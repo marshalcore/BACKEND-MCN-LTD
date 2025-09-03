@@ -14,19 +14,22 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # CORS Setup - Enhanced Configuration with frontend ports
+# ADD YOUR NETLIFY FRONTEND URL HERE
 origins = [
     "http://localhost",
     "http://localhost:5500",
-    "http://localhost:5501",  # ← ADD THIS
+    "http://localhost:5501",
     "http://localhost:5502",
     "http://127.0.0.1",
     "http://127.0.0.1:5500",
-    "http://127.0.0.1:5501",  # ← ADD THIS
+    "http://127.0.0.1:5501",
     "http://127.0.0.1:5502",
     "http://localhost:8000",
     "http://127.0.0.1:8000",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "https://marshalcoreofficer.netlify.app/", 
+    "https://marshalcoreofnigeria.netlify.app/", # REPLACE WITH YOUR ACTUAL NETLIFY URL
 ]
 
 app.add_middleware(
