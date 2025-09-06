@@ -28,8 +28,9 @@ origins = [
     "http://127.0.0.1:8000",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-    "https://marshalcoreofficer.netlify.app", 
-    "https://marshalcoreofnigeria.netlify.app", # REPLACE WITH YOUR ACTUAL NETLIFY URL
+    "https://backend-mcn-ltd.onrender.com",  
+    "https://marshalcoreofficer.netlify.app",
+    "https://marshalcoreofnigeria.netlify.app", 
 ]
 
 app.add_middleware(
@@ -134,6 +135,7 @@ from app.routes.password_reset import router as password_reset_router
 from app.routes.admin_auth import router as admin_router
 from app.routes.officer_uploads import router as officer_uploads_router
 from app.routes.officer_dashboard import router as officer_dashboard_router
+from app.routes.officer_auth import router as officer_auth_router
 
 # Include all routers
 routers = [
