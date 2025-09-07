@@ -14,7 +14,6 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # CORS Setup - Enhanced Configuration with frontend ports
-# ADD YOUR NETLIFY FRONTEND URL HERE
 origins = [
     "http://localhost",
     "http://localhost:5500",
@@ -41,7 +40,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
-    max_age=600  # Cache preflight requests for 10 minutes
+    max_age=600
 )
 
 # Add explicit OPTIONS handler middleware
@@ -55,16 +54,14 @@ async def options_handler(request: Request, call_next):
                 "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD",
                 "Access-Control-Allow-Headers": request.headers.get("access-control-request-headers", "Content-Type, Authorization, Accept"),
                 "Access-Control-Allow-Credentials": "true",
-                "Access-Control-Max-Age": "600",  # 10 minutes
+                "Access-Control-Max-Age": "600",
                 "Access-Control-Expose-Headers": "*"
             }
         )
         return response
     
-    # Add CORS headers to all responses
     response = await call_next(request)
     
-    # Add CORS headers to the response
     origin = request.headers.get("origin")
     if origin in origins:
         response.headers["Access-Control-Allow-Origin"] = origin
@@ -82,7 +79,6 @@ if os.path.exists(STATIC_DIR):
     logger.info(f"Static files mounted at /static from {STATIC_DIR}")
 else:
     logger.warning(f"Static directory not found at {STATIC_DIR}")
-    # Create static directory if it doesn't exist
     os.makedirs(STATIC_DIR, exist_ok=True)
     logger.info(f"Created static directory at {STATIC_DIR}")
 
@@ -98,7 +94,6 @@ def custom_openapi():
         routes=app.routes,
     )
     
-    # ✅ Fix: Merge security schemes instead of overwriting components
     if "components" not in openapi_schema:
         openapi_schema["components"] = {}
     if "securitySchemes" not in openapi_schema["components"]:
@@ -111,7 +106,6 @@ def custom_openapi():
         "description": "Enter JWT token in the format: Bearer <token>"
     }
 
-    # Add security requirements to all endpoints except public ones
     for path_name, path_item in openapi_schema["paths"].items():
         if any(public_path in path_name for public_path in ["/login", "/signup", "/health", "/docs", "/redoc", "/openapi.json"]):
             continue
@@ -126,26 +120,27 @@ def custom_openapi():
 app.openapi = custom_openapi
 
 # Route Registrations - Import all routers
+# FIXED: Removed duplicate officer_auth_router import
 from app.routes.pre_register import router as pre_register_router
 from app.routes.payment import router as payment_router
 from app.routes.application_access import router as application_access_router
 from app.routes.application_form import router as application_form_router
 from app.routes.form_submission import router as form_submission_router
-from app.routes.officer_auth import router as officer_auth_router
+from app.routes.officer_auth import router as officer_auth_router  # ✅ Only one import
 from app.routes.password_reset import router as password_reset_router
 from app.routes.admin_auth import router as admin_router
 from app.routes.officer_uploads import router as officer_uploads_router
 from app.routes.officer_dashboard import router as officer_dashboard_router
-from app.routes.officer_auth import router as officer_auth_router
+# REMOVED: Duplicate officer_auth_router import
 
-# Include all routers
+# Include all routers - FIXED: Removed duplicate router
 routers = [
     pre_register_router,
     payment_router,
     application_access_router,
     application_form_router,
     form_submission_router,
-    officer_auth_router,
+    officer_auth_router,  # ✅ Only one instance
     password_reset_router,
     admin_router,
     officer_uploads_router,
@@ -177,13 +172,11 @@ async def root():
 # File download route with CORS support
 @app.get("/download/pdf/{filename}", tags=["Public Downloads"])
 async def download_pdf(filename: str, request: Request):
-    # Security check - prevent directory traversal
     if ".." in filename or "/" in filename:
         raise HTTPException(status_code=400, detail="Invalid filename")
     
     pdf_path = os.path.join(STATIC_DIR, "pdfs", filename)
     
-    # Create pdfs directory if it doesn't exist
     pdfs_dir = os.path.join(STATIC_DIR, "pdfs")
     os.makedirs(pdfs_dir, exist_ok=True)
     
@@ -196,7 +189,6 @@ async def download_pdf(filename: str, request: Request):
         media_type="application/pdf"
     )
     
-    # Add CORS headers
     origin = request.headers.get("origin")
     if origin in origins:
         response.headers["Access-Control-Allow-Origin"] = origin
