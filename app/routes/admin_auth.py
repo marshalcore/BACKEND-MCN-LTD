@@ -130,8 +130,8 @@ async def verify_admin_otp(
         "email": normalized_email
     }
 
-    # If purpose is login → issue access token
-    if normalized_purpose == "login":
+    # If purpose is login or admin_login → issue access token
+    if normalized_purpose in ["login", "admin_login"]:
         admin = db.query(Admin).filter(
             func.lower(Admin.email) == normalized_email
         ).first()
