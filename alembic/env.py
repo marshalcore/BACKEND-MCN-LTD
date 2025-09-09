@@ -1,7 +1,13 @@
-import sys
+# ✅ ADD THESE LINES AT THE VERY TOP
 import os
-from logging.config import fileConfig
+from dotenv import load_dotenv
 
+# ✅ Load environment variables from .env file
+load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
+
+# ✅ Your existing imports below
+import sys
+from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool
 from alembic import context
 
@@ -57,3 +63,4 @@ if context.is_offline_mode():
     run_migrations_offline()
 else:
     run_migrations_online()
+    

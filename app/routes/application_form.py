@@ -8,6 +8,7 @@ from app.schemas.applicant import ApplicantResponse
 from datetime import datetime
 from typing import Optional
 import uuid
+from sqlalchemy import func
 
 router = APIRouter()
 
@@ -61,9 +62,14 @@ async def apply(
     bank_name: str = Form(...),
     account_number: str = Form(...),
     
+    # Application password for verification
+    application_password: str = Form(...),
+    
     db: Session = Depends(get_db)
 ):
     try:
+        normalized_email = email.strip().lower()
+        
         # Validate date format
         try:
             dob = datetime.strptime(date_of_birth, "%Y-%m-%d").date()
@@ -73,22 +79,45 @@ async def apply(
                 detail="Invalid date format. Use YYYY-MM-DD."
             )
 
+        # Verify pre-applicant status and password
+        pre_applicant = db.query(PreApplicant).filter(
+            func.lower(PreApplicant.email) == normalized_email
+        ).first()
+        
+        if not pre_applicant:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Pre-applicant not found"
+            )
+            
+        if not pre_applicant.has_paid:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Payment not completed"
+            )
+            
+        # Verify application password
+        if (pre_applicant.application_password != application_password or
+            pre_applicant.password_used or
+            not pre_applicant.password_expires_at or
+            pre_applicant.password_expires_at <= datetime.utcnow()):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired application password"
+            )
+
+        # Check if application already submitted
+        if pre_applicant.application_submitted:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Application already submitted with this email"
+            )
+
         # Save uploaded files
         passport_path = save_upload(passport_photo, "passports")
         nin_path = save_upload(nin_slip, "nin_slips")
         ssce_path = save_upload(ssce_certificate, "ssce")
         degree_path = save_upload(higher_education_degree, "degrees") if higher_education_degree else None
-
-        # Verify pre-applicant status
-        pre_applicant = db.query(PreApplicant).filter(
-            PreApplicant.email == email
-        ).first()
-        
-        if not pre_applicant or not pre_applicant.is_verified:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Pre-applicant is not verified"
-            )
 
         # Create new applicant
         applicant = Applicant(
@@ -135,8 +164,14 @@ async def apply(
             
             # SECTION E: Meta Information
             is_verified=True,
-            has_paid=pre_applicant.has_paid if pre_applicant else False
+            has_paid=True
         )
+
+        # Mark password as used and application as submitted
+        pre_applicant.password_used = True
+        pre_applicant.application_submitted = True
+        pre_applicant.submitted_at = datetime.utcnow()
+        pre_applicant.status = "submitted"
 
         db.add(applicant)
         db.commit()
