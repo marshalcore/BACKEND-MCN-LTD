@@ -30,6 +30,7 @@ origins = [
     "http://127.0.0.1:3000",
     "https://backend-mcn-ltd.onrender.com",  
     "https://marshalcoreofficer.netlify.app",
+    "https://mcn-org.netlify.app",
     "https://marshalcoreofnigerialimited.netlify.app",
     "https://marshalcoreadmin.netlify.app", 
 ]
