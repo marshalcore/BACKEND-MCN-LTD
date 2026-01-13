@@ -1,3 +1,4 @@
+# app/schemas/applicant.py
 from pydantic import BaseModel, EmailStr, ConfigDict
 from uuid import UUID
 from datetime import date, datetime

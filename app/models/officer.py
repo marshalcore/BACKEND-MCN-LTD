@@ -1,10 +1,9 @@
+# app/models/officer.py
 from sqlalchemy import Column, String, Boolean, ForeignKey, DateTime, Text, Date
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from sqlalchemy.orm import deferred
 import uuid
-from datetime import datetime
 from app.database import Base
 
 class Officer(Base):
@@ -40,8 +39,8 @@ class Officer(Base):
     full_name = Column(String(100), nullable=True)
     nin_number = Column(String(20), nullable=True)
     gender = Column(String(10), nullable=True)
-    rank = Column(String(50), nullable=True)  # Changed from Text to String(50)
-    position = Column(String(100), nullable=True)  # Changed from Text to String(100)
+    rank = Column(String(50), nullable=True)
+    position = Column(String(100), nullable=True)
     date_of_birth = Column(Date, nullable=True)
     residential_address = Column(Text, nullable=True)
     state_of_residence = Column(String(50), nullable=True)
@@ -61,6 +60,12 @@ class Officer(Base):
     category = Column(String(50), nullable=True)
     other_name = Column(String(100), nullable=True)
     do_you_smoke = Column(Boolean, nullable=True)
+
+    # PDF Tracking Fields
+    terms_pdf_path = Column(String(500), nullable=True, comment='Path to Terms & Conditions PDF')
+    application_pdf_path = Column(String(500), nullable=True, comment='Path to Application Form PDF')
+    terms_generated_at = Column(DateTime(timezone=True), nullable=True, comment='When Terms PDF was generated')
+    application_generated_at = Column(DateTime(timezone=True), nullable=True, comment='When Application PDF was generated')
 
     applicant = relationship(
         "Applicant",

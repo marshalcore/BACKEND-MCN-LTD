@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terms & Conditions - Marshal Core Nigeria</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 2cm;
+        }
+        
+        body {
+            font-family: 'Times New Roman', Times, serif;
+            line-height: 1.6;
+            color: #333;
+            font-size: 12pt;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #000;
+            padding-bottom: 20px;
+        }
+        
+        .company-name {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+        
+        .company-rc {
+            font-size: 14px;
+            color: #7f8c8d;
+            margin-bottom: 10px;
+        }
+        
+        .document-title {
+            font-size: 20px;
+            font-weight: bold;
+            text-decoration: underline;
+            margin: 30px 0 20px 0;
+        }
+        
+        .section {
+            margin-bottom: 20px;
+        }
+        
+        .section-title {
+            font-weight: bold;
+            font-size: 14px;
+            margin-bottom: 10px;
+            color: #2c3e50;
+        }
+        
+        .clause {
+            margin-bottom: 15px;
+            text-align: justify;
+        }
+        
+        .clause-number {
+            font-weight: bold;
+            display: inline;
+        }
+        
+        .warning-box {
+            border: 2px solid #e74c3c;
+            background-color: #ffebee;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        
+        .warning-title {
+            color: #c62828;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .signature-section {
+            margin-top: 50px;
+        }
+        
+        .signature-line {
+            width: 300px;
+            border-bottom: 1px solid #000;
+            margin: 40px 0 10px 0;
+        }
+        
+        .signature-label {
+            font-size: 12px;
+            color: #7f8c8d;
+        }
+        
+        .footer {
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+            text-align: center;
+            font-size: 10px;
+            color: #7f8c8d;
+            border-top: 1px solid #eee;
+            padding-top: 10px;
+        }
+        
+        .watermark {
+            position: absolute;
+            opacity: 0.1;
+            font-size: 100px;
+            transform: rotate(-45deg);
+            top: 300px;
+            left: 100px;
+            color: #000;
+            z-index: -1;
+        }
+        
+        .officer-info {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-left: 4px solid #3498db;
+            margin: 20px 0;
+        }
+        
+        .info-item {
+            margin-bottom: 5px;
+        }
+        
+        .info-label {
+            font-weight: bold;
+            display: inline-block;
+            width: 150px;
+        }
+        
+        .stamp-area {
+            border: 2px dashed #ccc;
+            padding: 20px;
+            text-align: center;
+            margin: 30px 0;
+            height: 150px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="watermark">OFFICIAL DOCUMENT</div>
+    
+    <div class="header">
+        <div class="company-name">MARSHAL CORE NIGERIA LIMITED</div>
+        <div class="company-rc">RC: 1234567</div>
+        <div>Official Security Services Provider</div>
+        <div>Lagos, Nigeria</div>
+    </div>
+    
+    <div class="document-title">TERMS AND CONDITIONS OF SERVICE</div>
+    
+    <div class="section">
+        <div class="section-title">OFFICER INFORMATION</div>
+        <div class="officer-info">
+            <div class="info-item">
+                <span class="info-label">Full Name:</span>
+                <span>{{ officer_full_name }}</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Officer ID:</span>
+                <span>{{ officer_id }}</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">NIN Number:</span>
+                <span>{{ nin_number }}</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Position:</span>
+                <span>{{ position }}</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Date of Agreement:</span>
+                <span>{{ agreement_date }}</span>
+            </div>
+        </div>
+    </div>
+    
+    <div class="section">
+        <div class="section-title">1. SERVICE AGREEMENT</div>
+        <div class="clause">
+            <span class="clause-number">1.1.</span> This agreement constitutes a legally binding contract between Marshal Core Nigeria Limited (hereinafter referred to as "the Company") and the officer named above (hereinafter referred to as "the Officer").
+        </div>
+        <div class="clause">
+            <span class="clause-number">1.2.</span> The Officer agrees to abide by all rules, regulations, and policies of the Company as outlined in the Employee Handbook and subsequent communications.
+        </div>
+    </div>
+    
+    <div class="section">
+        <div class="section-title">2. CODE OF CONDUCT</div>
+        <div class="clause">
+            <span class="clause-number">2.1.</span> The Officer shall maintain the highest standards of professionalism, integrity, and ethical conduct at all times.
+        </div>
+        <div class="clause">
+            <span class="clause-number">2.2.</span> The Officer shall treat all clients, colleagues, and members of the public with respect and dignity.
+        </div>
+        <div class="clause">
+            <span class="clause-number">2.3.</span> The Officer shall not engage in any activity that may bring disrepute to the Company or the security profession.
+        </div>
+    </div>
+    
+    <div class="warning-box">
+        <div class="warning-title">⚠️ SERIOUS CONSEQUENCES FOR MISCONDUCT</div>
+        <div class="clause">
+            <strong>2.4. Immediate Termination:</strong> The Company reserves the right to immediately terminate the Officer's employment without notice for serious misconduct including but not limited to: theft, fraud, assault, negligence endangering life or property, substance abuse on duty, or violation of client confidentiality.
+        </div>
+        <div class="clause">
+            <strong>2.5. Legal Prosecution:</strong> Criminal activities or serious breaches of the law will be reported to appropriate law enforcement agencies, and the Company will fully cooperate with legal proceedings.
+        </div>
+        <div class="clause">
+            <strong>2.6. Court Proceedings:</strong> For violations resulting in financial loss, damage to property, or harm to persons, the Company may initiate civil proceedings to recover damages.
+        </div>
+        <div class="clause">
+            <strong>2.7. Financial Penalties:</strong> The Officer may be held financially liable for damages caused by negligence or willful misconduct, including but not limited to: replacement costs for damaged equipment, compensation for lost client contracts, and legal fees incurred by the Company.
+        </div>
+    </div>
+    
+    <div class="section">
+        <div class="section-title">3. CONFIDENTIALITY</div>
+        <div class="clause">
+            <span class="clause-number">3.1.</span> The Officer shall not disclose any confidential information about the Company, its clients, or operations to any third party during or after employment.
+        </div>
+        <div class="clause">
+            <span class="clause-number">3.2.</span> Breach of confidentiality may result in immediate termination and potential legal action.
+        </div>
+    </div>
+    
+    <div class="section">
+        <div class="section-title">4. EQUIPMENT AND PROPERTY</div>
+        <div class="clause">
+            <span class="clause-number">4.1.</span> All equipment issued by the Company remains the property of the Company and must be returned upon termination of employment.
+        </div>
+        <div class="clause">
+            <span class="clause-number">4.2.</span> The Officer is responsible for the proper care and maintenance of all assigned equipment.
+        </div>
+    </div>
+    
+    <div class="section">
+        <div class="section-title">5. TERMINATION</div>
+        <div class="clause">
+            <span class="clause-number">5.1.</span> Either party may terminate this agreement with appropriate notice as specified in the employment contract.
+        </div>
+        <div class="clause">
+            <span class="clause-number">5.2.</span> Immediate termination may occur for cause as outlined in Section 2.
+        </div>
+    </div>
+    
+    <div class="signature-section">
+        <div class="section-title">ACCEPTANCE AND AGREEMENT</div>
+        
+        <div style="margin: 30px 0;">
+            <div>I, <strong>{{ officer_full_name }}</strong>, hereby acknowledge that I have read, understood, and agree to abide by all the terms and conditions outlined in this document.</div>
+            
+            <div class="signature-line"></div>
+            <div class="signature-label">Signature of Officer</div>
+            
+            <div style="margin-top: 20px;">
+                <div>Date: ________________________</div>
+            </div>
+        </div>
+        
+        <div class="stamp-area">
+            <div>
+                <div style="font-weight: bold; margin-bottom: 10px;">FOR MARSHAL CORE NIGERIA LIMITED</div>
+                <div>Authorized Signature & Company Stamp</div>
+            </div>
+        </div>
+        
+        <div style="margin-top: 20px;">
+            <div class="signature-line"></div>
+            <div class="signature-label">Signature of Authorized Representative</div>
+            
+            <div style="margin-top: 10px;">
+                <div>Name: ________________________</div>
+                <div>Position: _____________________</div>
+                <div>Date: ________________________</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="footer">
+        <div>Document ID: {{ document_id }}</div>
+        <div>Generated on: {{ generation_date }}</div>
+        <div>This is an official document of Marshal Core Nigeria Limited. Unauthorized duplication is prohibited.</div>
+    </div>
+</body>
+</html>

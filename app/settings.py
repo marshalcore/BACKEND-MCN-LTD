@@ -1,3 +1,4 @@
+# app/settings.py
 import os
 
 class Settings:

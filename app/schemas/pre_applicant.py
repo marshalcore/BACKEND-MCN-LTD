@@ -1,12 +1,12 @@
-# app/schemas/pre_applicant.py
-
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
 from datetime import datetime
 
+
 class PreApplicantCreate(BaseModel):
-    full_name: str
+    full_name: str = Field(..., min_length=2, max_length=100)
     email: EmailStr
+
 
 class PreApplicantStatusResponse(BaseModel):
     status: str
@@ -15,6 +15,7 @@ class PreApplicantStatusResponse(BaseModel):
     email: str
     pre_applicant_id: Optional[str] = None
 
+
 class PasswordValidationRequest(BaseModel):
     email: EmailStr
-    password: str
+    password: str = Field(..., min_length=8)

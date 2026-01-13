@@ -1,10 +1,10 @@
+# app/models/applicant.py
 from sqlalchemy import Column, String, Integer, Boolean, Date, DateTime, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
-from sqlalchemy.orm import relationship  # <-- Add this import
+from sqlalchemy.orm import relationship
 from app.database import Base
 import uuid
-from datetime import datetime
 
 class Applicant(Base):
     __tablename__ = "applicants"
@@ -61,6 +61,12 @@ class Applicant(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     last_login = Column(DateTime(timezone=True), nullable=True)
+
+    # SECTION F: PDF Tracking Fields
+    terms_pdf_path = Column(String(500), nullable=True, comment='Path to Terms & Conditions PDF')
+    application_pdf_path = Column(String(500), nullable=True, comment='Path to Application Form PDF')
+    terms_generated_at = Column(DateTime(timezone=True), nullable=True, comment='When Terms PDF was generated')
+    application_generated_at = Column(DateTime(timezone=True), nullable=True, comment='When Application PDF was generated')
 
     # Relationship
     officer = relationship("Officer", back_populates="applicant", cascade="all, delete")

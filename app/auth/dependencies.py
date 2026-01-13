@@ -52,3 +52,32 @@ def get_current_officer(
         return officer
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
+
+
+def get_current_existing_officer(
+    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+    db: Session = Depends(get_db)
+):
+    """Get current existing officer from JWT token"""
+    token = credentials.credentials
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        officer_id = payload.get("sub")
+        role = payload.get("role")
+        
+        if role != "existing_officer" or not officer_id:
+            raise HTTPException(status_code=401, detail="Invalid existing officer token")
+        
+        # Import here to avoid circular imports
+        from app.models.existing_officer import ExistingOfficer
+        officer = db.query(ExistingOfficer).filter(ExistingOfficer.officer_id == officer_id).first()
+        
+        if not officer:
+            raise HTTPException(status_code=401, detail="Existing officer not found")
+        
+        if not officer.is_active:
+            raise HTTPException(status_code=403, detail="Officer account is deactivated")
+            
+        return officer
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")

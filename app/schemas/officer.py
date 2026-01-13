@@ -1,24 +1,27 @@
+# app/schemas/officer.py
 from typing import Dict, Any, Optional
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from datetime import date, datetime
 from uuid import UUID
 
-# Add these missing models
+
 class OfficerSignup(BaseModel):
-    unique_id: str
+    unique_id: str = Field(..., min_length=3, max_length=50)
     email: EmailStr
-    phone: str
-    password: str
+    phone: str = Field(..., pattern=r'^\+?[\d\s\-\(\)]{10,20}$')
+    password: str = Field(..., min_length=6)
 
     class Config:
         title = "OfficerSignup"
 
+
 class OfficerLogin(BaseModel):
-    unique_id: str
-    password: str
+    unique_id: str = Field(..., min_length=3, max_length=50)
+    password: str = Field(..., min_length=6)
 
     class Config:
         title = "OfficerLogin"
+
 
 class OfficerSignupResponse(BaseModel):
     status: str
@@ -36,11 +39,13 @@ class OfficerSignupResponse(BaseModel):
             }
         }
 
-class VerifyOTPResponse(BaseModel):  # Add this new response model
+
+class VerifyOTPResponse(BaseModel):
     status: str
     message: str
     data: Dict[str, Any]
-    next_steps: Optional[str] = None  # Make next_steps optional for OTP verification
+    next_steps: Optional[str] = None
+
 
 class OfficerResponse(BaseModel):
     id: UUID
@@ -84,8 +89,10 @@ class OfficerResponse(BaseModel):
     class Config:
         from_attributes = True
 
+
 class OfficerProfile(OfficerResponse):
     applicant_data: Optional[dict] = None
+
 
 class OfficerUpdate(BaseModel):
     email: Optional[EmailStr] = None
@@ -104,10 +111,12 @@ class OfficerUpdate(BaseModel):
     account_number: Optional[str] = None
     do_you_smoke: Optional[bool] = None
 
+
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
+
 
 class ResetPasswordRequest(BaseModel):
     email: EmailStr
     code: str
-    new_password: str
+    new_password: str = Field(..., min_length=6)

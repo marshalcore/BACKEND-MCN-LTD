@@ -1,7 +1,11 @@
+# app/services/email_service.py
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
 from app.config import settings
 from jinja2 import Environment, FileSystemLoader
 import logging
+from datetime import datetime
+from typing import Optional
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -9,7 +13,6 @@ logger = logging.getLogger(__name__)
 MAIL_FROM_WITH_NAME = f"Marshal Core <{settings.EMAIL_FROM}>"
 
 # Two configs: one for TLS (587), one for SSL (465)
-
 
 conf_tls = ConnectionConfig(
     MAIL_USERNAME=settings.EMAIL_HOST_USER,
@@ -88,7 +91,7 @@ async def send_otp_email(to_email: str, name: str, token: str, purpose: str):
             template = "reset_password.html"
         elif canonical_purpose == "officer_signup":
             subject = "Marshal Core - Officer Account Verification"
-            template = "officer_signup_otp.html"  # add template if needed
+            template = "officer_signup_otp.html"
         else:
             subject = "Marshal Core - Verification Code"
             template = "generic_otp.html"
@@ -151,3 +154,99 @@ async def send_guarantor_confirmation_email(to_email: str, name: str):
         subtype="html"
     )
     return await send_email_with_retry(message, "Guarantor Confirmation", to_email)
+
+
+# NEW: PDF Email Functions
+async def send_pdfs_email(
+    to_email: str, 
+    name: str, 
+    terms_pdf_path: str, 
+    application_pdf_path: str,
+    cc_email: Optional[str] = None
+) -> bool:
+    """
+    Send both PDFs as email attachments
+    """
+    try:
+        logger.info(f"Sending PDFs email to: {to_email}")
+        
+        # Prepare HTML content
+        html = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+            <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+                <div style="background-color: #2c3e50; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0;">
+                    <h1>Marshal Core Nigeria</h1>
+                    <p>Official Security Services Provider</p>
+                </div>
+                
+                <div style="background-color: #f9f9f9; padding: 30px; border-radius: 0 0 5px 5px;">
+                    <h2>Dear {name},</h2>
+                    
+                    <p>Thank you for completing your application with Marshal Core Nigeria. Your application documents have been generated and are attached to this email.</p>
+                    
+                    <div style="background-color: #e8f4fc; border-left: 4px solid #3498db; padding: 15px; margin: 20px 0;">
+                        <h3>📎 Attached Documents:</h3>
+                        <ol>
+                            <li><strong>Terms & Conditions</strong> - Legal agreement outlining your rights and responsibilities</li>
+                            <li><strong>Application Form</strong> - Complete summary of your application for your records</li>
+                        </ol>
+                    </div>
+                    
+                    <h3>📋 Important Next Steps:</h3>
+                    <ol>
+                        <li>Review both documents carefully</li>
+                        <li>Print a copy of your Application Form for your records</li>
+                        <li>Read and understand the Terms & Conditions thoroughly</li>
+                        <li>Keep these documents in a safe place</li>
+                    </ol>
+                    
+                    <p>If you have any questions about your documents, please contact our support team at <a href="mailto:support@marshalcoreng.com">support@marshalcoreng.com</a>.</p>
+                    
+                    <p>Best regards,<br>
+                    <strong>The Marshal Core Nigeria Team</strong></p>
+                </div>
+                
+                <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #777; text-align: center;">
+                    <p>Marshal Core Nigeria Limited | RC: 1234567</p>
+                    <p>Generated on: {datetime.now().strftime('%d %B, %Y')}</p>
+                    <p>This is an automated message. Please do not reply to this email.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        
+        # Prepare recipients
+        recipients = [to_email]
+        if cc_email:
+            recipients.append(cc_email)
+        
+        # Create message with attachments
+        message = MessageSchema(
+            subject="Your Marshal Core Application Documents",
+            recipients=recipients,
+            body=html,
+            subtype="html",
+            attachments=[
+                {
+                    "file": terms_pdf_path,
+                    "headers": {
+                        "Content-Disposition": f'attachment; filename="{Path(terms_pdf_path).name}"'
+                    }
+                },
+                {
+                    "file": application_pdf_path,
+                    "headers": {
+                        "Content-Disposition": f'attachment; filename="{Path(application_pdf_path).name}"'
+                    }
+                }
+            ]
+        )
+        
+        # Send email with retry
+        return await send_email_with_retry(message, "Application Documents", to_email)
+        
+    except Exception as e:
+        logger.error(f"Failed to send PDFs email to {to_email}: {str(e)}")
+        return False

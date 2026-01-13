@@ -5,6 +5,7 @@ from fastapi.openapi.utils import get_openapi
 from fastapi.responses import FileResponse
 import os
 import logging
+import datetime
 
 # Init app
 app = FastAPI(title="Marshal Core Backend")
@@ -120,31 +121,35 @@ def custom_openapi():
 app.openapi = custom_openapi
 
 # Route Registrations - Import all routers
-# FIXED: Removed duplicate officer_auth_router import
 from app.routes.pre_register import router as pre_register_router
 from app.routes.payment import router as payment_router
 from app.routes.application_access import router as application_access_router
 from app.routes.application_form import router as application_form_router
 from app.routes.form_submission import router as form_submission_router
-from app.routes.officer_auth import router as officer_auth_router  # ✅ Only one import
+from app.routes.officer_auth import router as officer_auth_router
 from app.routes.password_reset import router as password_reset_router
 from app.routes.admin_auth import router as admin_router
 from app.routes.officer_uploads import router as officer_uploads_router
 from app.routes.officer_dashboard import router as officer_dashboard_router
-# REMOVED: Duplicate officer_auth_router import
+# NEW: Import existing officer router
+from app.routes.existing_officer import router as existing_officer_router
+# NEW: Import PDF download router
+from app.routes.pdf_download import router as pdf_download_router
 
-# Include all routers - FIXED: Removed duplicate router
+# Include all routers
 routers = [
     pre_register_router,
     payment_router,
     application_access_router,
     application_form_router,
     form_submission_router,
-    officer_auth_router,  # ✅ Only one instance
+    officer_auth_router,
     password_reset_router,
     admin_router,
     officer_uploads_router,
-    officer_dashboard_router
+    officer_dashboard_router,
+    existing_officer_router,  # NEW: Add existing officers router
+    pdf_download_router       # NEW: Add PDF download router
 ]
 
 for router in routers:
@@ -163,8 +168,10 @@ async def root():
         "endpoints": [
             "/admin/* - Admin authentication and management",
             "/officer/* - Officer routes",
+            "/api/existing-officers/* - Existing officers registration (no payment)",
             "/applicant/* - Applicant routes",
             "/payment/* - Payment processing",
+            "/pdf/* - PDF document download and management",
             "/health - System health check"
         ]
     }
@@ -172,16 +179,51 @@ async def root():
 # File download route with CORS support
 @app.get("/download/pdf/{filename}", tags=["Public Downloads"])
 async def download_pdf(filename: str, request: Request):
-    if ".." in filename or "/" in filename:
+    """
+    Public endpoint to download PDF files
+    """
+    # Security check - prevent directory traversal
+    if ".." in filename or "/" in filename or "\\" in filename:
         raise HTTPException(status_code=400, detail="Invalid filename")
     
-    pdf_path = os.path.join(STATIC_DIR, "pdfs", filename)
+    # Check in multiple directories
+    possible_paths = [
+        os.path.join(STATIC_DIR, "pdfs", filename),
+        os.path.join(STATIC_DIR, "pdfs", "terms", filename),
+        os.path.join(STATIC_DIR, "pdfs", "applications", filename),
+    ]
     
-    pdfs_dir = os.path.join(STATIC_DIR, "pdfs")
-    os.makedirs(pdfs_dir, exist_ok=True)
+    pdf_path = None
+    for path in possible_paths:
+        if os.path.isfile(path):
+            pdf_path = path
+            break
     
-    if not os.path.isfile(pdf_path):
-        raise HTTPException(status_code=404, detail="PDF file not found")
+    if not pdf_path:
+        # Try with .pdf extension if not provided
+        if not filename.endswith('.pdf'):
+            filename_with_pdf = f"{filename}.pdf"
+            possible_paths = [
+                os.path.join(STATIC_DIR, "pdfs", filename_with_pdf),
+                os.path.join(STATIC_DIR, "pdfs", "terms", filename_with_pdf),
+                os.path.join(STATIC_DIR, "pdfs", "applications", filename_with_pdf),
+            ]
+            
+            for path in possible_paths:
+                if os.path.isfile(path):
+                    pdf_path = path
+                    filename = filename_with_pdf
+                    break
+    
+    if not pdf_path:
+        # Create pdfs directory if it doesn't exist
+        pdfs_dir = os.path.join(STATIC_DIR, "pdfs")
+        os.makedirs(pdfs_dir, exist_ok=True)
+        
+        # Check again
+        pdf_path = os.path.join(STATIC_DIR, "pdfs", filename)
+        if not os.path.isfile(pdf_path):
+            raise HTTPException(status_code=404, detail="PDF file not found")
     
     response = FileResponse(
         pdf_path,
@@ -189,33 +231,339 @@ async def download_pdf(filename: str, request: Request):
         media_type="application/pdf"
     )
     
+    # Add CORS headers
     origin = request.headers.get("origin")
     if origin in origins:
         response.headers["Access-Control-Allow-Origin"] = origin
         response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Expose-Headers"] = "*"
     
+    logger.info(f"Serving PDF: {filename}")
+    return response
+
+# PDF Preview endpoint
+@app.get("/preview/pdf/{filename}", tags=["Public Downloads"])
+async def preview_pdf(filename: str, request: Request):
+    """
+    Preview PDF in browser (inline display)
+    """
+    # Security check - prevent directory traversal
+    if ".." in filename or "/" in filename or "\\" in filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    
+    # Check in multiple directories
+    possible_paths = [
+        os.path.join(STATIC_DIR, "pdfs", filename),
+        os.path.join(STATIC_DIR, "pdfs", "terms", filename),
+        os.path.join(STATIC_DIR, "pdfs", "applications", filename),
+    ]
+    
+    pdf_path = None
+    for path in possible_paths:
+        if os.path.isfile(path):
+            pdf_path = path
+            break
+    
+    if not pdf_path:
+        # Try with .pdf extension if not provided
+        if not filename.endswith('.pdf'):
+            filename_with_pdf = f"{filename}.pdf"
+            possible_paths = [
+                os.path.join(STATIC_DIR, "pdfs", filename_with_pdf),
+                os.path.join(STATIC_DIR, "pdfs", "terms", filename_with_pdf),
+                os.path.join(STATIC_DIR, "pdfs", "applications", filename_with_pdf),
+            ]
+            
+            for path in possible_paths:
+                if os.path.isfile(path):
+                    pdf_path = path
+                    filename = filename_with_pdf
+                    break
+    
+    if not pdf_path:
+        raise HTTPException(status_code=404, detail="PDF file not found")
+    
+    response = FileResponse(
+        pdf_path,
+        filename=filename,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"inline; filename=\"{filename}\""
+        }
+    )
+    
+    # Add CORS headers
+    origin = request.headers.get("origin")
+    if origin in origins:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Expose-Headers"] = "*"
+    
+    logger.info(f"Previewing PDF: {filename}")
     return response
 
 # Health check endpoint with detailed information
 @app.get("/health", include_in_schema=False)
 async def health_check():
+    """
+    Comprehensive health check endpoint
+    """
     import psutil
     import datetime
+    import sys
     
-    return {
+    health_status = {
         "status": "healthy",
         "timestamp": datetime.datetime.now().isoformat(),
-        "server": {
-            "python_version": os.sys.version,
-            "platform": os.sys.platform,
-            "uptime": psutil.boot_time() if hasattr(psutil, 'boot_time') else "N/A"
-        },
-        "memory": {
-            "available": f"{psutil.virtual_memory().available / (1024**3):.2f} GB",
-            "used": f"{psutil.virtual_memory().used / (1024**3):.2f} GB",
-            "total": f"{psutil.virtual_memory().total / (1024**3):.2f} GB"
-        } if hasattr(psutil, 'virtual_memory') else "N/A"
+        "service": "Marshal Core Backend API",
+        "version": "1.0.0",
     }
+    
+    try:
+        # System information
+        health_status["system"] = {
+            "python_version": sys.version,
+            "platform": sys.platform,
+            "uptime": psutil.boot_time() if hasattr(psutil, 'boot_time') else "N/A"
+        }
+        
+        # Memory information
+        if hasattr(psutil, 'virtual_memory'):
+            memory = psutil.virtual_memory()
+            health_status["memory"] = {
+                "available": f"{memory.available / (1024**3):.2f} GB",
+                "used": f"{memory.used / (1024**3):.2f} GB",
+                "total": f"{memory.total / (1024**3):.2f} GB",
+                "percent": f"{memory.percent}%"
+            }
+        
+        # Disk information
+        if hasattr(psutil, 'disk_usage'):
+            try:
+                disk = psutil.disk_usage('/')
+                health_status["disk"] = {
+                    "free": f"{disk.free / (1024**3):.2f} GB",
+                    "used": f"{disk.used / (1024**3):.2f} GB",
+                    "total": f"{disk.total / (1024**3):.2f} GB",
+                    "percent": f"{disk.percent}%"
+                }
+            except:
+                health_status["disk"] = "N/A"
+        
+        # Check PDF directories
+        pdf_dirs = {
+            "static_pdfs": os.path.join(STATIC_DIR, "pdfs"),
+            "static_pdfs_terms": os.path.join(STATIC_DIR, "pdfs", "terms"),
+            "static_pdfs_applications": os.path.join(STATIC_DIR, "pdfs", "applications"),
+            "templates_pdf": os.path.join(BASE_DIR, "templates", "pdf")
+        }
+        
+        health_status["directories"] = {}
+        for name, path in pdf_dirs.items():
+            exists = os.path.exists(path)
+            health_status["directories"][name] = {
+                "exists": exists,
+                "path": path
+            }
+            if exists and os.path.isdir(path):
+                try:
+                    file_count = len([f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))])
+                    health_status["directories"][name]["file_count"] = file_count
+                except:
+                    health_status["directories"][name]["file_count"] = "N/A"
+        
+        # Check PDF generation capability
+        try:
+            import reportlab
+            health_status["pdf_generation"] = {
+                "status": "ready",
+                "library": "reportlab",
+                "version": getattr(reportlab, '__version__', 'unknown')
+            }
+        except ImportError:
+            health_status["pdf_generation"] = {
+                "status": "not_available",
+                "message": "Install with: pip install reportlab pillow"
+            }
+            health_status["status"] = "degraded"
+        
+        logger.info("Health check completed successfully")
+        
+    except Exception as e:
+        health_status["status"] = "degraded"
+        health_status["error"] = str(e)
+        logger.error(f"Health check failed: {e}")
+    
+    return health_status
+
+# PDF System Status endpoint
+@app.get("/pdf/status", tags=["PDF System"])
+async def pdf_system_status():
+    """
+    Check PDF generation system status
+    """
+    status = {
+        "pdf_system": "operational",
+        "timestamp": datetime.datetime.now().isoformat(),
+        "checks": {}
+    }
+    
+    try:
+        # Check if ReportLab is installed
+        try:
+            import reportlab
+            status["checks"]["reportlab"] = {
+                "status": "installed",
+                "version": getattr(reportlab, '__version__', 'unknown')
+            }
+        except ImportError:
+            status["checks"]["reportlab"] = {
+                "status": "not_installed",
+                "message": "Install with: pip install reportlab pillow"
+            }
+            status["pdf_system"] = "degraded"
+        
+        # Check if Pillow is installed (for image support)
+        try:
+            import PIL
+            status["checks"]["pillow"] = {
+                "status": "installed",
+                "version": getattr(PIL, '__version__', 'unknown')
+            }
+        except ImportError:
+            status["checks"]["pillow"] = {
+                "status": "not_installed",
+                "message": "Install with: pip install pillow"
+            }
+            # Not critical, just for image support
+            status["checks"]["pillow"]["severity"] = "warning"
+        
+        # Check PDF storage directories
+        pdf_dirs_to_check = [
+            ("pdfs_root", os.path.join(STATIC_DIR, "pdfs")),
+            ("pdfs_terms", os.path.join(STATIC_DIR, "pdfs", "terms")),
+            ("pdfs_applications", os.path.join(STATIC_DIR, "pdfs", "applications"))
+        ]
+        
+        dir_status = []
+        for name, path in pdf_dirs_to_check:
+            exists = os.path.exists(path)
+            writable = False
+            if exists:
+                # Check if directory is writable
+                test_file = os.path.join(path, ".test_write")
+                try:
+                    with open(test_file, 'w') as f:
+                        f.write("test")
+                    os.remove(test_file)
+                    writable = True
+                except:
+                    writable = False
+            
+            dir_status.append({
+                "name": name,
+                "path": path,
+                "exists": exists,
+                "writable": writable
+            })
+        
+        status["checks"]["directories"] = {
+            "status": "ready" if all(d["exists"] and d["writable"] for d in dir_status) else "issues",
+            "directories": dir_status
+        }
+        
+        if not all(d["exists"] and d["writable"] for d in dir_status):
+            status["pdf_system"] = "degraded"
+        
+        # Check if PDF utility can be imported
+        try:
+            from app.utils.pdf import PDFGenerator
+            status["checks"]["pdf_utility"] = {
+                "status": "importable",
+                "class": "PDFGenerator"
+            }
+            
+            # Test PDF generation
+            try:
+                pdf_gen = PDFGenerator()
+                status["checks"]["pdf_utility"]["instantiation"] = "success"
+            except Exception as e:
+                status["checks"]["pdf_utility"]["instantiation"] = f"failed: {str(e)}"
+                status["pdf_system"] = "error"
+                
+        except ImportError as e:
+            status["checks"]["pdf_utility"] = {
+                "status": "import_failed",
+                "error": str(e)
+            }
+            status["pdf_system"] = "error"
+        
+        logger.info("PDF system status check completed")
+        
+    except Exception as e:
+        status["pdf_system"] = "error"
+        status["error"] = str(e)
+        logger.error(f"PDF system status check failed: {e}")
+    
+    return status
+
+# Test PDF Generation endpoint (for debugging)
+@app.post("/pdf/test/generate", tags=["PDF System"])
+async def test_pdf_generation():
+    """
+    Test PDF generation endpoint (for debugging)
+    """
+    try:
+        from app.utils.pdf import pdf_generator
+        
+        # Sample test data
+        test_data = {
+            "full_name": "Test Officer",
+            "nin_number": "12345678901",
+            "residential_address": "123 Test Street, Abuja, Nigeria",
+            "rank": "Security Officer",
+            "position": "Field Operations",
+            "email": "test@example.com",
+            "phone": "+2348012345678",
+            "mobile_number": "+2348012345678",
+            "date_of_birth": "1990-01-01",
+            "gender": "Male",
+            "marital_status": "Single",
+            "nationality": "Nigerian",
+            "religion": "Christian",
+            "place_of_birth": "Lagos",
+            "state_of_residence": "Abuja",
+            "local_government_residence": "Municipal Area Council",
+            "country_of_residence": "Nigeria",
+            "state_of_origin": "Lagos",
+            "local_government_origin": "Ikeja",
+            "years_of_service": "3",
+            "service_number": "TEST-001",
+            "additional_skills": "First Aid, Communication",
+            "bank_name": "Test Bank",
+            "account_number": "1234567890",
+            "unique_id": "TEST001"
+        }
+        
+        # Generate test PDFs
+        result = pdf_generator.generate_both_pdfs(test_data, "test001")
+        
+        return {
+            "status": "success",
+            "message": "Test PDFs generated successfully",
+            "data": result,
+            "download_links": {
+                "terms": f"/download/pdf/{os.path.basename(result['terms_pdf_path'])}",
+                "application": f"/download/pdf/{os.path.basename(result['application_pdf_path'])}"
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Test PDF generation failed: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Test PDF generation failed: {str(e)}"
+        )
 
 # Global exception handler
 @app.exception_handler(404)
@@ -225,7 +573,8 @@ async def not_found_exception_handler(request: Request, exc: HTTPException):
         content=f"Endpoint {request.url} not found",
         headers={
             "Access-Control-Allow-Origin": request.headers.get("origin", "*"),
-            "Access-Control-Allow-Credentials": "true"
+            "Access-Control-Allow-Credentials": "true",
+            "Access-Control-Expose-Headers": "*"
         }
     )
 
@@ -237,16 +586,45 @@ async def internal_error_handler(request: Request, exc: HTTPException):
         content="Internal server error",
         headers={
             "Access-Control-Allow-Origin": request.headers.get("origin", "*"),
-            "Access-Control-Allow-Credentials": "true"
+            "Access-Control-Allow-Credentials": "true",
+            "Access-Control-Expose-Headers": "*"
         }
     )
 
 # Startup event
 @app.on_event("startup")
 async def startup_event():
+    """
+    Initialize application on startup
+    """
     logger.info("🚀 Marshal Core Backend starting up...")
     logger.info(f"📁 Static directory: {STATIC_DIR}")
     logger.info(f"🌐 CORS enabled for origins: {origins}")
+    
+    # Create necessary directories
+    directories_to_create = [
+        os.path.join(STATIC_DIR, "pdfs"),
+        os.path.join(STATIC_DIR, "pdfs", "terms"),
+        os.path.join(STATIC_DIR, "pdfs", "applications"),
+        os.path.join(BASE_DIR, "templates", "pdf")
+    ]
+    
+    for directory in directories_to_create:
+        try:
+            os.makedirs(directory, exist_ok=True)
+            logger.info(f"✓ Created/verified directory: {directory}")
+        except Exception as e:
+            logger.warning(f"⚠ Could not create directory {directory}: {e}")
+    
+    # Log PDF system status
+    try:
+        import reportlab
+        logger.info("✓ ReportLab is installed for PDF generation")
+    except ImportError:
+        logger.warning("⚠ ReportLab is not installed. PDF generation will fail.")
+        logger.info("  Install with: pip install reportlab pillow")
+    
+    # Log loaded routers
     logger.info("✅ Server is ready to handle requests")
 
 # Shutdown event
