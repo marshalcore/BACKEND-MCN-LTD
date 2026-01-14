@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Application Form - Marshal Core Nigeria</title>
+    <title>Application Form - Marshal Core of Nigeria</title>
     <style>
         @page {
             size: A4;
@@ -15,6 +15,7 @@
             line-height: 1.5;
             color: #333;
             font-size: 11pt;
+            position: relative;
         }
         
         .watermark {
@@ -22,10 +23,13 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%) rotate(-45deg);
-            font-size: 80px;
-            color: rgba(0, 0, 0, 0.1);
+            width: 400px;
+            height: 400px;
+            background-image: url('https://marshalcoreofnigeria.ng/images/logo.png');
+            background-repeat: no-repeat;
+            background-size: contain;
+            opacity: 0.1;
             z-index: -1;
-            font-weight: bold;
         }
         
         .header {
@@ -33,6 +37,11 @@
             margin-bottom: 20px;
             padding-bottom: 15px;
             border-bottom: 3px double #000;
+        }
+        
+        .company-logo {
+            max-height: 80px;
+            margin-bottom: 10px;
         }
         
         .company-name {
@@ -188,15 +197,26 @@
             text-align: center;
             margin-bottom: 10px;
         }
+        
+        .document-id {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 9px;
+            color: #777;
+        }
     </style>
 </head>
 <body>
-    <div class="watermark">OFFICIAL APPLICATION</div>
+    <div class="watermark"></div>
+    
+    <div class="document-id">ID: {{ application_id }}</div>
     
     <div class="header">
-        <div class="company-name">MARSHAL CORE NIGERIA LIMITED</div>
-        <div>RC: 1234567 | Official Security Services Provider</div>
-        <div>Lagos, Nigeria</div>
+        <img src="https://marshalcoreofnigeria.ng/images/logo.png" alt="Marshal Core Logo" class="company-logo">
+        <div class="company-name">MARSHAL CORE OF NIGERIA</div>
+        <div>Certificate No: YA/CLB/10100 | Official Security Services Provider</div>
+        <div>Benin City, Edo State, Nigeria</div>
         <div class="form-title">OFFICER APPLICATION FORM</div>
     </div>
     
@@ -353,15 +373,15 @@
         
         <div class="checkbox-item">
             <span class="{{ 'checkbox-checked' if agree_to_join else 'checkbox-unchecked' }}"></span>
-            I agree to join Marshal Core Nigeria Limited if my application is successful
+            I agree to join Marshal Core of Nigeria if my application is successful
         </div>
         <div class="checkbox-item">
             <span class="{{ 'checkbox-checked' if agree_to_abide_rules else 'checkbox-unchecked' }}"></span>
-            I agree to abide by all rules and regulations of the company
+            I agree to abide by all rules and regulations of the organization
         </div>
         <div class="checkbox-item">
             <span class="{{ 'checkbox-checked' if agree_to_return_properties else 'checkbox-unchecked' }}"></span>
-            I agree to return all company properties upon termination
+            I agree to return all organization properties upon termination
         </div>
         <div class="checkbox-item">
             <span class="{{ 'checkbox-checked' if do_you_smoke else 'checkbox-unchecked' }}"></span>
@@ -403,7 +423,7 @@
     <div class="footer">
         <div>Application Form ID: {{ application_id }}</div>
         <div>Generated on: {{ generation_date }}</div>
-        <div>Marshal Core Nigeria  | This document is electronically generated and valid without signature</div>
+        <div>Marshal Core of Nigeria  | This document is electronically generated and valid without signature</div>
     </div>
 </body>
 </html>

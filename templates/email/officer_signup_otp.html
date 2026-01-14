@@ -3,16 +3,64 @@
 <head>
     <meta charset="utf-8">
     <title>Officer Account Verification</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            max-width: 600px; 
+            margin: 0 auto;
+            padding: 20px;
+            position: relative;
+            background-image: url('https://marshalcoreofnigeria.ng/images/logo.png');
+            background-repeat: no-repeat;
+            background-position: center;
+            background-size: 200px;
+            background-attachment: fixed;
+            opacity: 0.95;
+        }
+        body::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-45deg);
+            width: 300px;
+            height: 300px;
+            background-image: url('https://marshalcoreofnigeria.ng/images/logo.png');
+            background-repeat: no-repeat;
+            background-size: contain;
+            opacity: 0.08;
+            z-index: -1;
+        }
+        .content {
+            position: relative;
+            z-index: 1;
+            background-color: rgba(255, 255, 255, 0.92);
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        .logo-header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .logo-header img {
+            max-height: 70px;
+        }
+    </style>
 </head>
 <body>
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+    <div class="content">
+        <div class="logo-header">
+            <img src="https://marshalcoreofnigeria.ng/images/logo.png" alt="Marshal Core of Nigeria Logo">
+        </div>
+        
         <h2 style="color: #254a93;">Marshal Core - Officer Account Verification</h2>
         
         <p>Hello {{ name }},</p>
         
-        <p>Thank you for signing up as an officer at Marshal Core. To complete your registration, please use the verification code below:</p>
+        <p>Thank you for signing up as an officer at Marshal Core of Nigeria. To complete your registration, please use the verification code below:</p>
         
-        <div style="background-color: #f5f5f5; padding: 15px; text-align: center; margin: 20px 0;">
+        <div style="background-color: #f5f5f5; padding: 20px; text-align: center; margin: 20px 0; border-radius: 8px; border: 2px solid #254a93;">
             <h1 style="color: #254a93; margin: 0; font-size: 32px; letter-spacing: 5px;">
                 {{ token }}
             </h1>
@@ -22,10 +70,13 @@
         
         <p>If you didn't request this signup, please ignore this email.</p>
         
-        <p>Best regards,<br>Marshal Core Team</p>
+        <p>Best regards,<br>Marshal Core of Nigeria Team</p>
         
         <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
         
+        <p style="font-size: 12px; color: #777;">
+            Marshal Core of Nigeria | Certificate No: YA/CLB/10100
+        </p>
         <p style="font-size: 12px; color: #777;">
             This is an automated message. Please do not reply to this email.
         </p>

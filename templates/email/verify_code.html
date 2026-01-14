@@ -1,10 +1,89 @@
 <!DOCTYPE html>
 <html>
-<head><title>Verification Code</title></head>
+<head>
+    <title>Verification Code</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            line-height: 1.6; 
+            color: #333; 
+            max-width: 600px; 
+            margin: 0 auto; 
+            padding: 20px;
+            position: relative;
+            background-image: url('https://marshalcoreofnigeria.ng/images/logo.png');
+            background-repeat: no-repeat;
+            background-position: center;
+            background-size: 200px;
+            background-attachment: fixed;
+            opacity: 0.95;
+        }
+        body::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-45deg);
+            width: 300px;
+            height: 300px;
+            background-image: url('https://marshalcoreofnigeria.ng/images/logo.png');
+            background-repeat: no-repeat;
+            background-size: contain;
+            opacity: 0.1;
+            z-index: -1;
+        }
+        .content {
+            position: relative;
+            z-index: 1;
+            background-color: rgba(255, 255, 255, 0.92);
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        .logo-header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .logo-header img {
+            max-height: 60px;
+        }
+        .code {
+            font-size: 28px;
+            font-weight: bold;
+            color: #254a93;
+            margin: 25px 0;
+            padding: 15px;
+            background-color: #f0f4ff;
+            border-radius: 8px;
+            border: 2px dashed #254a93;
+        }
+        .footer {
+            margin-top: 20px;
+            font-size: 12px;
+            color: #777;
+            text-align: center;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+        }
+    </style>
+</head>
 <body>
-  <p>Hello {{ name }},</p>
-  <p>Your Marshal Core verification code is:</p>
-  <h2>{{ code }}</h2>
-  <p>This code will expire in 10 minutes. Do not share it with anyone.</p>
+    <div class="content">
+        <div class="logo-header">
+            <img src="https://marshalcoreofnigeria.ng/images/logo.png" alt="Marshal Core of Nigeria Logo">
+        </div>
+        
+        <p>Hello {{ name }},</p>
+        <p>Your Marshal Core of Nigeria verification code is:</p>
+        
+        <div class="code">{{ code }}</div>
+        
+        <p>This code will expire in 10 minutes. Do not share it with anyone.</p>
+        
+        <div class="footer">
+            <p>Marshal Core of Nigeria | Certificate No: YA/CLB/10100</p>
+        </div>
+    </div>
 </body>
 </html>

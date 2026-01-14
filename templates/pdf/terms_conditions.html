@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Terms & Conditions - Marshal Core Nigeria</title>
+    <title>Terms & Conditions - Marshal Core of Nigeria</title>
     <style>
         @page {
             size: A4;
@@ -15,6 +15,21 @@
             line-height: 1.6;
             color: #333;
             font-size: 12pt;
+            position: relative;
+        }
+        
+        .watermark {
+            position: absolute;
+            width: 400px;
+            height: 400px;
+            background-image: url('https://marshalcoreofnigeria.ng/images/logo.png');
+            background-repeat: no-repeat;
+            background-size: contain;
+            opacity: 0.1;
+            z-index: -1;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-45deg);
         }
         
         .header {
@@ -22,6 +37,11 @@
             margin-bottom: 30px;
             border-bottom: 2px solid #000;
             padding-bottom: 20px;
+        }
+        
+        .company-logo {
+            max-height: 80px;
+            margin-bottom: 10px;
         }
         
         .company-name {
@@ -103,17 +123,7 @@
             color: #7f8c8d;
             border-top: 1px solid #eee;
             padding-top: 10px;
-        }
-        
-        .watermark {
-            position: absolute;
-            opacity: 0.1;
-            font-size: 100px;
-            transform: rotate(-45deg);
-            top: 300px;
-            left: 100px;
-            color: #000;
-            z-index: -1;
+            background-color: white;
         }
         
         .officer-info {
@@ -143,16 +153,27 @@
             align-items: center;
             justify-content: center;
         }
+        
+        .document-id {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 9px;
+            color: #777;
+        }
     </style>
 </head>
 <body>
-    <div class="watermark">OFFICIAL DOCUMENT</div>
+    <div class="watermark"></div>
+    
+    <div class="document-id">ID: {{ document_id }}</div>
     
     <div class="header">
-        <div class="company-name">MARSHAL CORE NIGERIA LIMITED</div>
-        <div class="company-rc">RC: 1234567</div>
+        <img src="https://marshalcoreofnigeria.ng/images/logo.png" alt="Marshal Core Logo" class="company-logo">
+        <div class="company-name">MARSHAL CORE OF NIGERIA</div>
+        <div class="company-rc">Certificate No: YA/CLB/10100</div>
         <div>Official Security Services Provider</div>
-        <div>Lagos, Nigeria</div>
+        <div>Benin City, Edo State, Nigeria</div>
     </div>
     
     <div class="document-title">TERMS AND CONDITIONS OF SERVICE</div>
@@ -186,10 +207,10 @@
     <div class="section">
         <div class="section-title">1. SERVICE AGREEMENT</div>
         <div class="clause">
-            <span class="clause-number">1.1.</span> This agreement constitutes a legally binding contract between Marshal Core Nigeria Limited (hereinafter referred to as "the Company") and the officer named above (hereinafter referred to as "the Officer").
+            <span class="clause-number">1.1.</span> This agreement constitutes a legally binding contract between Marshal Core of Nigeria (hereinafter referred to as "the Organization") and the officer named above (hereinafter referred to as "the Officer").
         </div>
         <div class="clause">
-            <span class="clause-number">1.2.</span> The Officer agrees to abide by all rules, regulations, and policies of the Company as outlined in the Employee Handbook and subsequent communications.
+            <span class="clause-number">1.2.</span> The Officer agrees to abide by all rules, regulations, and policies of the Organization as outlined in the Officer Handbook and subsequent communications.
         </div>
     </div>
     
@@ -202,30 +223,30 @@
             <span class="clause-number">2.2.</span> The Officer shall treat all clients, colleagues, and members of the public with respect and dignity.
         </div>
         <div class="clause">
-            <span class="clause-number">2.3.</span> The Officer shall not engage in any activity that may bring disrepute to the Company or the security profession.
+            <span class="clause-number">2.3.</span> The Officer shall not engage in any activity that may bring disrepute to the Organization or the security profession.
         </div>
     </div>
     
     <div class="warning-box">
         <div class="warning-title">⚠️ SERIOUS CONSEQUENCES FOR MISCONDUCT</div>
         <div class="clause">
-            <strong>2.4. Immediate Termination:</strong> The Company reserves the right to immediately terminate the Officer's employment without notice for serious misconduct including but not limited to: theft, fraud, assault, negligence endangering life or property, substance abuse on duty, or violation of client confidentiality.
+            <strong>2.4. Immediate Termination:</strong> The Organization reserves the right to immediately terminate the Officer's engagement without notice for serious misconduct including but not limited to: theft, fraud, assault, negligence endangering life or property, substance abuse on duty, or violation of client confidentiality.
         </div>
         <div class="clause">
-            <strong>2.5. Legal Prosecution:</strong> Criminal activities or serious breaches of the law will be reported to appropriate law enforcement agencies, and the Company will fully cooperate with legal proceedings.
+            <strong>2.5. Legal Prosecution:</strong> Criminal activities or serious breaches of the law will be reported to appropriate law enforcement agencies, and the Organization will fully cooperate with legal proceedings.
         </div>
         <div class="clause">
-            <strong>2.6. Court Proceedings:</strong> For violations resulting in financial loss, damage to property, or harm to persons, the Company may initiate civil proceedings to recover damages.
+            <strong>2.6. Court Proceedings:</strong> For violations resulting in financial loss, damage to property, or harm to persons, the Organization may initiate civil proceedings to recover damages.
         </div>
         <div class="clause">
-            <strong>2.7. Financial Penalties:</strong> The Officer may be held financially liable for damages caused by negligence or willful misconduct, including but not limited to: replacement costs for damaged equipment, compensation for lost client contracts, and legal fees incurred by the Company.
+            <strong>2.7. Financial Penalties:</strong> The Officer may be held financially liable for damages caused by negligence or willful misconduct, including but not limited to: replacement costs for damaged equipment, compensation for lost client contracts, and legal fees incurred by the Organization.
         </div>
     </div>
     
     <div class="section">
         <div class="section-title">3. CONFIDENTIALITY</div>
         <div class="clause">
-            <span class="clause-number">3.1.</span> The Officer shall not disclose any confidential information about the Company, its clients, or operations to any third party during or after employment.
+            <span class="clause-number">3.1.</span> The Officer shall not disclose any confidential information about the Organization, its clients, or operations to any third party during or after engagement.
         </div>
         <div class="clause">
             <span class="clause-number">3.2.</span> Breach of confidentiality may result in immediate termination and potential legal action.
@@ -235,7 +256,7 @@
     <div class="section">
         <div class="section-title">4. EQUIPMENT AND PROPERTY</div>
         <div class="clause">
-            <span class="clause-number">4.1.</span> All equipment issued by the Company remains the property of the Company and must be returned upon termination of employment.
+            <span class="clause-number">4.1.</span> All equipment issued by the Organization remains the property of the Organization and must be returned upon termination of engagement.
         </div>
         <div class="clause">
             <span class="clause-number">4.2.</span> The Officer is responsible for the proper care and maintenance of all assigned equipment.
@@ -245,7 +266,7 @@
     <div class="section">
         <div class="section-title">5. TERMINATION</div>
         <div class="clause">
-            <span class="clause-number">5.1.</span> Either party may terminate this agreement with appropriate notice as specified in the employment contract.
+            <span class="clause-number">5.1.</span> Either party may terminate this agreement with appropriate notice as specified in the engagement contract.
         </div>
         <div class="clause">
             <span class="clause-number">5.2.</span> Immediate termination may occur for cause as outlined in Section 2.
@@ -268,8 +289,8 @@
         
         <div class="stamp-area">
             <div>
-                <div style="font-weight: bold; margin-bottom: 10px;">FOR MARSHAL CORE NIGERIA LIMITED</div>
-                <div>Authorized Signature & Company Stamp</div>
+                <div style="font-weight: bold; margin-bottom: 10px;">FOR MARSHAL CORE OF NIGERIA</div>
+                <div>Authorized Signature & Organization Stamp</div>
             </div>
         </div>
         
@@ -288,7 +309,7 @@
     <div class="footer">
         <div>Document ID: {{ document_id }}</div>
         <div>Generated on: {{ generation_date }}</div>
-        <div>This is an official document of Marshal Core Nigeria Limited. Unauthorized duplication is prohibited.</div>
+        <div>This is an official document of Marshal Core of Nigeria. Unauthorized duplication is prohibited.</div>
     </div>
 </body>
 </html>

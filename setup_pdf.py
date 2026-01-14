@@ -88,15 +88,20 @@ def create_templates():
 
 def check_dependencies():
     """Check if required packages are installed"""
-    try:
-        import weasyprint
-        import jinja2
-        print("✓ WeasyPrint and Jinja2 are installed")
-        return True
-    except ImportError as e:
-        print(f"✗ Missing dependency: {e}")
+    import importlib.util
+
+    missing = []
+    for pkg in ("weasyprint", "jinja2"):
+        if importlib.util.find_spec(pkg) is None:
+            missing.append(pkg)
+
+    if missing:
+        print(f"✗ Missing dependency(s): {', '.join(missing)}")
         print("Install with: pip install weasyprint jinja2")
         return False
+
+    print("✓ WeasyPrint and Jinja2 are installed")
+    return True
 
 if __name__ == "__main__":
     print("Setting up PDF generation system...")
