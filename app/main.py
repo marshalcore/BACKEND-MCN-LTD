@@ -14,7 +14,7 @@ app = FastAPI(title="Marshal Core Backend")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# CORS Setup - Enhanced Configuration with frontend ports
+# CORS Setup - Enhanced Configuration
 origins = [
     "http://localhost",
     "http://localhost:5500",
@@ -29,6 +29,7 @@ origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://marshalcoreofnigeria.ng",
+    "https://marshalcoreofnigeria.ng",
     "https://backend-mcn-ltd.onrender.com",  
     "https://marshalcoreofficer.netlify.app",
     "https://mcn-org.netlify.app",
@@ -36,15 +37,21 @@ origins = [
     "https://marshalcoreadmin.netlify.app", 
 ]
 
+# Remove the existing OPTIONS handler middleware (comment it out)
+# And use ONLY the CORSMiddleware
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allow_headers=["*"],
     expose_headers=["*"],
     max_age=600
 )
+
+# Remove the entire @app.middleware("http") OPTIONS handler
+# Let FastAPI's CORSMiddleware handle OPTIONS requests
 
 # Add explicit OPTIONS handler middleware
 @app.middleware("http")

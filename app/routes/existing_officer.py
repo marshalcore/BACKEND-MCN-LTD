@@ -1,8 +1,10 @@
+# app/routes/existing_officer.py
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Request
 from sqlalchemy.orm import Session
 from uuid import UUID
-from datetime import datetime  # ADDED THIS IMPORT
+from datetime import datetime
+import logging
 
 from app.database import get_db
 from app.auth.dependencies import get_current_admin
@@ -18,7 +20,6 @@ from app.schemas.existing_officer import (
 )
 from app.services.existing_officer_service import ExistingOfficerService
 from app.utils.jwt_handler import create_access_token
-import logging
 
 logger = logging.getLogger(__name__)
 router = APIRouter(
@@ -35,6 +36,7 @@ router = APIRouter(
 )
 async def verify_officer_credentials(
     verify_data: ExistingOfficerVerify,
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """
@@ -44,12 +46,24 @@ async def verify_officer_credentials(
     and returns verification status.
     """
     try:
+        logger.info(f"Verifying officer: {verify_data.officer_id} with email: {verify_data.email}")
+        
+        # Log request origin for debugging
+        origin = request.headers.get("origin")
+        logger.info(f"Request from origin: {origin}")
+        
         result = ExistingOfficerService.verify_officer(db, verify_data)
+        
+        # Log successful verification
+        logger.info(f"Officer verification successful: {verify_data.officer_id}")
+        
         return VerifyResponse(**result)
+        
     except HTTPException as he:
+        logger.warning(f"HTTP Exception in verify: {he.detail}")
         raise he
     except Exception as e:
-        logger.error(f"Error verifying officer: {str(e)}")
+        logger.error(f"Error verifying officer: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error during verification"
@@ -64,6 +78,7 @@ async def verify_officer_credentials(
 )
 async def register_existing_officer(
     register_data: ExistingOfficerRegister,
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """
@@ -73,23 +88,34 @@ async def register_existing_officer(
     The officer must be verified first using the /verify endpoint.
     """
     try:
+        logger.info(f"Registering officer: {register_data.officer_id} with email: {register_data.email}")
+        
+        # Log request origin
+        origin = request.headers.get("origin")
+        logger.info(f"Registration request from origin: {origin}")
+        
         officer = ExistingOfficerService.register_officer(db, register_data)
+        
+        logger.info(f"Officer registered successfully: {officer.id}")
         
         return RegisterResponse(
             status="success",
             message="Officer registered successfully",
             officer_id=officer.officer_id,
             email=officer.email,
+            registration_id=str(officer.id),  # Add registration ID
             next_steps=[
                 "Upload required documents",
                 "Wait for admin verification",
                 "Login with your credentials"
             ]
         )
+        
     except HTTPException as he:
+        logger.warning(f"HTTP Exception in register: {he.detail}")
         raise he
     except Exception as e:
-        logger.error(f"Error registering officer: {str(e)}")
+        logger.error(f"Error registering officer: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to register officer"

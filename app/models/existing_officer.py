@@ -25,6 +25,13 @@ class ExistingOfficer(Base):
     phone = Column(String(20), nullable=False, comment='Officer phone number')
     password_hash = Column(String(255), nullable=False, comment='Hashed password')
     
+    # Category Field - NEW (MCN, MBT, MBC)
+    category = Column(
+        String(50), 
+        nullable=True, 
+        comment='Officer category: MCN (Marshal Core Nigeria), MBT (Marshal Board of Trustees), MBC (Marshal Board Committee)'
+    )
+    
     # Verification Fields
     is_verified = Column(Boolean, default=False, comment='Whether officer credentials are verified')
     verification_date = Column(DateTime(timezone=True), nullable=True, comment='Date when officer was verified')
