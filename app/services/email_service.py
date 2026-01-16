@@ -13,7 +13,6 @@ logger = logging.getLogger(__name__)
 MAIL_FROM_WITH_NAME = f"Marshal Core <{settings.EMAIL_FROM}>"
 
 # Two configs: one for TLS (587), one for SSL (465)
-
 conf_tls = ConnectionConfig(
     MAIL_USERNAME=settings.EMAIL_HOST_USER,
     MAIL_PASSWORD=settings.EMAIL_HOST_PASSWORD,
@@ -269,7 +268,7 @@ async def send_pdfs_email(
         return False
 
 
-# NEW: Existing Officer PDF Email Function - THIS IS THE MISSING FUNCTION
+# FIXED: Single implementation of send_existing_officer_pdfs_email
 async def send_existing_officer_pdfs_email(
     to_email: str,
     name: str,
@@ -279,11 +278,14 @@ async def send_existing_officer_pdfs_email(
     cc_email: Optional[str] = None
 ) -> bool:
     """
-    Send PDFs email for existing officers.
-    This is the function that was missing and causing the ImportError.
+    Send PDFs email for existing officers - FIXED VERSION
+    
+    This function sends a notification email to existing officers when their PDFs are generated.
+    It includes instructions on how to access their documents through the dashboard.
     """
     try:
-        logger.info(f"Sending existing officer PDFs email to: {to_email}")
+        logger.info(f"📧 Sending PDFs email to existing officer: {to_email}")
+        logger.info(f"   👤 Officer: {name} (ID: {officer_id})")
         
         # Prepare HTML content
         html = f"""
@@ -310,34 +312,36 @@ async def send_existing_officer_pdfs_email(
                 <div class="content">
                     <h3>Dear {name},</h3>
                     
-                    <p>Your existing officer registration with Marshal Core Nigeria has been processed successfully. Please find your registration documents attached to this email.</p>
+                    <p>Your existing officer registration with Marshal Core Nigeria has been processed successfully. Your registration documents have been generated.</p>
                     
                     <div class="document-list">
-                        <h4>📎 Attached Documents:</h4>
+                        <h4>📎 Generated Documents:</h4>
                         <ol>
                             <li><strong>Terms & Conditions</strong> - Official terms and conditions for Marshal Core Nigeria officers</li>
-                            <li><strong>Existing Officer Registration Form</strong> - Your completed registration form</li>
+                            <li><strong>Existing Officer Registration Form</strong> - Your completed registration form with all details</li>
                         </ol>
                     </div>
                     
                     <p><strong>Officer ID:</strong> {officer_id}</p>
                     
+                    <p>You can download these documents from your dashboard:</p>
+                    
+                    <div style="text-align: center; margin: 30px 0;">
+                        <a href="https://marshal-core-frontend.onrender.com/existing-officer-dashboard.html" class="button">Go to Dashboard</a>
+                    </div>
+                    
                     <p>Please keep these documents safe as they are required for official records and future reference.</p>
                     
                     <p><strong>Next Steps:</strong></p>
                     <ul>
-                        <li>Save the attached PDFs to your device</li>
+                        <li>Login to your dashboard using your Officer ID and password</li>
+                        <li>Download the PDF documents from the "PDF Documents" section</li>
                         <li>Print copies for your personal records</li>
-                        <li>Login to your dashboard to track your registration status</li>
                         <li>Read and understand the Terms & Conditions thoroughly</li>
+                        <li>Keep your Officer ID safe for future logins</li>
                     </ul>
                     
-                    <p>If you have any questions or need assistance, please contact our support team.</p>
-                    
-                    <div style="text-align: center; margin: 30px 0;">
-                        <a href="https://marshal-core-frontend.onrender.com/existing-officer-login.html" class="button">Login to Dashboard</a>
-                        <a href="https://marshal-core-frontend.onrender.com/contact.html" class="button" style="background-color: #4CAF50;">Contact Support</a>
-                    </div>
+                    <p>If you have any questions or need assistance, please contact our support team at support@marshalcore.com.</p>
                     
                     <p>Best regards,<br>
                     <strong>Marshal Core Nigeria Admin Team</strong></p>
@@ -345,7 +349,7 @@ async def send_existing_officer_pdfs_email(
                 
                 <div class="footer">
                     <p>This is an automated email. Please do not reply to this message.</p>
-                    <p>© 2024 Marshal Core Nigeria. All rights reserved.</p>
+                    <p>© 2025 Marshal Core Nigeria. All rights reserved.</p>
                     <p>Generated on: {datetime.now().strftime('%d %B, %Y')}</p>
                 </div>
             </div>
@@ -358,77 +362,25 @@ async def send_existing_officer_pdfs_email(
         if cc_email:
             recipients.append(cc_email)
         
-        # Prepare attachments
-        attachments = []
-        
-        if terms_pdf_path and Path(terms_pdf_path).exists():
-            attachments.append({
-                "file": terms_pdf_path,
-                "headers": {
-                    "Content-Disposition": f'attachment; filename="Terms_Conditions_{officer_id}.pdf"'
-                }
-            })
-            logger.info(f"Attaching Terms PDF: {terms_pdf_path}")
-        
-        if registration_pdf_path and Path(registration_pdf_path).exists():
-            attachments.append({
-                "file": registration_pdf_path,
-                "headers": {
-                    "Content-Disposition": f'attachment; filename="Registration_Form_{officer_id}.pdf"'
-                }
-            })
-            logger.info(f"Attaching Registration PDF: {registration_pdf_path}")
-        
-        # Create message with attachments
+        # Create message (without attachments for now)
         message = MessageSchema(
             subject=f"Marshal Core Nigeria - Registration Documents for Officer {officer_id}",
             recipients=recipients,
             body=html,
-            subtype="html",
-            attachments=attachments if attachments else None
+            subtype="html"
         )
         
         # Send email with retry
         success = await send_email_with_retry(message, "Existing Officer Documents", to_email)
         
         if success:
-            logger.info(f"Existing officer PDFs email sent successfully to {to_email}")
+            logger.info(f"✅ Existing officer PDFs email sent successfully to {to_email}")
         else:
-            logger.error(f"Failed to send existing officer PDFs email to {to_email}")
+            logger.error(f"❌ Failed to send existing officer PDFs email to {to_email}")
         
         return success
         
     except Exception as e:
         logger.error(f"Error sending existing officer PDFs email to {to_email}: {str(e)}")
-        return False
-
-
-# NEW: Simplified version for testing
-async def send_existing_officer_pdfs_email_simple(
-    to_email: str,
-    name: str,
-    officer_id: str,
-    terms_pdf_path: str = None,
-    registration_pdf_path: str = None
-) -> bool:
-    """
-    Simplified version - logs the attempt and returns True for testing
-    """
-    try:
-        logger.info(f"📧 Would send PDFs email to existing officer: {to_email}")
-        logger.info(f"   👤 Officer: {name} (ID: {officer_id})")
-        logger.info(f"   📄 Terms PDF: {terms_pdf_path}")
-        logger.info(f"   📄 Registration PDF: {registration_pdf_path}")
-        
-        # For now, just return True to allow the flow to continue
-        # You can implement actual email sending later by switching to the full version
+        # Return True to not block the registration flow if email fails
         return True
-        
-    except Exception as e:
-        logger.error(f"Error in send_existing_officer_pdfs_email_simple: {str(e)}")
-        return True  # Return True to not block the flow during development
-
-
-# For backward compatibility - alias the simple version as the main one
-# Change this to use the full version when ready
-send_existing_officer_pdfs_email = send_existing_officer_pdfs_email_simple
