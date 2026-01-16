@@ -140,9 +140,8 @@ from app.routes.password_reset import router as password_reset_router
 from app.routes.admin_auth import router as admin_router
 from app.routes.officer_uploads import router as officer_uploads_router
 from app.routes.officer_dashboard import router as officer_dashboard_router
-# NEW: Import existing officer router
 from app.routes.existing_officer import router as existing_officer_router
-# NEW: Import PDF download router
+from app.routes.existing_officer_dashboard import router as existing_officer_dashboard_router
 from app.routes.pdf_download import router as pdf_download_router
 
 # Include all routers
@@ -157,8 +156,9 @@ routers = [
     admin_router,
     officer_uploads_router,
     officer_dashboard_router,
-    existing_officer_router,  # NEW: Add existing officers router
-    pdf_download_router       # NEW: Add PDF download router
+    existing_officer_router,               
+    existing_officer_dashboard_router,     
+    pdf_download_router                    
 ]
 
 for router in routers:

@@ -1,5 +1,5 @@
 # app/models/existing_officer.py
-from sqlalchemy import Column, String, Boolean, DateTime, Text, Date
+from sqlalchemy import Column, String, Boolean, DateTime, Text, Date, Integer, Index
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 import uuid
@@ -20,12 +20,16 @@ class ExistingOfficer(Base):
     )
     
     # Credential Fields
-    officer_id = Column(String(50), unique=True, nullable=False, comment='Original officer ID from legacy system')
+    officer_id = Column(String(50), unique=True, nullable=False, comment='Original officer ID from legacy system - NEW FORMAT: PREFIX/ALPHANUMERIC/INTAKE')
     email = Column(String(255), unique=True, nullable=False, comment='Officer email')
     phone = Column(String(20), nullable=False, comment='Officer phone number')
     password_hash = Column(String(255), nullable=False, comment='Hashed password')
     
-    # Category Field - NEW (MCN, MBT, MBC)
+    # NEW FIELDS: Service Dates (from master prompt)
+    date_of_enlistment = Column(Date, nullable=False, comment='Date officer enlisted - REQUIRED')
+    date_of_promotion = Column(Date, nullable=True, comment='Date of last promotion - OPTIONAL')
+    
+    # Category Field - MCN, MBT, MBC (extracted from officer_id)
     category = Column(
         String(50), 
         nullable=True, 
@@ -47,7 +51,7 @@ class ExistingOfficer(Base):
     is_active = Column(Boolean, default=True, comment='Whether officer account is active')
     last_login = Column(DateTime(timezone=True), nullable=True, comment='Last login timestamp')
     
-    # Personal Information (23 fields as specified)
+    # Personal Information
     full_name = Column(String(100), nullable=False, comment='Full name')
     nin_number = Column(String(20), nullable=False, unique=True, comment='National Identification Number')
     gender = Column(String(10), nullable=False, comment='Gender')
@@ -80,23 +84,29 @@ class ExistingOfficer(Base):
     bank_name = Column(String(100), nullable=True, comment='Bank name')
     account_number = Column(String(20), nullable=True, comment='Bank account number')
     
-    # PDF Tracking Fields
+    # PDF Tracking Fields - UPDATED FOR EXISTING OFFICERS
     terms_pdf_path = Column(String(500), nullable=True, comment='Path to Terms & Conditions PDF')
-    application_pdf_path = Column(String(500), nullable=True, comment='Path to Application Form PDF')
+    registration_pdf_path = Column(String(500), nullable=True, comment='Path to Existing Officer Registration Form PDF')
     terms_generated_at = Column(DateTime(timezone=True), nullable=True, comment='When Terms PDF was generated')
-    application_generated_at = Column(DateTime(timezone=True), nullable=True, comment='When Application PDF was generated')
+    registration_generated_at = Column(DateTime(timezone=True), nullable=True, comment='When Registration PDF was generated')
     
-    # Document Paths (10+ file types)
-    passport_photo = Column(String(255), nullable=True, comment='Passport photo path')
-    nin_slip = Column(String(255), nullable=True, comment='NIN slip path')
-    ssce_certificate = Column(String(255), nullable=True, comment='SSCE certificate path')
-    birth_certificate = Column(String(255), nullable=True, comment='Birth certificate path')
-    letter_of_first_appointment = Column(String(255), nullable=True, comment='First appointment letter')
-    promotion_letters = Column(String(255), nullable=True, comment='Promotion letters')
+    # Document Paths (Required from master prompt)
+    passport_photo = Column(String(255), nullable=True, comment='Passport photo path - REQUIRED')
+    nin_slip = Column(String(255), nullable=True, comment='NIN slip path - REQUIRED')
+    ssce_certificate = Column(String(255), nullable=True, comment='SSCE certificate path - REQUIRED')
+    birth_certificate = Column(String(255), nullable=True, comment='Birth certificate path - OPTIONAL')
+    letter_of_first_appointment = Column(String(255), nullable=True, comment='First appointment letter - OPTIONAL')
+    promotion_letters = Column(String(255), nullable=True, comment='Promotion letters - OPTIONAL')
+    
+    # Other documents
     service_certificate = Column(String(255), nullable=True, comment='Service certificate')
     medical_certificate = Column(String(255), nullable=True, comment='Medical certificate')
     guarantor_form = Column(String(255), nullable=True, comment='Guarantor form')
     other_documents = Column(Text, nullable=True, comment='Other documents JSON array')
+    
+    # Dashboard tracking
+    dashboard_access_count = Column(Integer, default=0, comment='Number of times dashboard accessed')
+    last_dashboard_access = Column(DateTime(timezone=True), nullable=True, comment='Last dashboard access timestamp')
     
     # Audit Fields
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -107,3 +117,12 @@ class ExistingOfficer(Base):
     # Comments/Notes
     admin_notes = Column(Text, nullable=True, comment='Administrator notes')
     rejection_reason = Column(Text, nullable=True, comment='Reason for rejection if applicable')
+    
+    # Indexes for faster lookups
+    __table_args__ = (
+        Index('ix_existing_officer_id', 'officer_id'),
+        Index('ix_existing_officer_email', 'email'),
+        Index('ix_existing_officer_category', 'category'),
+        Index('ix_existing_officer_status', 'status'),
+        Index('ix_existing_officer_enlistment', 'date_of_enlistment'),
+    )

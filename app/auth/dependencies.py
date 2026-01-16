@@ -1,3 +1,4 @@
+# app/auth/dependencies.py
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import jwt, JWTError
@@ -66,18 +67,74 @@ def get_current_existing_officer(
         role = payload.get("role")
         
         if role != "existing_officer" or not officer_id:
-            raise HTTPException(status_code=401, detail="Invalid existing officer token")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid existing officer token"
+            )
         
         # Import here to avoid circular imports
         from app.models.existing_officer import ExistingOfficer
-        officer = db.query(ExistingOfficer).filter(ExistingOfficer.officer_id == officer_id).first()
+        officer = db.query(ExistingOfficer).filter(
+            ExistingOfficer.officer_id == officer_id,
+            ExistingOfficer.is_active == True
+        ).first()
         
         if not officer:
-            raise HTTPException(status_code=401, detail="Existing officer not found")
-        
-        if not officer.is_active:
-            raise HTTPException(status_code=403, detail="Officer account is deactivated")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Existing officer not found or inactive"
+            )
             
         return officer
     except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token"
+        )
+
+
+# NEW: Dependency that returns a dict (for dashboard routes)
+def get_current_existing_officer_dict(
+    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+    db: Session = Depends(get_db)
+) -> dict:
+    """Get current existing officer as dictionary for dashboard routes"""
+    token = credentials.credentials
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        officer_id = payload.get("sub")
+        role = payload.get("role")
+        
+        if role != "existing_officer" or not officer_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid existing officer token"
+            )
+        
+        # Import here to avoid circular imports
+        from app.models.existing_officer import ExistingOfficer
+        officer = db.query(ExistingOfficer).filter(
+            ExistingOfficer.officer_id == officer_id,
+            ExistingOfficer.is_active == True
+        ).first()
+        
+        if not officer:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Existing officer not found or inactive"
+            )
+            
+        return {
+            "officer_id": officer.officer_id,
+            "email": officer.email,
+            "full_name": officer.full_name,
+            "role": "existing_officer",
+            "db_id": str(officer.id),
+            "category": officer.category,
+            "rank": officer.rank
+        }
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token"
+        )

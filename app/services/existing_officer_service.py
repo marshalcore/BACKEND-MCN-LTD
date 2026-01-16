@@ -2,7 +2,7 @@
 import logging
 import json
 import re
-from datetime import datetime
+from datetime import datetime, date
 from typing import Optional, Dict, Any, List, Tuple
 from pathlib import Path
 
@@ -25,9 +25,9 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 class OfficerIDValidator:
-    """Validate and parse officer IDs"""
+    """Validate and parse officer IDs - UPDATED FOR NEW FORMAT"""
     
-    # Officer categories based on ID prefix - CORRECTED: MCN, MBT, MBC only
+    # Officer categories based on ID prefix - MCN, MBT, MBC only
     OFFICER_CATEGORIES = {
         'MCN': 'Marshal Core Nigeria',
         'MBT': 'Marshal Board of Trustees', 
@@ -37,8 +37,8 @@ class OfficerIDValidator:
     @staticmethod
     def validate_officer_id_format(officer_id: str) -> Tuple[bool, str, Optional[dict]]:
         """
-        Validate officer ID format and extract components
-        Format: PREFIX/SEQUENCE/YEAR  e.g., MCN/001/2024
+        Validate NEW officer ID format and extract components
+        NEW Format: PREFIX/ALPHANUMERIC/INTAKE  e.g., MCN/001B/031
         Returns: (is_valid, error_message, parsed_data)
         """
         if not officer_id:
@@ -46,36 +46,30 @@ class OfficerIDValidator:
         
         officer_id = officer_id.strip().upper()
         
-        # Pattern: 2-4 letters / 1-4 digits / 4 digits
-        pattern = r'^([A-Z]{2,4})/(\d{1,4})/(\d{4})$'
+        # NEW Pattern: MCN|MBT|MBC / 3-4 alphanumeric / 3 digits
+        pattern = r'^(MCN|MBT|MBC)/([A-Z0-9]{3,4})/(\d{3})$'
         match = re.match(pattern, officer_id)
         
         if not match:
-            return False, "Invalid ID format. Use: PREFIX/NUMBER/YEAR (e.g., MCN/001/2024)", None
+            return False, "Invalid ID format. Use: PREFIX/ALPHANUMERIC/INTAKE (e.g., MCN/001B/031)", None
         
-        prefix, sequence, year = match.groups()
+        prefix, alphanumeric, intake = match.groups()
         
-        # Check if prefix is valid - CORRECTED: MCN, MBT, MBC only
+        # Check if prefix is valid
         if prefix not in OfficerIDValidator.OFFICER_CATEGORIES:
             valid_prefixes = ', '.join(OfficerIDValidator.OFFICER_CATEGORIES.keys())
             return False, f"Invalid prefix '{prefix}'. Valid prefixes: {valid_prefixes}", None
         
-        # Validate year
-        current_year = datetime.now().year
-        year_int = int(year)
-        if year_int < 2000 or year_int > current_year:
-            return False, f"Invalid year {year}. Must be between 2000 and {current_year}", None
-        
-        # Validate sequence number
-        sequence_int = int(sequence)
-        if sequence_int <= 0:
-            return False, "Sequence number must be positive", None
+        # Validate intake (3 digits)
+        intake_int = int(intake)
+        if not (1 <= intake_int <= 999):
+            return False, f"Invalid intake '{intake}'. Must be between 001 and 999", None
         
         parsed_data = {
             'original_id': officer_id,
             'prefix': prefix,
-            'sequence': sequence_int,
-            'year': year_int,
+            'alphanumeric': alphanumeric,
+            'intake': intake,
             'category': OfficerIDValidator.OFFICER_CATEGORIES[prefix],
             'formatted_id': officer_id
         }
@@ -94,15 +88,20 @@ class OfficerIDValidator:
         return None
     
     @staticmethod
-    def generate_officer_id(prefix: str, sequence: int, year: int) -> str:
-        """Generate a properly formatted officer ID"""
-        if prefix not in OfficerIDValidator.OFFICER_CATEGORIES:
-            raise ValueError(f"Invalid prefix. Must be one of: {list(OfficerIDValidator.OFFICER_CATEGORIES.keys())}")
-        
-        return f"{prefix}/{sequence:03d}/{year}"
+    def generate_officer_id_examples() -> List[str]:
+        """Generate example officer IDs for reference"""
+        return [
+            "MCN/001/031",
+            "MCN/001B/123",
+            "MBT/A01/456",
+            "MBC/123A/789",
+            "MCN/ABCD/001",
+            "MBT/1234/999",
+            "MBC/X1Y2/050"
+        ]
 
 
-# Mock verification service
+# Mock verification service - UPDATED FOR NEW FORMAT
 class OfficerVerificationService:
     """Service to verify existing officer credentials against legacy system"""
     
@@ -119,7 +118,7 @@ class OfficerVerificationService:
                 detail=f"Email validation failed: {email_msg}"
             )
         
-        # 2. Validate officer ID format
+        # 2. Validate officer ID format (NEW FORMAT)
         is_id_valid, id_msg, parsed_id = OfficerIDValidator.validate_officer_id_format(officer_id)
         if not is_id_valid:
             raise HTTPException(
@@ -141,21 +140,21 @@ class OfficerVerificationService:
             "exists_in_legacy": True,
             "category": parsed_id['category'],
             "prefix": parsed_id['prefix'],
-            "sequence": parsed_id['sequence'],
-            "year": parsed_id['year'],
+            "alphanumeric": parsed_id['alphanumeric'],
+            "intake": parsed_id['intake'],
             "full_name": f"Verified {parsed_id['category']} Officer",
             "message": f"{parsed_id['category']} officer credentials verified successfully"
         }
         
         # 5. Log verification details
         logger.info(f"""
-        ✅ Officer Verification Successful:
+        ✅ Officer Verification Successful (NEW FORMAT):
            - ID: {officer_id}
            - Category: {parsed_id['category']}
            - Email: {email}
            - Prefix: {parsed_id['prefix']}
-           - Sequence: {parsed_id['sequence']}
-           - Year: {parsed_id['year']}
+           - Alphanumeric: {parsed_id['alphanumeric']}
+           - Intake: {parsed_id['intake']}
         """)
         
         return officer_data
@@ -169,7 +168,7 @@ class ExistingOfficerService:
         db: Session, 
         verify_data: ExistingOfficerVerify
     ) -> Dict[str, Any]:
-        """Verify officer credentials with enhanced validation"""
+        """Verify officer credentials with enhanced validation - UPDATED FOR NEW FORMAT"""
         logger.info(f"Verifying officer: {verify_data.officer_id}")
         
         # Clean and validate input
@@ -184,7 +183,7 @@ class ExistingOfficerService:
                 detail=f"Email validation failed: {email_msg}"
             )
         
-        # 2. Validate officer ID format
+        # 2. Validate officer ID format (NEW FORMAT)
         is_id_valid, id_msg, parsed_id = OfficerIDValidator.validate_officer_id_format(officer_id)
         if not is_id_valid:
             raise HTTPException(
@@ -237,7 +236,7 @@ class ExistingOfficerService:
         register_data: ExistingOfficerRegister,
         created_by: Optional[str] = "system"
     ) -> ExistingOfficer:
-        """Register a new existing officer with enhanced validation"""
+        """Register a new existing officer with enhanced validation - UPDATED WITH NEW FIELDS"""
         logger.info(f"Registering existing officer: {register_data.officer_id}")
         
         # Clean and validate input
@@ -245,7 +244,7 @@ class ExistingOfficerService:
         email = register_data.email.strip().lower()
         phone = register_data.phone.strip()
         
-        # 1. Validate officer ID format
+        # 1. Validate officer ID format (NEW FORMAT)
         is_id_valid, id_msg, parsed_id = OfficerIDValidator.validate_officer_id_format(officer_id)
         if not is_id_valid:
             raise HTTPException(
@@ -261,7 +260,14 @@ class ExistingOfficerService:
                 detail=f"Email validation failed: {email_msg}"
             )
         
-        # 3. Check for duplicates
+        # 3. Validate date of enlistment (NEW FIELD)
+        if not register_data.date_of_enlistment:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Date of enlistment is required"
+            )
+        
+        # 4. Check for duplicates
         existing_officer = db.query(ExistingOfficer).filter(
             (ExistingOfficer.officer_id == officer_id) |
             (ExistingOfficer.email == email) |
@@ -281,19 +287,23 @@ class ExistingOfficerService:
                 detail=detail
             )
         
-        # 4. Validate password length
+        # 5. Validate password length
         if len(register_data.password) < 8:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Password must be at least 8 characters long"
             )
         
-        # 5. Prepare the data for creation
+        # 6. Prepare the data for creation - INCLUDING NEW FIELDS
         officer_data = {
             "officer_id": officer_id,
             "email": email,
             "phone": phone,
             "password_hash": hash_password(register_data.password),
+            # NEW FIELDS
+            "date_of_enlistment": register_data.date_of_enlistment,
+            "date_of_promotion": register_data.date_of_promotion,
+            # Personal Information
             "full_name": register_data.full_name.strip(),
             "nin_number": register_data.nin_number.strip(),
             "gender": register_data.gender if register_data.gender else "Not Specified",
@@ -323,7 +333,7 @@ class ExistingOfficerService:
             "category": parsed_id['category']
         }
         
-        # 6. Create new officer record
+        # 7. Create new officer record
         officer = ExistingOfficer(**officer_data)
         
         try:
@@ -336,6 +346,8 @@ class ExistingOfficerService:
                - Name: {register_data.full_name}
                - Email: {email}
                - Category: {parsed_id['category']}
+               - Enlistment: {register_data.date_of_enlistment}
+               - Promotion: {register_data.date_of_promotion or 'N/A'}
                - Registration ID: {officer.id}
             """)
             return officer
@@ -355,7 +367,7 @@ class ExistingOfficerService:
         document_type: str,
         description: Optional[str] = None
     ) -> str:
-        """Upload document for existing officer"""
+        """Upload document for existing officer - UPDATED FOR REQUIRED/Optional DOCS"""
         logger.info(f"Uploading document {document_type} for officer {officer_id}")
         
         # Get officer
@@ -376,7 +388,7 @@ class ExistingOfficerService:
                 detail="No file provided"
             )
         
-        # Validate file size (max 10MB)
+        # Validate file size (max 10MB - from master prompt)
         file.file.seek(0, 2)
         file_size = file.file.tell()
         file.file.seek(0)
@@ -387,7 +399,7 @@ class ExistingOfficerService:
                 detail="File size exceeds 10MB limit"
             )
         
-        # Validate file type
+        # Validate file type (from master prompt)
         allowed_extensions = {'.pdf', '.jpg', '.jpeg', '.png'}
         file_ext = Path(file.filename).suffix.lower()
         if file_ext not in allowed_extensions:
@@ -398,16 +410,17 @@ class ExistingOfficerService:
         
         # Save upload
         try:
-            file_path = save_upload(file, f"existing_officers/{document_type}")
+            file_path = save_upload(file, f"existing_officers/{officer_id}/{document_type}")
             
             # Update officer record with document path
+            # Based on master prompt requirements
             document_field_map = {
-                'passport': 'passport_photo',
-                'nin_slip': 'nin_slip',
-                'ssce': 'ssce_certificate',
-                'birth_certificate': 'birth_certificate',
-                'appointment_letter': 'letter_of_first_appointment',
-                'promotion_letter': 'promotion_letters',
+                'passport': 'passport_photo',  # REQUIRED
+                'nin_slip': 'nin_slip',  # REQUIRED
+                'ssce': 'ssce_certificate',  # REQUIRED
+                'birth_certificate': 'birth_certificate',  # OPTIONAL
+                'appointment_letter': 'letter_of_first_appointment',  # OPTIONAL
+                'promotion_letter': 'promotion_letters',  # OPTIONAL
                 'service_certificate': 'service_certificate',
                 'medical_certificate': 'medical_certificate',
                 'guarantor_form': 'guarantor_form',
@@ -417,6 +430,7 @@ class ExistingOfficerService:
             if document_type in document_field_map:
                 field_name = document_field_map[document_type]
                 setattr(officer, field_name, file_path)
+                logger.info(f"Document saved to field: {field_name}")
             else:
                 # Handle other documents as JSON array
                 current_docs = officer.other_documents or '[]'
@@ -426,7 +440,8 @@ class ExistingOfficerService:
                         "type": document_type,
                         "path": file_path,
                         "description": description,
-                        "uploaded_at": datetime.utcnow().isoformat()
+                        "uploaded_at": datetime.utcnow().isoformat(),
+                        "required": document_type in ['passport', 'nin_slip', 'ssce']
                     })
                     officer.other_documents = json.dumps(docs_list)
                 except json.JSONDecodeError:
@@ -434,7 +449,8 @@ class ExistingOfficerService:
                         "type": document_type,
                         "path": file_path,
                         "description": description,
-                        "uploaded_at": datetime.utcnow().isoformat()
+                        "uploaded_at": datetime.utcnow().isoformat(),
+                        "required": document_type in ['passport', 'nin_slip', 'ssce']
                     }]
                     officer.other_documents = json.dumps(docs_list)
             
@@ -555,3 +571,113 @@ class ExistingOfficerService:
         query = query.order_by(ExistingOfficer.created_at.desc())
         
         return query.offset(skip).limit(limit).all()
+    
+    @staticmethod
+    def get_dashboard_data(db: Session, officer_id: str) -> Dict[str, Any]:
+        """Get dashboard data for existing officer - NEW METHOD"""
+        officer = db.query(ExistingOfficer).filter(
+            ExistingOfficer.officer_id == officer_id
+        ).first()
+        
+        if not officer:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Officer not found"
+            )
+        
+        # Update dashboard access tracking
+        officer.dashboard_access_count = (officer.dashboard_access_count or 0) + 1
+        officer.last_dashboard_access = datetime.utcnow()
+        db.commit()
+        
+        # Prepare dashboard data
+        dashboard_data = {
+            "officer_id": officer.officer_id,
+            "full_name": officer.full_name,
+            "email": officer.email,
+            "phone": officer.phone,
+            "rank": officer.rank,
+            "position": officer.position,
+            "status": officer.status,
+            "is_verified": officer.is_verified,
+            "is_active": officer.is_active,
+            "date_of_enlistment": officer.date_of_enlistment,
+            "date_of_promotion": officer.date_of_promotion,
+            "category": officer.category,
+            
+            # Document status
+            "passport_uploaded": bool(officer.passport_photo),
+            "nin_uploaded": bool(officer.nin_slip),
+            "ssce_uploaded": bool(officer.ssce_certificate),
+            "birth_certificate_uploaded": bool(officer.birth_certificate),
+            "appointment_letter_uploaded": bool(officer.letter_of_first_appointment),
+            "promotion_letters_uploaded": bool(officer.promotion_letters),
+            
+            # PDF availability
+            "has_terms_pdf": bool(officer.terms_pdf_path),
+            "has_registration_pdf": bool(officer.registration_pdf_path),
+            
+            # Document paths for download
+            "document_paths": {
+                "passport": officer.passport_photo,
+                "nin": officer.nin_slip,
+                "ssce": officer.ssce_certificate,
+                "birth_certificate": officer.birth_certificate,
+                "appointment_letter": officer.letter_of_first_appointment,
+                "promotion_letters": officer.promotion_letters,
+            },
+            
+            # PDF paths for download
+            "pdf_paths": {
+                "terms": officer.terms_pdf_path,
+                "registration": officer.registration_pdf_path,
+            },
+            
+            # Timestamps
+            "created_at": officer.created_at,
+            "last_login": officer.last_login,
+            "last_dashboard_access": officer.last_dashboard_access,
+            "dashboard_access_count": officer.dashboard_access_count,
+        }
+        
+        return dashboard_data
+    
+    @staticmethod
+    def update_pdf_paths(
+        db: Session,
+        officer_id: str,
+        terms_pdf_path: Optional[str] = None,
+        registration_pdf_path: Optional[str] = None
+    ) -> ExistingOfficer:
+        """Update PDF paths for existing officer - NEW METHOD"""
+        officer = db.query(ExistingOfficer).filter(
+            ExistingOfficer.officer_id == officer_id
+        ).first()
+        
+        if not officer:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Officer not found"
+            )
+        
+        if terms_pdf_path:
+            officer.terms_pdf_path = terms_pdf_path
+            officer.terms_generated_at = datetime.utcnow()
+        
+        if registration_pdf_path:
+            officer.registration_pdf_path = registration_pdf_path
+            officer.registration_generated_at = datetime.utcnow()
+        
+        officer.updated_at = datetime.utcnow()
+        
+        try:
+            db.commit()
+            db.refresh(officer)
+            return officer
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Error updating PDF paths: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to update PDF paths"
+            )

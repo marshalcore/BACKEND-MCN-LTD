@@ -7,12 +7,88 @@ from app.utils.pdf import pdf_generator
 from app.models.applicant import Applicant
 from app.models.officer import Officer
 from app.models.existing_officer import ExistingOfficer
+# Remove the problematic import and create the class locally
 
 logger = logging.getLogger(__name__)
+
+class ExistingOfficerPDFGenerator:
+    """PDF Generator for Existing Officers - LOCAL VERSION"""
+    def __init__(self):
+        pass
+    
+    def generate_registration_form(self, officer_data: Dict[str, Any]) -> str:
+        """Generate Existing Officer Registration Form PDF"""
+        try:
+            import os
+            from reportlab.lib.pagesizes import letter
+            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+            from reportlab.lib.units import inch
+            from reportlab.lib import colors
+            from datetime import datetime as dt
+            
+            # Create filename
+            officer_id = officer_data.get('officer_id', 'unknown').replace('/', '_')
+            filename = f"existing_officer_{officer_id}_registration_{dt.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+            
+            # Create directory
+            base_dir = os.path.join("static", "pdfs", "existing_officers")
+            os.makedirs(base_dir, exist_ok=True)
+            filepath = os.path.join(base_dir, filename)
+            
+            # Create PDF
+            doc = SimpleDocTemplate(filepath, pagesize=letter)
+            story = []
+            
+            # Create header
+            styles = getSampleStyleSheet()
+            
+            # Add title
+            story.append(Paragraph("EXISTING OFFICER REGISTRATION FORM", styles['Title']))
+            story.append(Spacer(1, 20))
+            
+            # Officer information
+            info_data = [
+                ["Officer ID:", officer_data.get('officer_id', 'N/A')],
+                ["Full Name:", officer_data.get('full_name', 'N/A')],
+                ["Email:", officer_data.get('email', 'N/A')],
+                ["Phone:", officer_data.get('phone', 'N/A')],
+                ["Date of Enlistment:", str(officer_data.get('date_of_enlistment', 'N/A'))],
+                ["Date of Promotion:", str(officer_data.get('date_of_promotion', 'N/A'))],
+                ["Rank:", officer_data.get('rank', 'N/A')],
+                ["Position:", officer_data.get('position', 'N/A')],
+                ["Category:", officer_data.get('category', 'N/A')],
+            ]
+            
+            table = Table(info_data, colWidths=[2*inch, 4*inch])
+            table.setStyle(TableStyle([
+                ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 10),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                ('PADDING', (0, 0), (-1, -1), 6),
+            ]))
+            
+            story.append(table)
+            story.append(Spacer(1, 20))
+            
+            # Add footer
+            story.append(Paragraph(f"Generated on: {dt.now().strftime('%Y-%m-%d %H:%M:%S')}", styles['Normal']))
+            
+            # Build PDF
+            doc.build(story)
+            
+            logger.info(f"Existing Officer PDF generated: {filepath}")
+            return filepath
+            
+        except Exception as e:
+            logger.error(f"Error generating existing officer PDF: {str(e)}")
+            raise Exception(f"Failed to generate PDF: {str(e)}")
+
 
 class PDFService:
     def __init__(self, db: Session):
         self.db = db
+        self.existing_officer_generator = ExistingOfficerPDFGenerator()  # Use local class
     
     def get_user_data(self, user_id: str, user_type: str) -> Dict[str, Any]:
         """Get user data for PDF generation based on user type"""
@@ -109,7 +185,9 @@ class PDFService:
                     })
         
         elif user_type == "existing_officer":
-            user = self.db.query(ExistingOfficer).filter(ExistingOfficer.id == user_id).first()
+            user = self.db.query(ExistingOfficer).filter(
+                ExistingOfficer.id == user_id
+            ).first()
             if user:
                 user_data = {
                     'officer_id': user.officer_id,
@@ -137,6 +215,12 @@ class PDFService:
                     'passport_photo': user.passport_photo,
                     'nin_slip': user.nin_slip,
                     'ssce_certificate': user.ssce_certificate,
+                    # NEW FIELDS FOR EXISTING OFFICERS
+                    'date_of_enlistment': user.date_of_enlistment,
+                    'date_of_promotion': user.date_of_promotion,
+                    'category': user.category,
+                    'years_of_service': user.years_of_service,
+                    'service_number': user.service_number,
                 }
         
         return user_data
@@ -186,7 +270,12 @@ class PDFService:
                 raise ValueError(f"User not found: {user_id}")
             
             # Generate PDF
-            pdf_path = pdf_generator.generate_application_form(user_data, user_id)
+            if user_type == "existing_officer":
+                # Use new template for existing officers
+                pdf_path = self.generate_existing_officer_registration_form(user_id)
+            else:
+                # Use regular application form for others
+                pdf_path = pdf_generator.generate_application_form(user_data, user_id)
             
             # Update database record
             self._update_pdf_record(user_id, user_type, 'application', pdf_path)
@@ -195,6 +284,55 @@ class PDFService:
             
         except Exception as e:
             logger.error(f"Failed to generate Application Form: {str(e)}")
+            raise
+    
+    def generate_existing_officer_registration_form(
+        self,
+        user_id: str
+    ) -> str:
+        """
+        Generate Existing Officer Registration Form PDF - NEW METHOD
+        
+        Creates a specific PDF template for existing officers
+        """
+        try:
+            logger.info(f"Generating Existing Officer Registration Form for: {user_id}")
+            
+            # Get existing officer data
+            officer = self.db.query(ExistingOfficer).filter(
+                ExistingOfficer.id == user_id
+            ).first()
+            
+            if not officer:
+                raise ValueError(f"Existing officer not found: {user_id}")
+            
+            # Prepare data for PDF generation
+            pdf_data = {
+                'officer_id': officer.officer_id,
+                'full_name': officer.full_name,
+                'email': officer.email,
+                'phone': officer.phone,
+                'date_of_enlistment': officer.date_of_enlistment,
+                'date_of_promotion': officer.date_of_promotion,
+                'rank': officer.rank,
+                'position': officer.position,
+                'category': officer.category,
+                'date_of_birth': officer.date_of_birth,
+                'gender': officer.gender,
+                'nin_number': officer.nin_number,
+                'residential_address': officer.residential_address,
+                'state_of_residence': officer.state_of_residence,
+                'nationality': officer.nationality,
+            }
+            
+            # Generate PDF using the local generator
+            pdf_path = self.existing_officer_generator.generate_registration_form(pdf_data)
+            
+            logger.info(f"Existing Officer Registration Form generated: {pdf_path}")
+            return pdf_path
+            
+        except Exception as e:
+            logger.error(f"Failed to generate Existing Officer Registration Form: {str(e)}")
             raise
     
     def generate_both_pdfs(
@@ -214,7 +352,17 @@ class PDFService:
                 raise ValueError(f"User not found: {user_id}")
             
             # Generate both PDFs
-            pdf_paths = pdf_generator.generate_both_pdfs(user_data, user_id, user_type)
+            terms_pdf_path = self.generate_terms_conditions(user_id, user_type)
+            
+            if user_type == "existing_officer":
+                application_pdf_path = self.generate_existing_officer_registration_form(user_id)
+            else:
+                application_pdf_path = self.generate_application_form(user_id, user_type)
+            
+            pdf_paths = {
+                'terms_pdf_path': terms_pdf_path,
+                'application_pdf_path': application_pdf_path
+            }
             
             # Update database records
             self._update_pdf_record(
@@ -280,9 +428,48 @@ class PDFService:
                         officer.terms_pdf_path = pdf_path
                         officer.terms_generated_at = now
                     else:
-                        officer.application_pdf_path = pdf_path
-                        officer.application_generated_at = now
+                        officer.registration_pdf_path = pdf_path  # Changed from application_pdf_path
+                        officer.registration_generated_at = now
                     self.db.commit()
                     
         except Exception as e:
             logger.error(f"Failed to update PDF record: {str(e)}")
+    
+    def get_existing_officer_pdf_status(
+        self,
+        officer_id: str
+    ) -> Dict[str, Any]:
+        """
+        Check PDF generation status for existing officer
+        """
+        try:
+            officer = self.db.query(ExistingOfficer).filter(
+                ExistingOfficer.officer_id == officer_id
+            ).first()
+            
+            if not officer:
+                return {
+                    "has_terms": False,
+                    "has_registration": False,
+                    "terms_generated_at": None,
+                    "registration_generated_at": None,
+                    "message": "Officer not found"
+                }
+            
+            return {
+                "has_terms": bool(officer.terms_pdf_path),
+                "has_registration": bool(officer.registration_pdf_path),
+                "terms_generated_at": officer.terms_generated_at,
+                "registration_generated_at": officer.registration_generated_at,
+                "terms_path": officer.terms_pdf_path,
+                "registration_path": officer.registration_pdf_path,
+                "message": "PDF status retrieved successfully"
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting PDF status: {str(e)}")
+            return {
+                "has_terms": False,
+                "has_registration": False,
+                "message": f"Error: {str(e)}"
+            }

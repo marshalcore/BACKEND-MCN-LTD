@@ -7,34 +7,26 @@ import re
 
 
 class ExistingOfficerVerify(BaseModel):
-    """Schema for verifying existing officer credentials"""
-    officer_id: str = Field(..., min_length=3, max_length=50, description="Officer ID in format: PREFIX/NUMBER/YEAR (e.g., MCN/001/2024)")
+    """Schema for verifying existing officer credentials - UPDATED FORMAT"""
+    officer_id: str = Field(..., min_length=8, max_length=50, description="Officer ID in format: PREFIX/ALPHANUMERIC/INTAKE (e.g., MCN/001B/031)")
     email: EmailStr = Field(..., description="Officer email address")
     
     @validator('officer_id')
     def validate_officer_id_format(cls, v):
-        """Validate officer ID format with slashes"""
+        """Validate NEW officer ID format: PREFIX/ALPHANUMERIC/INTAKE"""
         v = v.strip().upper()
         
-        # Pattern: 2-4 letters / 1-4 digits / 4 digits
-        pattern = r'^([A-Z]{2,4})/(\d{1,4})/(\d{4})$'
+        # NEW Pattern: MCN|MBT|MBC / 3-4 alphanumeric / 3 digits
+        pattern = r'^(MCN|MBT|MBC)/[A-Z0-9]{3,4}/\d{3}$'
         
         if not re.match(pattern, v):
-            raise ValueError('Invalid ID format. Use: PREFIX/NUMBER/YEAR (e.g., MCN/001/2024)')
+            raise ValueError('Invalid ID format. Use: PREFIX/ALPHANUMERIC/INTAKE (e.g., MCN/001B/031)')
         
         # Check valid prefixes: MCN, MBT, MBC only
         valid_prefixes = ['MCN', 'MBT', 'MBC']
         prefix = v.split('/')[0]
         if prefix not in valid_prefixes:
             raise ValueError(f'Invalid prefix "{prefix}". Valid prefixes: {", ".join(valid_prefixes)}')
-        
-        # Validate year
-        from datetime import datetime
-        current_year = datetime.now().year
-        year = int(v.split('/')[2])
-        
-        if year < 2000 or year > current_year:
-            raise ValueError(f'Invalid year {year}. Must be between 2000 and {current_year}')
         
         return v
     
@@ -60,12 +52,16 @@ class ExistingOfficerVerify(BaseModel):
 
 
 class ExistingOfficerRegister(BaseModel):
-    """Schema for registering an existing officer"""
+    """Schema for registering an existing officer - UPDATED WITH NEW FIELDS"""
     # Credentials
-    officer_id: str = Field(..., min_length=3, max_length=50)
+    officer_id: str = Field(..., min_length=8, max_length=50)
     email: EmailStr
     phone: str = Field(..., min_length=10, max_length=20)
     password: str = Field(..., min_length=8)
+    
+    # NEW REQUIRED FIELDS
+    date_of_enlistment: date = Field(..., description="Date officer enlisted (YYYY-MM-DD)")
+    date_of_promotion: Optional[date] = Field(None, description="Date of last promotion (YYYY-MM-DD)")
     
     # Personal Information
     full_name: str = Field(..., min_length=2, max_length=100)
@@ -102,12 +98,13 @@ class ExistingOfficerRegister(BaseModel):
     
     @validator('officer_id')
     def validate_officer_id(cls, v):
-        """Validate officer ID during registration"""
+        """Validate NEW officer ID format during registration"""
         v = v.strip().upper()
-        pattern = r'^([A-Z]{2,4})/(\d{1,4})/(\d{4})$'
+        # NEW Pattern: MCN|MBT|MBC / 3-4 alphanumeric / 3 digits
+        pattern = r'^(MCN|MBT|MBC)/[A-Z0-9]{3,4}/\d{3}$'
         
         if not re.match(pattern, v):
-            raise ValueError('Invalid ID format. Use: PREFIX/NUMBER/YEAR (e.g., MCN/001/2024)')
+            raise ValueError('Invalid ID format. Use: PREFIX/ALPHANUMERIC/INTAKE (e.g., MCN/001B/031)')
         
         # Check valid prefixes
         valid_prefixes = ['MCN', 'MBT', 'MBC']
@@ -115,6 +112,23 @@ class ExistingOfficerRegister(BaseModel):
         if prefix not in valid_prefixes:
             raise ValueError(f'Invalid prefix "{prefix}". Valid prefixes: {", ".join(valid_prefixes)}')
         
+        return v
+    
+    @validator('date_of_enlistment')
+    def validate_enlistment_date(cls, v):
+        """Validate date of enlistment is not in future"""
+        if v > date.today():
+            raise ValueError('Date of enlistment cannot be in the future')
+        return v
+    
+    @validator('date_of_promotion')
+    def validate_promotion_date(cls, v, values):
+        """Validate promotion date is after enlistment date if provided"""
+        if v and 'date_of_enlistment' in values and values['date_of_enlistment']:
+            if v < values['date_of_enlistment']:
+                raise ValueError('Date of promotion must be after date of enlistment')
+            if v > date.today():
+                raise ValueError('Date of promotion cannot be in the future')
         return v
     
     @validator('phone')
@@ -183,7 +197,10 @@ class ExistingOfficerResponse(BaseModel):
     nin_number: str
     rank: str
     position: Optional[str]
-    category: Optional[str]  # Added category field
+    category: Optional[str]
+    # NEW FIELDS
+    date_of_enlistment: Optional[date]
+    date_of_promotion: Optional[date]
     created_at: datetime
     updated_at: Optional[datetime]
     verification_date: Optional[datetime]
@@ -226,6 +243,10 @@ class ExistingOfficerDetailResponse(ExistingOfficerResponse):
     medical_certificate: Optional[str]
     guarantor_form: Optional[str]
     other_documents: Optional[str]
+    
+    # PDF paths
+    terms_pdf_path: Optional[str]
+    application_pdf_path: Optional[str]
 
 
 class ExistingOfficerUpdate(BaseModel):
@@ -238,7 +259,7 @@ class ExistingOfficerUpdate(BaseModel):
 
 class ExistingOfficerLogin(BaseModel):
     """Schema for existing officer login"""
-    officer_id: str = Field(..., min_length=3, max_length=50)
+    officer_id: str = Field(..., min_length=8, max_length=50)
     password: str = Field(..., min_length=8)
 
 
@@ -247,8 +268,8 @@ class VerifyResponse(BaseModel):
     verified: bool
     message: str
     officer_data: Optional[dict] = None
-    category: Optional[str] = None  # Added category
-    id_details: Optional[dict] = None  # Added ID details
+    category: Optional[str] = None
+    id_details: Optional[dict] = None
 
 
 class RegisterResponse(BaseModel):
@@ -257,6 +278,50 @@ class RegisterResponse(BaseModel):
     message: str
     officer_id: str
     email: str
-    category: Optional[str] = None  # Added category
+    category: Optional[str] = None
     next_steps: List[str] = Field(default_factory=list)
     registration_id: Optional[str] = None
+    # NEW: Include dates in response
+    date_of_enlistment: Optional[date] = None
+    date_of_promotion: Optional[date] = None
+
+
+# Schema for dashboard data
+class ExistingOfficerDashboard(BaseModel):
+    """Schema for existing officer dashboard data"""
+    officer_id: str
+    full_name: str
+    email: str
+    phone: str
+    rank: str
+    position: Optional[str]
+    status: str
+    is_verified: bool
+    is_active: bool
+    date_of_enlistment: Optional[date]
+    date_of_promotion: Optional[date]
+    category: Optional[str]
+    
+    # Document status
+    passport_uploaded: bool
+    nin_uploaded: bool
+    ssce_uploaded: bool
+    birth_certificate_uploaded: bool
+    appointment_letter_uploaded: bool
+    promotion_letters_uploaded: bool
+    
+    # PDF availability
+    has_terms_pdf: bool
+    has_registration_pdf: bool
+    
+    # Timestamps
+    created_at: datetime
+    last_login: Optional[datetime]
+    
+    class Config:
+        from_attributes = True
+
+
+# Keep officer.py schemas as they are (they're for the working portal)
+# app/schemas/officer.py remains unchanged as per master prompt
+# ... [officer.py schemas remain exactly as provided] ...
