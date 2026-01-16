@@ -269,6 +269,8 @@ async def send_pdfs_email(
 
 
 # FIXED: Single implementation of send_existing_officer_pdfs_email
+# In your email_service.py, replace the send_existing_officer_pdfs_email function with:
+
 async def send_existing_officer_pdfs_email(
     to_email: str,
     name: str,
@@ -278,91 +280,48 @@ async def send_existing_officer_pdfs_email(
     cc_email: Optional[str] = None
 ) -> bool:
     """
-    Send PDFs email for existing officers - FIXED VERSION
-    
-    This function sends a notification email to existing officers when their PDFs are generated.
-    It includes instructions on how to access their documents through the dashboard.
+    Send PDFs email for existing officers using proper template
     """
     try:
-        logger.info(f"📧 Sending PDFs email to existing officer: {to_email}")
-        logger.info(f"   👤 Officer: {name} (ID: {officer_id})")
+        logger.info(f"📧 Preparing to send PDFs email to existing officer: {to_email}")
         
-        # Prepare HTML content
-        html = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <style>
-                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-                .header {{ background-color: #1a237e; color: white; padding: 20px; text-align: center; }}
-                .content {{ padding: 30px; background-color: #f9f9f9; }}
-                .footer {{ text-align: center; padding: 20px; color: #666; font-size: 12px; }}
-                .button {{ display: inline-block; background-color: #1a237e; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; margin: 10px 5px; }}
-                .document-list {{ background: white; padding: 15px; border-left: 4px solid #1a237e; margin: 15px 0; }}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <div class="header">
-                    <h1>Marshal Core Nigeria</h1>
-                    <h2>Existing Officer Registration Documents</h2>
-                </div>
-                
-                <div class="content">
-                    <h3>Dear {name},</h3>
-                    
-                    <p>Your existing officer registration with Marshal Core Nigeria has been processed successfully. Your registration documents have been generated.</p>
-                    
-                    <div class="document-list">
-                        <h4>📎 Generated Documents:</h4>
-                        <ol>
-                            <li><strong>Terms & Conditions</strong> - Official terms and conditions for Marshal Core Nigeria officers</li>
-                            <li><strong>Existing Officer Registration Form</strong> - Your completed registration form with all details</li>
-                        </ol>
-                    </div>
-                    
-                    <p><strong>Officer ID:</strong> {officer_id}</p>
-                    
-                    <p>You can download these documents from your dashboard:</p>
-                    
-                    <div style="text-align: center; margin: 30px 0;">
-                        <a href="https://marshal-core-frontend.onrender.com/existing-officer-dashboard.html" class="button">Go to Dashboard</a>
-                    </div>
-                    
-                    <p>Please keep these documents safe as they are required for official records and future reference.</p>
-                    
-                    <p><strong>Next Steps:</strong></p>
-                    <ul>
-                        <li>Login to your dashboard using your Officer ID and password</li>
-                        <li>Download the PDF documents from the "PDF Documents" section</li>
-                        <li>Print copies for your personal records</li>
-                        <li>Read and understand the Terms & Conditions thoroughly</li>
-                        <li>Keep your Officer ID safe for future logins</li>
-                    </ul>
-                    
-                    <p>If you have any questions or need assistance, please contact our support team at support@marshalcore.com.</p>
-                    
-                    <p>Best regards,<br>
-                    <strong>Marshal Core Nigeria Admin Team</strong></p>
-                </div>
-                
-                <div class="footer">
-                    <p>This is an automated email. Please do not reply to this message.</p>
-                    <p>© 2025 Marshal Core Nigeria. All rights reserved.</p>
-                    <p>Generated on: {datetime.now().strftime('%d %B, %Y')}</p>
-                </div>
-            </div>
-        </body>
-        </html>
-        """
+        # Try to use the template
+        try:
+            # Load the template
+            template = env.get_template("existing_officer_documents.html")
+            
+            # Render template with context
+            html = template.render(
+                name=name,
+                officer_id=officer_id,
+                date=datetime.now().strftime('%d %B, %Y')
+            )
+            
+            logger.info(f"✅ Template rendered successfully for {officer_id}")
+            
+        except Exception as template_error:
+            logger.warning(f"Template rendering failed: {str(template_error)}. Using fallback HTML.")
+            
+            # Fallback HTML if template doesn't exist
+            html = f"""
+            <!DOCTYPE html>
+            <html>
+            <body>
+                <h2>Marshal Core Nigeria - Registration Documents</h2>
+                <p>Dear {name},</p>
+                <p>Your registration documents for Officer ID: {officer_id} have been generated.</p>
+                <p>Login to your dashboard to download them.</p>
+                <p>Date: {datetime.now().strftime('%d %B, %Y')}</p>
+            </body>
+            </html>
+            """
         
         # Prepare recipients
         recipients = [to_email]
         if cc_email:
             recipients.append(cc_email)
         
-        # Create message (without attachments for now)
+        # Create message
         message = MessageSchema(
             subject=f"Marshal Core Nigeria - Registration Documents for Officer {officer_id}",
             recipients=recipients,
@@ -374,13 +333,63 @@ async def send_existing_officer_pdfs_email(
         success = await send_email_with_retry(message, "Existing Officer Documents", to_email)
         
         if success:
-            logger.info(f"✅ Existing officer PDFs email sent successfully to {to_email}")
+            logger.info(f"✅ Email sent successfully to {to_email} for officer {officer_id}")
+            
+            # Also log PDF paths for debugging
+            logger.info(f"📄 PDF Paths for {officer_id}:")
+            logger.info(f"   - Terms: {terms_pdf_path}")
+            logger.info(f"   - Registration: {registration_pdf_path}")
         else:
-            logger.error(f"❌ Failed to send existing officer PDFs email to {to_email}")
+            logger.error(f"❌ Failed to send email to {to_email}")
         
         return success
         
     except Exception as e:
-        logger.error(f"Error sending existing officer PDFs email to {to_email}: {str(e)}")
-        # Return True to not block the registration flow if email fails
+        logger.error(f"💥 Error in send_existing_officer_pdfs_email: {str(e)}")
+        # Return True to not block the registration flow
+        return True
+
+
+# Also add this function for registration confirmation
+async def send_existing_officer_welcome_email(
+    to_email: str,
+    name: str,
+    officer_id: str,
+    category: str
+) -> bool:
+    """Send welcome email to existing officer after registration"""
+    try:
+        logger.info(f"Sending welcome email to new existing officer: {to_email}")
+        
+        # Try to use template
+        try:
+            template = env.get_template("existing_officer_welcome.html")
+            html = template.render(
+                name=name,
+                officer_id=officer_id,
+                category=category,
+                date=datetime.now().strftime('%d %B, %Y')
+            )
+        except:
+            # Fallback
+            html = f"""
+            <h2>Welcome to Marshal Core Nigeria</h2>
+            <p>Dear {name},</p>
+            <p>Your registration as an existing officer is complete.</p>
+            <p><strong>Officer ID:</strong> {officer_id}</p>
+            <p><strong>Category:</strong> {category}</p>
+            <p>Use your Officer ID to login to the dashboard.</p>
+            """
+        
+        message = MessageSchema(
+            subject=f"Welcome to Marshal Core Nigeria - Officer {officer_id}",
+            recipients=[to_email],
+            body=html,
+            subtype="html"
+        )
+        
+        return await send_email_with_retry(message, "Existing Officer Welcome", to_email)
+        
+    except Exception as e:
+        logger.error(f"Error sending welcome email: {str(e)}")
         return True

@@ -359,113 +359,84 @@ class ExistingOfficerService:
                 detail=f"Failed to register officer: {str(e)}"
             )
     
-    @staticmethod
-    def upload_document(
-        db: Session,
-        officer_id: str,
-        file: UploadFile,
-        document_type: str,
-        description: Optional[str] = None
-    ) -> str:
-        """Upload document for existing officer - UPDATED FOR REQUIRED/Optional DOCS"""
-        logger.info(f"Uploading document {document_type} for officer {officer_id}")
-        
-        # Get officer
-        officer = db.query(ExistingOfficer).filter(
-            ExistingOfficer.officer_id == officer_id
-        ).first()
-        
-        if not officer:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Officer not found"
-            )
-        
-        # Validate file
-        if not file.filename:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No file provided"
-            )
-        
-        # Validate file size (max 10MB - from master prompt)
-        file.file.seek(0, 2)
-        file_size = file.file.tell()
-        file.file.seek(0)
-        
-        if file_size > 10 * 1024 * 1024:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="File size exceeds 10MB limit"
-            )
-        
-        # Validate file type (from master prompt)
-        allowed_extensions = {'.pdf', '.jpg', '.jpeg', '.png'}
-        file_ext = Path(file.filename).suffix.lower()
-        if file_ext not in allowed_extensions:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid file type. Allowed: {', '.join(allowed_extensions)}"
-            )
-        
+   # In existing_officer_service.py, update the upload_document method:
+
+@staticmethod
+def upload_document(
+    db: Session,
+    officer_id: str,
+    file: UploadFile,
+    document_type: str,
+    description: Optional[str] = None
+) -> str:
+    """Upload document for existing officer - FIXED VERSION"""
+    logger.info(f"📤 Uploading document {document_type} for officer {officer_id}")
+    
+    # Get officer
+    officer = db.query(ExistingOfficer).filter(
+        ExistingOfficer.officer_id == officer_id
+    ).first()
+    
+    if not officer:
+        logger.error(f"Officer {officer_id} not found for document upload")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Officer not found"
+        )
+    
+    # Validate file
+    if not file.filename:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No file provided"
+        )
+    
+    try:
         # Save upload
-        try:
-            file_path = save_upload(file, f"existing_officers/{officer_id}/{document_type}")
+        file_path = save_upload(file, f"existing_officers/{officer_id}/{document_type}")
+        logger.info(f"✅ File saved: {file_path}")
+        
+        # Update officer record with document path - FIXED MAPPING
+        document_field_map = {
+            'passport': 'passport_photo',
+            'nin_slip': 'nin_slip',
+            'ssce': 'ssce_certificate',
+            'birth_certificate': 'birth_certificate',
+            'appointment_letter': 'letter_of_first_appointment',
+            'promotion_letters': 'promotion_letters',
+            'service_certificate': 'service_certificate',
+            'medical_certificate': 'medical_certificate',
+            'guarantor_form': 'guarantor_form',
+        }
+        
+        if document_type in document_field_map:
+            field_name = document_field_map[document_type]
+            setattr(officer, field_name, file_path)
+            logger.info(f"✅ Document saved to field: {field_name}")
             
-            # Update officer record with document path
-            # Based on master prompt requirements
-            document_field_map = {
-                'passport': 'passport_photo',  # REQUIRED
-                'nin_slip': 'nin_slip',  # REQUIRED
-                'ssce': 'ssce_certificate',  # REQUIRED
-                'birth_certificate': 'birth_certificate',  # OPTIONAL
-                'appointment_letter': 'letter_of_first_appointment',  # OPTIONAL
-                'promotion_letter': 'promotion_letters',  # OPTIONAL
-                'service_certificate': 'service_certificate',
-                'medical_certificate': 'medical_certificate',
-                'guarantor_form': 'guarantor_form',
-                'other': 'other_documents'
-            }
-            
-            if document_type in document_field_map:
-                field_name = document_field_map[document_type]
-                setattr(officer, field_name, file_path)
-                logger.info(f"Document saved to field: {field_name}")
-            else:
-                # Handle other documents as JSON array
-                current_docs = officer.other_documents or '[]'
-                try:
-                    docs_list = json.loads(current_docs)
-                    docs_list.append({
-                        "type": document_type,
-                        "path": file_path,
-                        "description": description,
-                        "uploaded_at": datetime.utcnow().isoformat(),
-                        "required": document_type in ['passport', 'nin_slip', 'ssce']
-                    })
-                    officer.other_documents = json.dumps(docs_list)
-                except json.JSONDecodeError:
-                    docs_list = [{
-                        "type": document_type,
-                        "path": file_path,
-                        "description": description,
-                        "uploaded_at": datetime.utcnow().isoformat(),
-                        "required": document_type in ['passport', 'nin_slip', 'ssce']
-                    }]
-                    officer.other_documents = json.dumps(docs_list)
-            
-            officer.updated_at = datetime.utcnow()
+            # Force commit and refresh
             db.commit()
+            db.refresh(officer)
             
-            logger.info(f"Document uploaded successfully: {file_path}")
-            return file_path
-            
-        except Exception as e:
-            logger.error(f"Error uploading document: {str(e)}", exc_info=True)
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to upload document: {str(e)}"
-            )
+            # Verify the field was updated
+            updated_value = getattr(officer, field_name)
+            logger.info(f"✅ Verified field {field_name} = {updated_value}")
+        else:
+            logger.warning(f"Document type {document_type} not in field map")
+        
+        officer.updated_at = datetime.utcnow()
+        db.commit()
+        
+        logger.info(f"✅ Document uploaded successfully for {officer_id}")
+        return file_path
+        
+    except Exception as e:
+        logger.error(f"❌ Error uploading document: {str(e)}", exc_info=True)
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to upload document: {str(e)}"
+        )
     
     @staticmethod
     def get_officer_by_id(db: Session, officer_id: str) -> Optional[ExistingOfficer]:

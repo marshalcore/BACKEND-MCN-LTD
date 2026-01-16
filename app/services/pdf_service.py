@@ -406,3 +406,53 @@ class PDFService:
                     
         except Exception as e:
             logger.error(f"Failed to update PDF record: {str(e)}")
+    
+    # ================== NEW METHOD ADDED HERE ==================
+    def generate_and_email_existing_officer_pdfs(
+        self,
+        officer_id: str
+    ) -> Dict[str, Any]:
+        """
+        Generate PDFs and send email for existing officer
+        Returns status and paths
+        """
+        try:
+            logger.info(f"🔄 Generating PDFs for existing officer: {officer_id}")
+            
+            # Get officer from officer_id (not id)
+            officer = self.db.query(ExistingOfficer).filter(
+                ExistingOfficer.officer_id == officer_id
+            ).first()
+            
+            if not officer:
+                logger.error(f"Officer {officer_id} not found")
+                return {"success": False, "error": "Officer not found"}
+            
+            # Generate Terms PDF
+            terms_pdf_path = self.generate_terms_conditions(str(officer.id), "existing_officer")
+            
+            # Generate Registration PDF
+            registration_pdf_path = self.generate_existing_officer_registration_form(str(officer.id))
+            
+            logger.info(f"✅ PDFs generated for {officer_id}")
+            logger.info(f"   Terms: {terms_pdf_path}")
+            logger.info(f"   Registration: {registration_pdf_path}")
+            
+            return {
+                "success": True,
+                "officer_id": officer_id,
+                "email": officer.email,
+                "terms_pdf_path": terms_pdf_path,
+                "registration_pdf_path": registration_pdf_path,
+                "email_pending": True,  # Email will be sent by background task
+                "message": "PDFs generated successfully"
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Error generating PDFs for {officer_id}: {str(e)}")
+            return {
+                "success": False,
+                "officer_id": officer_id,
+                "error": str(e)
+            }
+    # ================== END OF NEW METHOD ==================
