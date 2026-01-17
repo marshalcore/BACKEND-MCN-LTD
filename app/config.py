@@ -27,6 +27,20 @@ class Settings(BaseSettings):
     EMAIL_HOST_PASSWORD: str = Field(default=os.getenv("EMAIL_HOST_PASSWORD", "2WRSyat5Yc4rIwTP"), description="SMTP password")
     EMAIL_FROM: str = Field(default=os.getenv("EMAIL_FROM", "marshalcoreofnigeria@gmail.com"), description="Email sender address")
 
+    # === RESEND EMAIL API ===
+    RESEND_API_KEY: Optional[str] = Field(
+        default=os.getenv("RESEND_API_KEY"),
+        description="Resend.com API key for transactional emails"
+    )
+    RESEND_FROM_EMAIL: str = Field(
+        default=os.getenv("RESEND_FROM_EMAIL", "marshalcoreofnigeria.ng"),
+        description="Resend sender email address"
+    )
+    RESEND_FROM_NAME: str = Field(
+        default=os.getenv("RESEND_FROM_NAME", "Marshal Core Nigeria"),
+        description="Resend sender display name"
+    )
+
     # === PAYMENT GATEWAY ===
     PAYSTACK_PUBLIC_KEY: str = Field(
         default=os.getenv("PAYSTACK_PUBLIC_KEY", "pk_test_48410250265efe44b910fb32c90df054a80f7d85"),
@@ -97,6 +111,12 @@ class Settings(BaseSettings):
 
     # === DEBUG MODE ===
     DEBUG: bool = Field(default=os.getenv("DEBUG", "True").lower() == "true", description="Debug mode")
+    
+    # === RENDER.COM DETECTION ===
+    RENDER: Optional[bool] = Field(
+        default=os.getenv("RENDER", "false").lower() == "true",
+        description="Running on Render.com platform"
+    )
 
     # === EXISTING OFFICERS ===
     EXISTING_OFFICERS_UPLOAD_DIR: str = Field(
@@ -136,6 +156,7 @@ class Settings(BaseSettings):
         env_file = ".env"
         env_file_encoding = "utf-8"
         case_sensitive = False
+        extra = "allow"  # Allow extra environment variables
 
 # Create settings instance
 settings = Settings()
