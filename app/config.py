@@ -83,7 +83,7 @@ class Settings(BaseSettings):
 
     # === FRONTEND URLS ===
     FRONTEND_URL: str = Field(
-        default=os.getenv("FRONTEND_URL", "http://localhost:3000"),
+        default=os.getenv("FRONTEND_URL", "http://marshalcoreofnigeria.ng/"),
         description="Frontend URL for payment callbacks"
     )
     PAYMENT_SUCCESS_URL: str = Field(
