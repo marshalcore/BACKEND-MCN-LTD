@@ -943,6 +943,8 @@ async def send_pdfs_email(
         # Return True to not block PDF generation
         return True
 
+# In app/services/email_service.py, update this function:
+
 async def send_existing_officer_pdfs_email(
     to_email: str,
     name: str,
@@ -955,7 +957,7 @@ async def send_existing_officer_pdfs_email(
     Queue existing officer PDFs email (decoupled)
     """
     try:
-        logger.info(f"📨 Queueing PDFs email for existing officer: {to_email}")
+        logger.info(f"📨 Queueing PDFs email for existing officer: {to_email} (ID: {officer_id})")
         
         # Try to use template
         try:
@@ -971,12 +973,62 @@ async def send_existing_officer_pdfs_email(
             html = f"""
             <!DOCTYPE html>
             <html>
+            <head>
+                <style>
+                    body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                    .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                    .header {{ background-color: #1a237e; color: white; padding: 20px; text-align: center; }}
+                    .content {{ padding: 30px; background-color: #f9f9f9; }}
+                    .footer {{ text-align: center; padding: 20px; color: #666; font-size: 12px; }}
+                    .button {{ display: inline-block; background-color: #1a237e; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; margin: 10px 5px; }}
+                    .document-list {{ background: white; padding: 15px; border-left: 4px solid #1a237e; margin: 15px 0; }}
+                </style>
+            </head>
             <body>
-                <h2>Marshal Core Nigeria - Registration Documents</h2>
-                <p>Dear {name},</p>
-                <p>Your registration documents for Officer ID: {officer_id} have been generated.</p>
-                <p>Login to your dashboard to download them.</p>
-                <p>Date: {datetime.now().strftime('%d %B, %Y')}</p>
+                <div class="container">
+                    <div class="header">
+                        <h1>Marshal Core Nigeria</h1>
+                        <h2>Registration Documents for Officer {officer_id}</h2>
+                    </div>
+                    
+                    <div class="content">
+                        <h3>Dear {name},</h3>
+                        
+                        <p>Your registration as an existing officer with Marshal Core Nigeria has been completed successfully.</p>
+                        
+                        <div class="document-list">
+                            <h4>📎 Attached Documents:</h4>
+                            <ol>
+                                <li><strong>Terms & Conditions</strong> - Official terms and conditions for Marshal Core Nigeria officers</li>
+                                <li><strong>Registration Form</strong> - Your completed registration form</li>
+                            </ol>
+                        </div>
+                        
+                        <p>Please keep these documents safe as they are required for official records and future reference.</p>
+                        
+                        <p><strong>Next Steps:</strong></p>
+                        <ul>
+                            <li>Save the attached PDFs to your device</li>
+                            <li>Print copies for your personal records</li>
+                            <li>Login to your dashboard to track your registration status</li>
+                        </ul>
+                        
+                        <p>If you have any questions or need assistance, please contact our support team.</p>
+                        
+                        <div style="text-align: center; margin: 30px 0;">
+                            <a href="https://marshal-core-frontend.onrender.com/existing-officer-login.html" class="button">Login to Dashboard</a>
+                            <a href="https://marshal-core-frontend.onrender.com/contact.html" class="button" style="background-color: #4CAF50;">Contact Support</a>
+                        </div>
+                        
+                        <p>Best regards,<br>
+                        <strong>Marshal Core Nigeria Admin Team</strong></p>
+                    </div>
+                    
+                    <div class="footer">
+                        <p>This is an automated email. Please do not reply to this message.</p>
+                        <p>© {datetime.now().year} Marshal Core Nigeria. All rights reserved.</p>
+                    </div>
+                </div>
             </body>
             </html>
             """
@@ -986,21 +1038,61 @@ async def send_existing_officer_pdfs_email(
         if cc_email:
             recipients.append(cc_email)
         
+        # Create message with attachments
+        message_attachments = []
+        
+        # Add Terms PDF attachment if path exists and file exists
+        if terms_pdf_path and os.path.exists(terms_pdf_path):
+            try:
+                terms_filename = os.path.basename(terms_pdf_path)
+                with open(terms_pdf_path, "rb") as f:
+                    file_content = f.read()
+                
+                message_attachments.append({
+                    "file": terms_pdf_path,
+                    "headers": {
+                        "Content-Disposition": f'attachment; filename="Marshal_Core_Terms_{officer_id}.pdf"'
+                    }
+                })
+                logger.info(f"✅ Added Terms PDF attachment: {terms_filename}")
+            except Exception as e:
+                logger.warning(f"⚠️ Could not attach Terms PDF: {e}")
+        
+        # Add Registration PDF attachment if path exists and file exists
+        if registration_pdf_path and os.path.exists(registration_pdf_path):
+            try:
+                reg_filename = os.path.basename(registration_pdf_path)
+                with open(registration_pdf_path, "rb") as f:
+                    file_content = f.read()
+                
+                message_attachments.append({
+                    "file": registration_pdf_path,
+                    "headers": {
+                        "Content-Disposition": f'attachment; filename="Marshal_Core_Registration_{officer_id}.pdf"'
+                    }
+                })
+                logger.info(f"✅ Added Registration PDF attachment: {reg_filename}")
+            except Exception as e:
+                logger.warning(f"⚠️ Could not attach Registration PDF: {e}")
+        
         # Create message
         message = MessageSchema(
             subject=f"Marshal Core Nigeria - Registration Documents for Officer {officer_id}",
             recipients=recipients,
             body=html,
-            subtype="html"
+            subtype="html",
+            attachments=message_attachments if message_attachments else None
         )
         
         # Queue email
-        await email_queue.add_email(message, "Existing Officer Documents", to_email)
+        await email_queue.add_email(message, f"Existing Officer Documents - {officer_id}", to_email)
         return True
         
     except Exception as e:
         logger.error(f"❌ Error queueing existing officer email: {str(e)}")
         return True
+
+# In app/services/email_service.py, update this function too:
 
 async def send_existing_officer_welcome_email(
     to_email: str,
@@ -1010,7 +1102,7 @@ async def send_existing_officer_welcome_email(
 ) -> bool:
     """Queue welcome email for existing officer"""
     try:
-        logger.info(f"Queueing welcome email for existing officer: {to_email}")
+        logger.info(f"Queueing welcome email for existing officer: {to_email} (ID: {officer_id})")
         
         try:
             template = env.get_template("existing_officer_welcome.html")
@@ -1023,12 +1115,68 @@ async def send_existing_officer_welcome_email(
         except:
             # Fallback
             html = f"""
-            <h2>Welcome to Marshal Core Nigeria</h2>
-            <p>Dear {name},</p>
-            <p>Your registration as an existing officer is complete.</p>
-            <p><strong>Officer ID:</strong> {officer_id}</p>
-            <p><strong>Category:</strong> {category}</p>
-            <p>Use your Officer ID to login to the dashboard.</p>
+            <!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+        .header {{ background-color: #1a237e; color: white; padding: 20px; text-align: center; }}
+        .content {{ padding: 30px; background-color: #f9f9f9; }}
+        .footer {{ text-align: center; padding: 20px; color: #666; font-size: 12px; }}
+        .welcome-box {{ background: white; padding: 20px; border-radius: 8px; border: 2px solid #1a237e; margin: 20px 0; }}
+        .button {{ display: inline-block; background-color: #1a237e; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; margin-top: 20px; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Marshal Core Nigeria</h1>
+            <h2>Welcome to the Team!</h2>
+        </div>
+        
+        <div class="content">
+            <div class="welcome-box">
+                <h2>Hello {name}!</h2>
+                <p>Welcome to Marshal Core Nigeria - Your trusted security partner.</p>
+                
+                <p>We're excited to have you join our community of security professionals. Your existing officer account has been successfully registered and is now active.</p>
+                
+                <p><strong>Your Officer Details:</strong></p>
+                <ul>
+                    <li><strong>Officer ID:</strong> {officer_id}</li>
+                    <li><strong>Category:</strong> {category}</li>
+                    <li><strong>Registration Date:</strong> {datetime.now().strftime('%d %B, %Y')}</li>
+                </ul>
+                
+                <p><strong>What's next?</strong></p>
+                <ul>
+                    <li>Your registration documents (Terms & Conditions and Registration Form) are being generated</li>
+                    <li>You will receive them via email shortly</li>
+                    <li>Login to your dashboard to track your registration status</li>
+                    <li>Upload any missing required documents</li>
+                </ul>
+                
+                <p>You can now login to your dashboard using your Officer ID:</p>
+                
+                <div style="text-align: center;">
+                    <a href="https://marshal-core-frontend.onrender.com/existing-officer-login.html" class="button">Go to Dashboard</a>
+                </div>
+            </div>
+            
+            <p>If you have any questions or need assistance, our support team is here to help.</p>
+            
+            <p>Best regards,<br>
+            <strong>The Marshal Core Nigeria Team</strong></p>
+        </div>
+        
+        <div class="footer">
+            <p>This is an automated welcome email.</p>
+            <p>© {datetime.now().year} Marshal Core Nigeria. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>
             """
         
         message = MessageSchema(
@@ -1038,7 +1186,7 @@ async def send_existing_officer_welcome_email(
             subtype="html"
         )
         
-        await email_queue.add_email(message, "Existing Officer Welcome", to_email)
+        await email_queue.add_email(message, f"Existing Officer Welcome - {officer_id}", to_email)
         return True
         
     except Exception as e:

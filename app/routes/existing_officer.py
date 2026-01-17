@@ -21,7 +21,7 @@ from app.schemas.existing_officer import (
 )
 from app.services.existing_officer_service import ExistingOfficerService
 from app.services.pdf_service import PDFService
-from app.services.email_service import send_existing_officer_pdfs_email
+from app.services.email_service import send_existing_officer_pdfs_email, send_existing_officer_welcome_email
 from app.utils.jwt_handler import create_access_token
 
 logger = logging.getLogger(__name__)
@@ -84,6 +84,7 @@ async def verify_officer_credentials(
 async def register_existing_officer(
     register_data: ExistingOfficerRegister,
     request: Request,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
     """
@@ -106,9 +107,25 @@ async def register_existing_officer(
         
         logger.info(f"Officer registered successfully with enlistment date: {register_data.date_of_enlistment}")
         
+        # ✅ ADD PDF GENERATION AND EMAIL IN BACKGROUND
+        background_tasks.add_task(
+            generate_existing_officer_pdfs_and_email,
+            officer_id=officer.officer_id,
+            db=db
+        )
+        
+        logger.info(f"✅ PDF generation scheduled for officer: {officer.officer_id}")
+        
+        # Also send welcome email
+        background_tasks.add_task(
+            send_welcome_email,
+            officer_id=officer.officer_id,
+            db=db
+        )
+        
         return RegisterResponse(
             status="success",
-            message="Officer registered successfully",
+            message="Officer registered successfully. PDFs will be generated and emailed shortly.",
             officer_id=officer.officer_id,
             email=officer.email,
             date_of_enlistment=officer.date_of_enlistment,
@@ -117,7 +134,7 @@ async def register_existing_officer(
             registration_id=str(officer.id),
             next_steps=[
                 "Upload required documents (Passport, NIN Slip, SSCE Certificate)",
-                "Upload optional documents if available",
+                "PDF documents will be generated and emailed to you",
                 "Wait for admin verification",
                 "Login with your Officer ID and password"
             ]
@@ -395,7 +412,7 @@ async def complete_registration(
     # Generate PDFs in background if background_tasks is provided
     if background_tasks:
         background_tasks.add_task(
-            generate_existing_officer_pdfs,
+            generate_existing_officer_pdfs_and_email,
             officer_id=officer_id,
             db=db
         )
@@ -409,7 +426,7 @@ async def complete_registration(
         }
     else:
         # Generate PDFs synchronously
-        await generate_existing_officer_pdfs(officer_id, db)
+        await generate_existing_officer_pdfs_and_email(officer_id, db)
         
         return {
             "status": "success",
@@ -509,7 +526,7 @@ async def generate_pdfs_for_officer(
     # Add background task if available, otherwise generate synchronously
     if background_tasks:
         background_tasks.add_task(
-            generate_existing_officer_pdfs,
+            generate_existing_officer_pdfs_and_email,
             officer_id=officer_id,
             db=db
         )
@@ -520,7 +537,7 @@ async def generate_pdfs_for_officer(
             "officer_id": officer_id
         }
     else:
-        await generate_existing_officer_pdfs(officer_id, db)
+        await generate_existing_officer_pdfs_and_email(officer_id, db)
         
         return {
             "status": "success",
@@ -576,35 +593,50 @@ async def logout_existing_officer(
         )
 
 
-# Background task function for PDF generation - UPDATED VERSION
-async def generate_existing_officer_pdfs(officer_id: str, db: Session):
+# ==================== BACKGROUND TASK FUNCTIONS ====================
+
+async def generate_existing_officer_pdfs_and_email(officer_id: str, db: Session):
     """
-    Background task to generate PDFs for existing officers
-    DECOUPLED from email sending - email is queued separately
+    Background task to generate PDFs for existing officers and send email
     """
     try:
-        logger.info(f"🔄 Generating PDFs for existing officer: {officer_id}")
+        logger.info(f"🔄 Starting PDF generation for existing officer: {officer_id}")
         
-        officer = ExistingOfficerService.get_officer_by_id(db, officer_id)
+        # Get officer by officer_id
+        from app.models.existing_officer import ExistingOfficer
+        officer = db.query(ExistingOfficer).filter(
+            ExistingOfficer.officer_id == officer_id
+        ).first()
+        
         if not officer:
-            logger.error(f"Officer not found: {officer_id}")
+            logger.error(f"❌ Officer not found: {officer_id}")
             return
         
+        logger.info(f"✅ Found officer: {officer.full_name} ({officer.email})")
+        
         # Generate PDFs using PDFService
+        from app.services.pdf_service import PDFService
         pdf_service = PDFService(db)
         
+        logger.info(f"📄 Generating Terms & Conditions PDF for {officer_id}")
         # Generate Terms & Conditions PDF
         terms_pdf_path = pdf_service.generate_terms_conditions(
             str(officer.id),
             "existing_officer"
         )
         
-        # Generate Existing Officer Registration Form PDF (NEW template)
+        logger.info(f"📄 Generating Registration Form PDF for {officer_id}")
+        # Generate Existing Officer Registration Form PDF
         registration_pdf_path = pdf_service.generate_existing_officer_registration_form(
             str(officer.id)
         )
         
+        logger.info(f"✅ PDFs generated successfully for {officer_id}")
+        logger.info(f"   Terms PDF: {terms_pdf_path}")
+        logger.info(f"   Registration PDF: {registration_pdf_path}")
+        
         # Update PDF paths in database
+        from app.services.existing_officer_service import ExistingOfficerService
         ExistingOfficerService.update_pdf_paths(
             db,
             officer_id,
@@ -612,9 +644,9 @@ async def generate_existing_officer_pdfs(officer_id: str, db: Session):
             registration_pdf_path
         )
         
-        # ✅ DECOUPLED: Email is queued separately, doesn't block PDF generation
-        # Email will be sent asynchronously via queue
-        await send_existing_officer_pdfs_email(
+        # ✅ Send email with PDFs
+        from app.services.email_service import send_existing_officer_pdfs_email
+        email_result = await send_existing_officer_pdfs_email(
             to_email=officer.email,
             name=officer.full_name,
             officer_id=officer.officer_id,
@@ -622,8 +654,47 @@ async def generate_existing_officer_pdfs(officer_id: str, db: Session):
             registration_pdf_path=registration_pdf_path
         )
         
-        logger.info(f"✅ PDFs generated for {officer_id}, email queued")
+        if email_result:
+            logger.info(f"📧 Email queued successfully for {officer.email}")
+        else:
+            logger.warning(f"⚠️ Email queuing failed for {officer.email}")
+        
+        logger.info(f"✅ PDF generation and email queuing COMPLETE for {officer_id}")
             
     except Exception as e:
-        logger.error(f"❌ Error generating PDFs for {officer_id}: {str(e)}")
-        # Don't re-raise, just log - PDF generation should not fail the entire request
+        logger.error(f"❌ Error generating PDFs for {officer_id}: {str(e)}", exc_info=True)
+
+
+async def send_welcome_email(officer_id: str, db: Session):
+    """
+    Background task to send welcome email to existing officer
+    """
+    try:
+        logger.info(f"📧 Sending welcome email to officer: {officer_id}")
+        
+        # Get officer by officer_id
+        from app.models.existing_officer import ExistingOfficer
+        officer = db.query(ExistingOfficer).filter(
+            ExistingOfficer.officer_id == officer_id
+        ).first()
+        
+        if not officer:
+            logger.error(f"❌ Officer not found for welcome email: {officer_id}")
+            return
+        
+        # Send welcome email
+        from app.services.email_service import send_existing_officer_welcome_email
+        email_result = await send_existing_officer_welcome_email(
+            to_email=officer.email,
+            name=officer.full_name,
+            officer_id=officer.officer_id,
+            category=officer.category
+        )
+        
+        if email_result:
+            logger.info(f"✅ Welcome email sent successfully to {officer.email}")
+        else:
+            logger.warning(f"⚠️ Welcome email failed for {officer.email}")
+            
+    except Exception as e:
+        logger.error(f"❌ Error sending welcome email: {str(e)}")
