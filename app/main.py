@@ -550,7 +550,6 @@ async def internal_error_handler(request: Request, exc: HTTPException):
         status_code=500,
         content="Internal server error"
     )
-
 # Startup event
 @app.on_event("startup")
 async def startup_event():
@@ -585,13 +584,8 @@ async def startup_event():
         await start_email_queue()
         logger.info("✓ Email queue processor started")
         
-        # Start keep-alive service (FIXED VERSION)
-        from app.services.keep_alive import start_keep_alive_service
-        await start_keep_alive_service()
-        logger.info("✓ Keep-alive service started")
-        
     except Exception as e:
-        logger.warning(f"⚠ Background services initialization failed: {e}")
+        logger.warning(f"⚠ Email service initialization failed: {e}")
     
     # Log PDF system status
     try:
@@ -601,8 +595,66 @@ async def startup_event():
         logger.warning("⚠ ReportLab is not installed. PDF generation will fail.")
         logger.info("  Install with: pip install reportlab pillow")
     
+    # Add Render status endpoint
+    @app.get("/api/health/render-status", tags=["Health Check"], include_in_schema=False)
+    async def render_status():
+        """
+        Special endpoint for Render.com status monitoring
+        """
+        import time
+        
+        return {
+            "status": "awake",
+            "timestamp": datetime.datetime.now().isoformat(),
+            "service": "Marshal Core API",
+            "render": {
+                "free_tier": True,
+                "sleep_after_minutes": 15,
+                "wake_time_seconds": 30,
+                "keep_alive_active": True,
+                "last_activity": time.time(),
+                "recommended_ping_interval": "Every 10 minutes",
+                "safety_margin_minutes": 5,
+                "next_wake_check": "Continuous via keep-alive service"
+            },
+            "message": "Service is awake and responsive. Keep-alive service prevents sleeping on Render free tier."
+        }
+    
     # Log loaded routers
     logger.info("✅ Server is ready to handle requests")
+
+# Start keep-alive service AFTER server is fully started
+@app.on_event("startup")
+async def delayed_startup():
+    """
+    Start keep-alive service after a delay to ensure server is running
+    """
+    # Wait 5 seconds for server to fully start
+    await asyncio.sleep(5)
+    
+    try:
+        # Check if we're running on Render.com
+        is_render = os.getenv("RENDER") == "true" or "render.com" in os.getenv("RENDER_EXTERNAL_URL", "")
+        
+        if is_render:
+            from app.services.keep_alive import start_keep_alive_service
+            await start_keep_alive_service()
+            logger.info("✅ Keep-alive service started for Render.com")
+            logger.info("⚠️  Render free tier: Services sleep after 15 minutes of inactivity")
+            logger.info("✅ This service will ping every 10 minutes (600 seconds) to stay awake")
+            logger.info("📊 Safety margin: 5 minutes before Render's 15-minute sleep timer")
+        else:
+            # Local development - start with delay
+            try:
+                await asyncio.sleep(10)  # Wait longer for local
+                from app.services.keep_alive import start_keep_alive_service
+                await start_keep_alive_service()
+                logger.info("✓ Keep-alive service started (local development - delayed start)")
+            except Exception as e:
+                logger.info(f"⏸️  Keep-alive service skipped locally: {e}")
+        
+    except Exception as e:
+        logger.warning(f"⚠ Keep-alive service initialization failed: {e}")
 
 # Shutdown event
 @app.on_event("shutdown")

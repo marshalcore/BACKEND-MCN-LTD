@@ -1,16 +1,18 @@
+# app/services/keep_alive.py
 import asyncio
 import logging
 import httpx
 from datetime import datetime
 from typing import List, Dict, Any
 import os
+import time
 
 logger = logging.getLogger(__name__)
 
 class KeepAliveService:
     """
     Keep-alive service to prevent Render.com from sleeping
-    Pings endpoints every 4 minutes (240 seconds)
+    Pings endpoints every 10 minutes (600 seconds) - SAFER than 15 minutes
     """
     
     _instance = None
@@ -24,109 +26,104 @@ class KeepAliveService:
     
     def __init__(self):
         if not self._initialized:
-            # Determine the base URL
-            if os.getenv("ENVIRONMENT") == "production" or os.getenv("RENDER"):
-                # On Render.com production
+            # Determine if we're on Render.com or local
+            is_render = os.getenv("RENDER") == "true" or "render.com" in os.getenv("RENDER_EXTERNAL_URL", "")
+            
+            if is_render:
+                # Use Render's external URL
                 self.base_url = os.getenv("RENDER_EXTERNAL_URL", "https://backend-mcn-ltd.onrender.com")
+                logger.info(f"🌐 Render.com deployment detected: {self.base_url}")
             else:
                 # Local development
                 self.base_url = "http://localhost:8000"
-                
-            # Endpoints to ping - ALL THESE NOW SUPPORT HEAD REQUESTS
+                logger.info(f"💻 Local development: {self.base_url}")
+            
+            # Ping multiple endpoints to ensure activity
             self.endpoints = [
-                "/",  # Root endpoint - now has HEAD support
-                "/health",  # Health check - now has HEAD support
-                "/pdf/status",  # PDF status - now has HEAD support
-                "/api/health",  # Enhanced health - has HEAD support
+                "/",  # Root endpoint
+                "/health",  # Health check
+                "/api/health",  # API health
+                "/pdf/status",  # PDF status
+                "/api/health/ping",  # Simple ping endpoint
             ]
             
-            self.ping_interval = 240  # 4 minutes
-            self.timeout = 10  # seconds
+            # CRITICAL: Ping every 10 minutes (600 seconds) for Render.com
+            # Render sleeps after 15 minutes, so 10 minutes gives us 5-minute safety margin
+            self.ping_interval = 600  # 10 minutes
+            
+            self.timeout = 30  # Longer timeout for cold starts
             self.task = None
             self.client = None
+            self._initialized = True
             self.stats = {
                 "total_pings": 0,
                 "successful_pings": 0,
                 "failed_pings": 0,
                 "last_ping": None,
-                "started_at": datetime.now()
+                "started_at": datetime.now(),
+                "next_ping": None,
+                "is_render": is_render
             }
-            self._initialized = True
     
     async def initialize_client(self):
-        """Initialize HTTP client"""
+        """Initialize HTTP client with longer timeout for cold starts"""
         if self.client is None or self.client.is_closed:
             self.client = httpx.AsyncClient(
                 timeout=self.timeout,
                 follow_redirects=True,
                 headers={
-                    "User-Agent": "MarshalCore-KeepAlive/1.0"
+                    "User-Agent": "MarshalCore-KeepAlive/1.0",
+                    "Accept": "application/json",
+                    "X-Keep-Alive": "true"
                 }
             )
     
-    async def ping_endpoint(self, endpoint: str) -> Dict[str, Any]:
-        """Ping a single endpoint using GET method"""
+    async def ping_endpoint(self, endpoint: str):
+        """Ping a single endpoint"""
         url = f"{self.base_url}{endpoint}"
         
         try:
             await self.initialize_client()
             
-            # USE GET METHOD - works for all endpoints
+            # Use GET - most reliable
+            start_time = time.time()
             response = await self.client.get(url)
-            elapsed = response.elapsed.total_seconds() * 1000
+            elapsed = time.time() - start_time
             
-            # Consider 2xx and 3xx as successful
             if response.status_code < 400:
                 return {
                     "endpoint": endpoint,
                     "status": "success",
                     "status_code": response.status_code,
-                    "response_time_ms": elapsed,
-                    "method_used": "GET",
-                    "timestamp": datetime.now()
-                }
-            elif response.status_code == 405:
-                # Method not allowed - should not happen with GET
-                return {
-                    "endpoint": endpoint,
-                    "status": "method_not_allowed",
-                    "status_code": response.status_code,
-                    "method_used": "GET",
+                    "response_time": elapsed,
                     "timestamp": datetime.now()
                 }
             else:
+                logger.warning(f"⚠️ Ping warning: {endpoint} - Status {response.status_code}")
                 return {
                     "endpoint": endpoint,
                     "status": "warning",
                     "status_code": response.status_code,
-                    "response_time_ms": elapsed,
-                    "method_used": "GET",
+                    "response_time": elapsed,
                     "timestamp": datetime.now()
                 }
                 
         except httpx.ConnectError:
-            # This is expected when pinging production from localhost
-            if "localhost" in self.base_url and "render.com" in url:
-                return {
-                    "endpoint": endpoint,
-                    "status": "skipped",
-                    "reason": "local_testing",
-                    "timestamp": datetime.now()
-                }
-            else:
-                return {
-                    "endpoint": endpoint,
-                    "status": "connection_error",
-                    "timestamp": datetime.now()
-                }
-        except httpx.RequestError as e:
+            logger.error(f"🌐 Connection error: {endpoint}")
             return {
                 "endpoint": endpoint,
-                "status": "failed",
-                "error": str(e),
+                "status": "connection_error",
+                "timestamp": datetime.now()
+            }
+        except httpx.TimeoutException:
+            logger.error(f"⏱️ Timeout: {endpoint}")
+            return {
+                "endpoint": endpoint,
+                "status": "timeout",
                 "timestamp": datetime.now()
             }
         except Exception as e:
+            logger.error(f"❌ Error pinging {endpoint}: {str(e)}")
             return {
                 "endpoint": endpoint,
                 "status": "error",
@@ -135,64 +132,85 @@ class KeepAliveService:
             }
     
     async def ping_all_endpoints(self):
-        """Ping all endpoints concurrently"""
+        """Ping all endpoints with timing information"""
         self.stats["last_ping"] = datetime.now()
+        next_ping_time = datetime.now().timestamp() + self.ping_interval
+        self.stats["next_ping"] = datetime.fromtimestamp(next_ping_time)
+        
+        if self.stats["is_render"]:
+            logger.info(f"🔔 RENDER KEEP-ALIVE: Pinging {len(self.endpoints)} endpoints...")
+            logger.info(f"⏰ Next ping at: {self.stats['next_ping'].strftime('%H:%M:%S')}")
+        else:
+            logger.debug(f"Pinging {len(self.endpoints)} endpoints...")
         
         tasks = [self.ping_endpoint(endpoint) for endpoint in self.endpoints]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        results = await asyncio.gather(*tasks)
         
-        # Process results
-        successful = 0
-        total_with_failures = 0
+        # Count successes
+        successes = sum(1 for r in results if r["status"] == "success")
+        total = len(results)
         
-        for result in results:
-            if isinstance(result, Exception):
-                self.stats["failed_pings"] += 1
-                logger.error(f"❌ Ping task failed: {str(result)}")
-            elif result.get("status") == "success":
-                successful += 1
-                self.stats["successful_pings"] += 1
-            elif result.get("status") in ["skipped"]:
-                # Don't count these as failed
-                pass
+        # Update stats
+        self.stats["total_pings"] += total
+        self.stats["successful_pings"] += successes
+        self.stats["failed_pings"] += (total - successes)
+        
+        # Log results for Render
+        if self.stats["is_render"]:
+            if successes == total:
+                logger.info(f"✅ RENDER: All {total} endpoints responded successfully")
+                logger.info(f"📊 Successful pings: {self.stats['successful_pings']}, Failed: {self.stats['failed_pings']}")
             else:
-                self.stats["failed_pings"] += 1
-                total_with_failures += 1
-        
-        self.stats["total_pings"] += len(self.endpoints)
-        
-        # Only log if there's an issue
-        if successful < len(self.endpoints):
-            failed_count = len(self.endpoints) - successful
-            logger.info(f"📊 Keep-alive: {successful}/{len(self.endpoints)} successful ({failed_count} issues)")
-        else:
-            # Only log success occasionally (once every 5 successful cycles)
-            import random
-            if random.random() < 0.2:  # 20% chance
-                logger.info(f"✅ Keep-alive: All {len(self.endpoints)} endpoints healthy")
+                failed = [r for r in results if r["status"] != "success"]
+                logger.warning(f"⚠️ RENDER: {successes}/{total} endpoints successful")
+                for f in failed:
+                    logger.warning(f"  ❌ {f['endpoint']}: {f.get('status', 'unknown')}")
         
         return results
     
     async def run(self):
-        """Main keep-alive loop"""
+        """Main keep-alive loop with precise timing"""
         await self.initialize_client()
         self._is_running = True
         
-        logger.info("🚀 Starting keep-alive service...")
+        if self.stats["is_render"]:
+            logger.info("🚀 STARTING RENDER.COM KEEP-ALIVE SERVICE")
+            logger.info(f"🎯 Target URL: {self.base_url}")
+            logger.info(f"⏰ Ping interval: {self.ping_interval/60} minutes")
+            logger.info(f"⚠️  Render sleeps after: 15 minutes of inactivity")
+            logger.info(f"✅ Safety margin: {15 - self.ping_interval/60} minutes")
+            logger.info(f"📈 Endpoints to ping: {len(self.endpoints)}")
+        else:
+            logger.info("🚀 Starting local keep-alive service")
+        
+        # Initial delay to let server fully start
+        await asyncio.sleep(30)
         
         while self._is_running:
             try:
-                await self.ping_all_endpoints()
+                results = await self.ping_all_endpoints()
                 
-                # Wait for next interval
-                await asyncio.sleep(self.ping_interval)
+                # Calculate exact sleep time
+                now = datetime.now()
+                if self.stats["next_ping"]:
+                    sleep_seconds = max(1, (self.stats["next_ping"] - now).total_seconds())
+                    
+                    if self.stats["is_render"] and sleep_seconds > 60:
+                        minutes = sleep_seconds / 60
+                        logger.info(f"💤 Sleeping for {minutes:.1f} minutes until next ping...")
+                    
+                    await asyncio.sleep(sleep_seconds)
+                else:
+                    # Fallback
+                    await asyncio.sleep(self.ping_interval)
                 
             except asyncio.CancelledError:
                 logger.info("🛑 Keep-alive service cancelled")
                 break
             except Exception as e:
-                logger.error(f"❌ Error in keep-alive loop: {str(e)}")
-                await asyncio.sleep(60)  # Wait a minute before retrying
+                logger.error(f"❌ Keep-alive loop error: {str(e)}")
+                # Wait 1 minute before retrying on error
+                await asyncio.sleep(60)
     
     async def stop(self):
         """Stop the keep-alive service"""
@@ -201,15 +219,23 @@ class KeepAliveService:
             await self.client.aclose()
         logger.info("🛑 Keep-alive service stopped")
     
-    def get_stats(self) -> Dict[str, Any]:
-        """Get current statistics"""
+    def get_stats(self):
+        """Get service statistics"""
+        if not self.stats["last_ping"]:
+            return {"status": "not_started"}
+        
         uptime = datetime.now() - self.stats["started_at"]
         
         success_rate = 0
         if self.stats["total_pings"] > 0:
             success_rate = (self.stats["successful_pings"] / self.stats["total_pings"]) * 100
         
-        return {
+        # Calculate time until next ping
+        next_ping_in = 0
+        if self.stats["next_ping"]:
+            next_ping_in = max(0, (self.stats["next_ping"] - datetime.now()).total_seconds())
+        
+        stats = {
             **self.stats,
             "uptime_seconds": uptime.total_seconds(),
             "uptime_human": str(uptime),
@@ -217,8 +243,21 @@ class KeepAliveService:
             "is_running": self._is_running,
             "endpoints": self.endpoints,
             "base_url": self.base_url,
-            "ping_interval": self.ping_interval
+            "ping_interval_seconds": self.ping_interval,
+            "ping_interval_minutes": self.ping_interval / 60,
+            "next_ping_in_seconds": next_ping_in,
+            "next_ping_in_minutes": next_ping_in / 60,
         }
+        
+        if self.stats["is_render"]:
+            stats["render_info"] = {
+                "sleep_after_minutes": 15,
+                "safety_margin_minutes": 15 - (self.ping_interval / 60),
+                "status": "active" if self._is_running else "inactive",
+                "last_activity": self.stats["last_ping"].isoformat() if self.stats["last_ping"] else None
+            }
+        
+        return stats
 
     def start(self):
         """Start the keep-alive service"""
@@ -238,9 +277,8 @@ async def get_keep_alive_status():
 async def start_keep_alive_service():
     """Start the keep-alive service"""
     if keep_alive_service.start():
-        logger.info("✓ Keep-alive service initialized")
-    else:
-        logger.info("✓ Keep-alive service already running")
+        return True
+    return False
 
 async def stop_keep_alive_service():
     """Stop the keep-alive service"""
