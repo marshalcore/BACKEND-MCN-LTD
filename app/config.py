@@ -33,7 +33,7 @@ class Settings(BaseSettings):
         description="Resend.com API key for transactional emails"
     )
     RESEND_FROM_EMAIL: str = Field(
-        default=os.getenv("RESEND_FROM_EMAIL", "marshalcoreofnigeria.ng"),
+        default=os.getenv("RESEND_FROM_EMAIL", "onboarding@marshalcoreofnigeria.ng"),
         description="Resend sender email address"
     )
     RESEND_FROM_NAME: str = Field(

@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 # ✅ ENVIRONMENT DETECTION
 IS_RENDER = os.getenv("RENDER") == "true"
 RESEND_API_KEY = os.getenv("RESEND_API_KEY")
-RESEND_FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL", "marshalcoreofnigeria.ng")
+RESEND_FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL", "onboarding@marshalcoreofnigeria.ng")
 RESEND_FROM_NAME = os.getenv("RESEND_FROM_NAME", "Marshal Core Nigeria")
 RESEND_ENABLED = bool(RESEND_API_KEY and RESEND_AVAILABLE)
 
