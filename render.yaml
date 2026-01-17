@@ -1,0 +1,84 @@
+# Render YAML configuration for deploying Marshal Core Backend
+services:
+  # Main Web Service
+  - type: web
+    name: marshal-core-backend
+    env: python
+    region: frankfurt  # or oregon, ohio based on your needs
+    plan: free
+    branch: main
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        sync: false
+      - key: ALGORITHM
+        value: "HS256"
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "30"
+      - key: REFRESH_TOKEN_EXPIRE_DAYS
+        value: "7"
+      - key: EMAIL_HOST
+        sync: false
+      - key: EMAIL_HOST_USER
+        sync: false
+      - key: EMAIL_HOST_PASSWORD
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: PAYSTACK_SECRET_KEY
+        sync: false
+      - key: FLUTTERWAVE_SECRET_KEY
+        value: "flw_test_xxxxx"
+      - key: DEBUG
+        value: "False"
+      - key: KEEP_ALIVE_INTERVAL
+        value: "240"  # 4 minutes in seconds
+      - key: ENABLE_KEEP_ALIVE
+        value: "true"
+      - key: RENDER_EXTERNAL_URL
+        fromService:
+          name: marshal-core-backend
+          type: web
+          property: url
+      - key: EXISTING_OFFICERS_UPLOAD_DIR
+        value: "static/uploads/existing_officers"
+      - key: EXISTING_OFFICERS_MAX_FILES
+        value: "10"
+      - key: EXISTING_OFFICERS_REQUIRED_DOCS
+        value: "passport,nin_slip,ssce"
+
+  # Background Worker for Email Queue (Optional - for production)
+  - type: worker
+    name: marshal-core-email-worker
+    env: python
+    region: frankfurt
+    plan: free
+    branch: main
+    buildCommand: pip install -r requirements.txt
+    startCommand: python app/workers/email_worker.py
+    envVars:
+      - key: DATABASE_URL
+        fromService: marshal-core-backend
+      - key: SECRET_KEY
+        fromService: marshal-core-backend
+      - key: ALGORITHM
+        fromService: marshal-core-backend
+      - key: EMAIL_HOST
+        fromService: marshal-core-backend
+      - key: EMAIL_HOST_USER
+        fromService: marshal-core-backend
+      - key: EMAIL_HOST_PASSWORD
+        fromService: marshal-core-backend
+      - key: EMAIL_FROM
+        fromService: marshal-core-backend
+      - key: KEEP_ALIVE_INTERVAL
+        value: "240"
+      - key: ENABLE_KEEP_ALIVE
+        value: "false"  # Don't run keep-alive in worker
+      - key: RENDER_EXTERNAL_URL
+        fromService: marshal-core-backend

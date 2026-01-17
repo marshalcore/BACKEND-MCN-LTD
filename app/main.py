@@ -6,6 +6,7 @@ from fastapi.responses import FileResponse
 import os
 import logging
 import datetime
+import asyncio
 
 # Init app
 app = FastAPI(title="Marshal Core Backend")
@@ -37,48 +38,16 @@ origins = [
     "https://marshalcoreadmin.netlify.app", 
 ]
 
-# Remove the existing OPTIONS handler middleware (comment it out)
-# And use ONLY the CORSMiddleware
-
+# Use ONLY FastAPI's CORSMiddleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
     allow_headers=["*"],
     expose_headers=["*"],
     max_age=600
 )
-
-# Remove the entire @app.middleware("http") OPTIONS handler
-# Let FastAPI's CORSMiddleware handle OPTIONS requests
-
-# Add explicit OPTIONS handler middleware
-@app.middleware("http")
-async def options_handler(request: Request, call_next):
-    if request.method == "OPTIONS":
-        response = Response(
-            status_code=200,
-            headers={
-                "Access-Control-Allow-Origin": request.headers.get("origin", "*"),
-                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD",
-                "Access-Control-Allow-Headers": request.headers.get("access-control-request-headers", "Content-Type, Authorization, Accept"),
-                "Access-Control-Allow-Credentials": "true",
-                "Access-Control-Max-Age": "600",
-                "Access-Control-Expose-Headers": "*"
-            }
-        )
-        return response
-    
-    response = await call_next(request)
-    
-    origin = request.headers.get("origin")
-    if origin in origins:
-        response.headers["Access-Control-Allow-Origin"] = origin
-        response.headers["Access-Control-Allow-Credentials"] = "true"
-        response.headers["Access-Control-Expose-Headers"] = "*"
-    
-    return response
 
 # Static Files
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -143,6 +112,7 @@ from app.routes.officer_dashboard import router as officer_dashboard_router
 from app.routes.existing_officer import router as existing_officer_router
 from app.routes.existing_officer_dashboard import router as existing_officer_dashboard_router
 from app.routes.pdf_download import router as pdf_download_router
+from app.routes.health import router as health_router
 
 # Include all routers
 routers = [
@@ -158,15 +128,17 @@ routers = [
     officer_dashboard_router,
     existing_officer_router,               
     existing_officer_dashboard_router,     
-    pdf_download_router                    
+    pdf_download_router,
+    health_router
 ]
 
 for router in routers:
     app.include_router(router)
     logger.info(f"Included router: {router.prefix}")
 
-# Root endpoint with CORS headers
+# Root endpoint with HEAD support
 @app.get("/", include_in_schema=False)
+@app.head("/", include_in_schema=False)
 async def root():
     return {
         "status": "ok",
@@ -181,7 +153,8 @@ async def root():
             "/applicant/* - Applicant routes",
             "/payment/* - Payment processing",
             "/pdf/* - PDF document download and management",
-            "/health - System health check"
+            "/health - System health check",
+            "/api/health - Enhanced health check with keep-alive"
         ]
     }
 
@@ -240,13 +213,6 @@ async def download_pdf(filename: str, request: Request):
         media_type="application/pdf"
     )
     
-    # Add CORS headers
-    origin = request.headers.get("origin")
-    if origin in origins:
-        response.headers["Access-Control-Allow-Origin"] = origin
-        response.headers["Access-Control-Allow-Credentials"] = "true"
-        response.headers["Access-Control-Expose-Headers"] = "*"
-    
     logger.info(f"Serving PDF: {filename}")
     return response
 
@@ -301,18 +267,12 @@ async def preview_pdf(filename: str, request: Request):
         }
     )
     
-    # Add CORS headers
-    origin = request.headers.get("origin")
-    if origin in origins:
-        response.headers["Access-Control-Allow-Origin"] = origin
-        response.headers["Access-Control-Allow-Credentials"] = "true"
-        response.headers["Access-Control-Expose-Headers"] = "*"
-    
     logger.info(f"Previewing PDF: {filename}")
     return response
 
-# Health check endpoint with detailed information
+# Health check endpoint with HEAD support
 @app.get("/health", include_in_schema=False)
+@app.head("/health", include_in_schema=False)
 async def health_check():
     """
     Comprehensive health check endpoint
@@ -405,8 +365,9 @@ async def health_check():
     
     return health_status
 
-# PDF System Status endpoint
+# PDF System Status endpoint with HEAD support
 @app.get("/pdf/status", tags=["PDF System"])
+@app.head("/pdf/status", tags=["PDF System"])
 async def pdf_system_status():
     """
     Check PDF generation system status
@@ -579,12 +540,7 @@ async def test_pdf_generation():
 async def not_found_exception_handler(request: Request, exc: HTTPException):
     return Response(
         status_code=404,
-        content=f"Endpoint {request.url} not found",
-        headers={
-            "Access-Control-Allow-Origin": request.headers.get("origin", "*"),
-            "Access-Control-Allow-Credentials": "true",
-            "Access-Control-Expose-Headers": "*"
-        }
+        content=f"Endpoint {request.url} not found"
     )
 
 @app.exception_handler(500)
@@ -592,12 +548,7 @@ async def internal_error_handler(request: Request, exc: HTTPException):
     logger.error(f"Internal server error: {exc}")
     return Response(
         status_code=500,
-        content="Internal server error",
-        headers={
-            "Access-Control-Allow-Origin": request.headers.get("origin", "*"),
-            "Access-Control-Allow-Credentials": "true",
-            "Access-Control-Expose-Headers": "*"
-        }
+        content="Internal server error"
     )
 
 # Startup event
@@ -615,7 +566,9 @@ async def startup_event():
         os.path.join(STATIC_DIR, "pdfs"),
         os.path.join(STATIC_DIR, "pdfs", "terms"),
         os.path.join(STATIC_DIR, "pdfs", "applications"),
-        os.path.join(BASE_DIR, "templates", "pdf")
+        os.path.join(STATIC_DIR, "uploads", "existing_officers"),
+        os.path.join(BASE_DIR, "templates", "pdf"),
+        os.path.join(BASE_DIR, "templates", "email")
     ]
     
     for directory in directories_to_create:
@@ -624,6 +577,21 @@ async def startup_event():
             logger.info(f"✓ Created/verified directory: {directory}")
         except Exception as e:
             logger.warning(f"⚠ Could not create directory {directory}: {e}")
+    
+    # Start background services
+    try:
+        # Start email queue processor
+        from app.services.email_service import start_email_queue
+        await start_email_queue()
+        logger.info("✓ Email queue processor started")
+        
+        # Start keep-alive service (FIXED VERSION)
+        from app.services.keep_alive import start_keep_alive_service
+        await start_keep_alive_service()
+        logger.info("✓ Keep-alive service started")
+        
+    except Exception as e:
+        logger.warning(f"⚠ Background services initialization failed: {e}")
     
     # Log PDF system status
     try:
@@ -639,7 +607,15 @@ async def startup_event():
 # Shutdown event
 @app.on_event("shutdown")
 async def shutdown_event():
+    """Clean shutdown of services"""
     logger.info("🛑 Marshal Core Backend shutting down...")
+    
+    # Stop keep-alive service
+    try:
+        from app.services.keep_alive import stop_keep_alive_service
+        await stop_keep_alive_service()
+    except Exception as e:
+        logger.error(f"Error stopping keep-alive: {e}")
 
 if __name__ == "__main__":
     import uvicorn

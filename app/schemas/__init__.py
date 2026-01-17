@@ -10,7 +10,15 @@ from .officer import (
     ForgotPasswordRequest,
     ResetPasswordRequest
 )
-from .payment import ManualPaymentRequest, GatewayCallback
+from .payment import (
+    ManualPaymentRequest, 
+    GatewayCallback,
+    PaymentCreate,  # NEW
+    PaymentVerify,  # NEW
+    PaymentCallback,  # NEW
+    PaymentType,  # NEW
+    UserType  # NEW
+)
 from .pre_applicant import (
     PreApplicantCreate,
     PreApplicantStatusResponse,
@@ -29,6 +37,11 @@ __all__ = [
     "ResetPasswordRequest",
     "ManualPaymentRequest",
     "GatewayCallback",
+    "PaymentCreate",  
+    "PaymentVerify",  
+    "PaymentCallback",  
+    "PaymentType",  
+    "UserType",  
     "PreApplicantCreate",
     "PreApplicantStatusResponse",
     "PasswordValidationRequest"

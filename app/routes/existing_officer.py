@@ -576,13 +576,14 @@ async def logout_existing_officer(
         )
 
 
-# Background task function for PDF generation
+# Background task function for PDF generation - UPDATED VERSION
 async def generate_existing_officer_pdfs(officer_id: str, db: Session):
     """
     Background task to generate PDFs for existing officers
+    DECOUPLED from email sending - email is queued separately
     """
     try:
-        logger.info(f"Generating PDFs for existing officer: {officer_id}")
+        logger.info(f"🔄 Generating PDFs for existing officer: {officer_id}")
         
         officer = ExistingOfficerService.get_officer_by_id(db, officer_id)
         if not officer:
@@ -611,8 +612,9 @@ async def generate_existing_officer_pdfs(officer_id: str, db: Session):
             registration_pdf_path
         )
         
-        # Send email with PDFs
-        success = await send_existing_officer_pdfs_email(
+        # ✅ DECOUPLED: Email is queued separately, doesn't block PDF generation
+        # Email will be sent asynchronously via queue
+        await send_existing_officer_pdfs_email(
             to_email=officer.email,
             name=officer.full_name,
             officer_id=officer.officer_id,
@@ -620,10 +622,8 @@ async def generate_existing_officer_pdfs(officer_id: str, db: Session):
             registration_pdf_path=registration_pdf_path
         )
         
-        if success:
-            logger.info(f"PDFs generated and emailed successfully to {officer.email}")
-        else:
-            logger.error(f"Failed to send PDFs email to {officer.email}")
+        logger.info(f"✅ PDFs generated for {officer_id}, email queued")
             
     except Exception as e:
-        logger.error(f"Error generating PDFs for {officer_id}: {str(e)}")
+        logger.error(f"❌ Error generating PDFs for {officer_id}: {str(e)}")
+        # Don't re-raise, just log - PDF generation should not fail the entire request
