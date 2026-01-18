@@ -306,7 +306,7 @@ async def verify_otp_login(
         is_valid = verify_otp(
             db=db,
             email=normalized_email,
-            otp_code=otp_data.otp,
+            code=otp_data.code,
             purpose=otp_data.purpose
         )
         
