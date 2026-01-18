@@ -259,7 +259,7 @@ async def admin_login(
         store_verification_code(
             db=db,
             email=admin.email.lower(),
-            otp_code=otp,
+            code=otp,  # CHANGE FROM otp_code to code
             purpose="admin_login"
         )
         
@@ -306,7 +306,7 @@ async def verify_otp_login(
         is_valid = verify_otp(
             db=db,
             email=normalized_email,
-            otp_code=otp_data.code,  # Changed from otp_data.otp to otp_data.code
+            code=otp_data.code,  # USE code NOT otp or otp_code
             purpose=otp_data.purpose
         )
         
@@ -570,7 +570,7 @@ async def request_password_reset(
         store_verification_code(
             db=db,
             email=normalized_email,
-            otp_code=otp,
+            code=otp,
             purpose="password_reset"
         )
         
@@ -617,9 +617,9 @@ async def verify_password_reset(
         is_valid = verify_otp(
             db=db,
             email=normalized_email,
-            otp_code=otp,
+            code=otp,  # CHANGE otp_code to code if needed
             purpose="password_reset"
-        )
+)
         
         if not is_valid:
             raise HTTPException(
@@ -1349,7 +1349,7 @@ async def resend_admin_otp(
         store_verification_code(
             db=db,
             email=normalized_email,
-            otp_code=otp,
+            code=otp,
             purpose=purpose
         )
         
