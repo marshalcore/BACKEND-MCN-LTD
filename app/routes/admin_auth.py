@@ -362,7 +362,6 @@ async def verify_otp_login(
             "is_verified": admin.is_verified,
             "is_active": admin.is_active,
             "last_login": admin.last_login.isoformat() if admin.last_login else None,
-            "created_at": admin.created_at.isoformat() if admin.created_at else None
         }
         
         return {
