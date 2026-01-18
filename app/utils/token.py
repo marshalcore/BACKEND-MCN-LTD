@@ -110,11 +110,8 @@ def store_verification_code(db: Session, email: str, code: str, purpose: str = "
     Args:
         db: Database session
         email: User email
-        code: 6-digit OTP code (parameter name is 'code', not 'otp_code')
+        code: 6-digit OTP code  # ALREADY CORRECT
         purpose: Purpose of OTP (login, signup, password_reset, admin_login)
-        
-    Returns:
-        VerificationCode object
     """
     try:
         # Delete any existing codes for this email and purpose
@@ -144,14 +141,14 @@ def store_verification_code(db: Session, email: str, code: str, purpose: str = "
         )
 
 
-def verify_otp(db: Session, email: str, otp_code: str, purpose: str) -> bool:
+def verify_otp(db: Session, email: str, code: str, purpose: str) -> bool:
     """
     Verify OTP code
     
     Args:
         db: Database session
         email: User email
-        otp_code: OTP code to verify
+        code: OTP code to verify  # CHANGED FROM otp_code to code
         purpose: Purpose of OTP
         
     Returns:
@@ -161,7 +158,7 @@ def verify_otp(db: Session, email: str, otp_code: str, purpose: str) -> bool:
         # Find the verification code
         verification = db.query(VerificationCode).filter(
             VerificationCode.email == email,
-            VerificationCode.code == otp_code,
+            VerificationCode.code == code,  # CHANGED FROM otp_code to code
             VerificationCode.purpose == purpose,
             VerificationCode.expires_at > datetime.utcnow()
         ).first()
