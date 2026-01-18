@@ -8,6 +8,7 @@ from jose import jwt, JWTError
 from enum import Enum
 from pydantic import BaseModel, EmailStr
 import logging
+import uuid
 
 from app.database import get_db
 from app.models.admin import Admin
@@ -75,6 +76,11 @@ class ApplicantUpdate(BaseModel):
     phone: Optional[str] = None
     status: Optional[str] = None
     unique_id: Optional[str] = None
+
+class StatusUpdateRequest(BaseModel):
+    status: str
+    reason: Optional[str] = None
+    admin_notes: Optional[str] = None
 
 # ------------------ Authentication Dependencies ------------------
 
@@ -172,11 +178,11 @@ async def admin_signup(
         # Create new admin - FIXED: using hashed_password field
         new_admin = Admin(
             email=admin_data.email.lower(),
-            hashed_password=hashed_password,  # FIXED: Changed from password to hashed_password
+            hashed_password=hashed_password,
             full_name=admin_data.full_name,
             is_active=True,
-            is_superuser=False,  # Default to False for new admins
-            is_verified=False   # New admins need verification
+            is_superuser=False,
+            is_verified=False
         )
         
         db.add(new_admin)
@@ -189,7 +195,7 @@ async def admin_signup(
                 send_otp_email,
                 new_admin.email,
                 new_admin.full_name,
-                "000000",  # Dummy OTP for welcome
+                "000000",
                 "admin_welcome"
             )
         
@@ -238,8 +244,8 @@ async def admin_login(
                 detail="Admin account is inactive"
             )
         
-        # Verify password - FIXED: Using hashed_password field instead of password
-        if not verify_password(login_data.password, admin.hashed_password):  # FIXED
+        # Verify password
+        if not verify_password(login_data.password, admin.hashed_password):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid credentials"
@@ -491,6 +497,23 @@ async def admin_dashboard(
             ExistingOfficer.status == 'pending_verification'
         ).scalar() or 0
         
+        # Get pending existing officers for approval queue
+        pending_approvals = db.query(func.count(ExistingOfficer.id)).filter(
+            ExistingOfficer.status == 'pending'
+        ).scalar() or 0
+        
+        # Get recent activity (last 10)
+        recent_officers = db.query(ExistingOfficer).order_by(ExistingOfficer.created_at.desc()).limit(10).all()
+        
+        recent_activity = []
+        for officer in recent_officers:
+            recent_activity.append({
+                "officer_id": officer.officer_id,
+                "full_name": officer.full_name,
+                "status": officer.status,
+                "created_at": officer.created_at.isoformat() if officer.created_at else None
+            })
+        
         logger.info(f"Admin dashboard accessed by: {current_admin.email}")
         
         return {
@@ -509,7 +532,8 @@ async def admin_dashboard(
                 "total_existing_officers": total_existing_officers,
                 "total_admins": total_admins,
                 "pending_verifications": pending_existing_officers,
-                "recent_activity": []
+                "pending_approvals": pending_approvals,
+                "recent_activity": recent_activity
             }
         }
         
@@ -584,7 +608,7 @@ async def verify_password_reset(
     db: Session = Depends(get_db)
 ):
     """
-    Verify OTP and reset password - FIXED: Using hashed_password field
+    Verify OTP and reset password
     """
     try:
         normalized_email = email.strip().lower()
@@ -611,7 +635,7 @@ async def verify_password_reset(
                 detail="Admin not found"
             )
         
-        # Update password in hashed_password field - FIXED
+        # Update password
         admin.hashed_password = hash_password(new_password)
         db.commit()
         
@@ -725,6 +749,7 @@ async def get_all_existing_officers(
             "officer_id": officer.officer_id,
             "full_name": officer.full_name,
             "email": officer.email,
+            "phone": officer.phone,
             "category": officer.category,
             "rank": officer.rank,
             "position": officer.position,
@@ -733,6 +758,16 @@ async def get_all_existing_officers(
             "status": officer.status,
             "is_verified": officer.is_verified,
             "is_active": officer.is_active,
+            "nin_number": officer.nin_number,
+            "years_of_service": officer.years_of_service,
+            "service_number": officer.service_number,
+            "bank_name": officer.bank_name,
+            "account_number": officer.account_number,
+            "residential_address": officer.residential_address,
+            "state_of_origin": officer.state_of_origin,
+            "state_of_residence": officer.state_of_residence,
+            "admin_notes": officer.admin_notes,
+            "rejection_reason": officer.rejection_reason,
             "created_at": officer.created_at.isoformat() if officer.created_at else None,
             "updated_at": officer.updated_at.isoformat() if officer.updated_at else None
         } for officer in officers]
@@ -742,6 +777,356 @@ async def get_all_existing_officers(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to load existing officers"
+        )
+
+@router.get("/existing-officers/{officer_id}", status_code=status.HTTP_200_OK)
+async def get_existing_officer(
+    officer_id: str,
+    db: Session = Depends(get_db),
+    current_admin: Admin = Depends(get_current_admin)
+):
+    """
+    Get a specific existing officer by officer_id
+    """
+    try:
+        officer = db.query(ExistingOfficer).filter(ExistingOfficer.officer_id == officer_id).first()
+        
+        if not officer:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Officer not found"
+            )
+        
+        return {
+            "id": str(officer.id),
+            "officer_id": officer.officer_id,
+            "full_name": officer.full_name,
+            "email": officer.email,
+            "phone": officer.phone,
+            "category": officer.category,
+            "rank": officer.rank,
+            "position": officer.position,
+            "date_of_enlistment": officer.date_of_enlistment.isoformat() if officer.date_of_enlistment else None,
+            "date_of_promotion": officer.date_of_promotion.isoformat() if officer.date_of_promotion else None,
+            "status": officer.status,
+            "is_verified": officer.is_verified,
+            "is_active": officer.is_active,
+            "nin_number": officer.nin_number,
+            "gender": officer.gender,
+            "date_of_birth": officer.date_of_birth.isoformat() if officer.date_of_birth else None,
+            "place_of_birth": officer.place_of_birth,
+            "nationality": officer.nationality,
+            "marital_status": officer.marital_status,
+            "residential_address": officer.residential_address,
+            "state_of_residence": officer.state_of_residence,
+            "local_government_residence": officer.local_government_residence,
+            "country_of_residence": officer.country_of_residence,
+            "state_of_origin": officer.state_of_origin,
+            "local_government_origin": officer.local_government_origin,
+            "years_of_service": officer.years_of_service,
+            "service_number": officer.service_number,
+            "religion": officer.religion,
+            "additional_skills": officer.additional_skills,
+            "bank_name": officer.bank_name,
+            "account_number": officer.account_number,
+            "passport_photo": officer.passport_photo,
+            "nin_slip": officer.nin_slip,
+            "ssce_certificate": officer.ssce_certificate,
+            "birth_certificate": officer.birth_certificate,
+            "letter_of_first_appointment": officer.letter_of_first_appointment,
+            "promotion_letters": officer.promotion_letters,
+            "admin_notes": officer.admin_notes,
+            "rejection_reason": officer.rejection_reason,
+            "created_at": officer.created_at.isoformat() if officer.created_at else None,
+            "updated_at": officer.updated_at.isoformat() if officer.updated_at else None,
+            "verification_date": officer.verification_date.isoformat() if officer.verification_date else None,
+            "verified_by": officer.verified_by,
+            "last_login": officer.last_login.isoformat() if officer.last_login else None,
+            "dashboard_access_count": officer.dashboard_access_count,
+            "last_dashboard_access": officer.last_dashboard_access.isoformat() if officer.last_dashboard_access else None
+        }
+        
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Error getting existing officer: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to load officer details"
+        )
+
+@router.put("/existing-officers/{officer_id}/approve", status_code=status.HTTP_200_OK)
+async def approve_existing_officer(
+    officer_id: str,
+    update_data: StatusUpdateRequest = Body(...),
+    db: Session = Depends(get_db),
+    current_admin: Admin = Depends(get_current_admin)
+):
+    """
+    Approve an existing officer
+    """
+    try:
+        officer = db.query(ExistingOfficer).filter(ExistingOfficer.officer_id == officer_id).first()
+        
+        if not officer:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Officer not found"
+            )
+        
+        # Update officer status
+        officer.status = "approved"
+        officer.is_verified = True
+        officer.verification_date = datetime.utcnow()
+        officer.verified_by = current_admin.email
+        officer.is_active = True
+        
+        if update_data.reason:
+            officer.admin_notes = f"Approved by {current_admin.email}: {update_data.reason}"
+        
+        if update_data.admin_notes:
+            officer.admin_notes = update_data.admin_notes
+        
+        db.commit()
+        db.refresh(officer)
+        
+        logger.info(f"Officer {officer_id} approved by admin: {current_admin.email}")
+        
+        return {
+            "status": "success",
+            "message": "Officer approved successfully",
+            "officer_id": officer.officer_id,
+            "status": officer.status,
+            "verified_by": officer.verified_by,
+            "verification_date": officer.verification_date.isoformat() if officer.verification_date else None
+        }
+        
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Error approving officer: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to approve officer"
+        )
+
+@router.put("/existing-officers/{officer_id}/reject", status_code=status.HTTP_200_OK)
+async def reject_existing_officer(
+    officer_id: str,
+    update_data: StatusUpdateRequest = Body(...),
+    db: Session = Depends(get_db),
+    current_admin: Admin = Depends(get_current_admin)
+):
+    """
+    Reject an existing officer
+    """
+    try:
+        officer = db.query(ExistingOfficer).filter(ExistingOfficer.officer_id == officer_id).first()
+        
+        if not officer:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Officer not found"
+            )
+        
+        # Update officer status
+        officer.status = "rejected"
+        officer.is_verified = False
+        officer.is_active = False
+        
+        if update_data.reason:
+            officer.rejection_reason = update_data.reason
+        
+        if update_data.admin_notes:
+            officer.admin_notes = update_data.admin_notes
+        
+        db.commit()
+        db.refresh(officer)
+        
+        logger.info(f"Officer {officer_id} rejected by admin: {current_admin.email}")
+        
+        return {
+            "status": "success",
+            "message": "Officer rejected successfully",
+            "officer_id": officer.officer_id,
+            "status": officer.status,
+            "rejection_reason": officer.rejection_reason
+        }
+        
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Error rejecting officer: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to reject officer"
+        )
+
+@router.put("/existing-officers/{officer_id}/verify", status_code=status.HTTP_200_OK)
+async def verify_existing_officer(
+    officer_id: str,
+    update_data: StatusUpdateRequest = Body(...),
+    db: Session = Depends(get_db),
+    current_admin: Admin = Depends(get_current_admin)
+):
+    """
+    Verify an existing officer (manual verification)
+    """
+    try:
+        officer = db.query(ExistingOfficer).filter(ExistingOfficer.officer_id == officer_id).first()
+        
+        if not officer:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Officer not found"
+            )
+        
+        # Update officer verification status
+        officer.status = "verified"
+        officer.is_verified = True
+        officer.verification_date = datetime.utcnow()
+        officer.verified_by = current_admin.email
+        officer.is_active = True
+        
+        if update_data.reason:
+            officer.admin_notes = f"Verified by {current_admin.email}: {update_data.reason}"
+        
+        if update_data.admin_notes:
+            officer.admin_notes = update_data.admin_notes
+        
+        db.commit()
+        db.refresh(officer)
+        
+        logger.info(f"Officer {officer_id} verified by admin: {current_admin.email}")
+        
+        return {
+            "status": "success",
+            "message": "Officer verified successfully",
+            "officer_id": officer.officer_id,
+            "status": officer.status,
+            "is_verified": officer.is_verified,
+            "verified_by": officer.verified_by,
+            "verification_date": officer.verification_date.isoformat() if officer.verification_date else None
+        }
+        
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Error verifying officer: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to verify officer"
+        )
+
+@router.put("/existing-officers/{officer_id}/status", status_code=status.HTTP_200_OK)
+async def update_officer_status(
+    officer_id: str,
+    update_data: StatusUpdateRequest = Body(...),
+    db: Session = Depends(get_db),
+    current_admin: Admin = Depends(get_current_admin)
+):
+    """
+    Update officer status (general endpoint)
+    """
+    try:
+        officer = db.query(ExistingOfficer).filter(ExistingOfficer.officer_id == officer_id).first()
+        
+        if not officer:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Officer not found"
+            )
+        
+        # Validate status
+        valid_statuses = ["pending", "verified", "approved", "rejected"]
+        if update_data.status not in valid_statuses:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid status. Must be one of: {', '.join(valid_statuses)}"
+            )
+        
+        # Update status
+        old_status = officer.status
+        officer.status = update_data.status
+        
+        # Set verification flags based on status
+        if update_data.status in ["verified", "approved"]:
+            officer.is_verified = True
+            officer.verification_date = datetime.utcnow()
+            officer.verified_by = current_admin.email
+            officer.is_active = True
+        elif update_data.status == "rejected":
+            officer.is_verified = False
+            officer.is_active = False
+            if update_data.reason:
+                officer.rejection_reason = update_data.reason
+        
+        # Update admin notes
+        notes = f"Status changed from {old_status} to {update_data.status} by {current_admin.email}"
+        if update_data.reason:
+            notes += f". Reason: {update_data.reason}"
+        if update_data.admin_notes:
+            officer.admin_notes = update_data.admin_notes
+        else:
+            officer.admin_notes = notes
+        
+        db.commit()
+        db.refresh(officer)
+        
+        logger.info(f"Officer {officer_id} status updated from {old_status} to {update_data.status} by admin: {current_admin.email}")
+        
+        return {
+            "status": "success",
+            "message": "Officer status updated successfully",
+            "officer_id": officer.officer_id,
+            "old_status": old_status,
+            "new_status": officer.status,
+            "is_verified": officer.is_verified,
+            "is_active": officer.is_active,
+            "admin_notes": officer.admin_notes
+        }
+        
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Error updating officer status: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update officer status"
+        )
+
+@router.get("/existing-officers/pending", status_code=status.HTTP_200_OK)
+async def get_pending_existing_officers(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_admin: Admin = Depends(get_current_admin)
+):
+    """
+    Get pending existing officers for approval queue
+    """
+    try:
+        officers = db.query(ExistingOfficer).filter(
+            ExistingOfficer.status == 'pending'
+        ).order_by(ExistingOfficer.created_at.desc()).offset(skip).limit(limit).all()
+        
+        return [{
+            "id": str(officer.id),
+            "officer_id": officer.officer_id,
+            "full_name": officer.full_name,
+            "email": officer.email,
+            "rank": officer.rank,
+            "position": officer.position,
+            "date_of_enlistment": officer.date_of_enlistment.isoformat() if officer.date_of_enlistment else None,
+            "status": officer.status,
+            "created_at": officer.created_at.isoformat() if officer.created_at else None
+        } for officer in officers]
+        
+    except Exception as e:
+        logger.error(f"Error getting pending officers: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to load pending officers"
         )
 
 # ------------------ Officer Management ------------------
