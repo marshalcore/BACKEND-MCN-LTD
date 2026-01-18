@@ -7,9 +7,9 @@ import os
 class Settings(BaseSettings):
     # === DATABASE ===
     DATABASE_URL: str = Field(
-        default=os.getenv("DATABASE_URL", "postgresql://neondb_owner:npg_1QCyHBgaJNq3@ep-jolly-star-abr6n08i-pooler.eu-west-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require"),
-        description="PostgreSQL database URL for Marshal Core"
-    )
+    default=os.getenv("DATABASE_URL", "postgresql://neondb_owner:npg_1QCyHBgaJNq3@ep-jolly-star-abr6n08i-pooler.eu-west-2.aws.neon.tech/neondb?sslmode=require"),
+    description="PostgreSQL database URL for Marshal Core"
+)
 
     # === JWT AUTH ===
     SECRET_KEY: str = Field(
