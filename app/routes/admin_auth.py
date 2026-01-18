@@ -255,11 +255,11 @@ async def admin_login(
         import random
         otp = str(random.randint(100000, 999999))
         
-        # Store OTP in database
+        # Store OTP in database - FIXED PARAMETER NAME
         store_verification_code(
             db=db,
             email=admin.email.lower(),
-            otp_code=otp,
+            code=otp,  # Changed from otp_code to code
             purpose="admin_login"
         )
         
@@ -570,7 +570,7 @@ async def request_password_reset(
         store_verification_code(
             db=db,
             email=normalized_email,
-            otp_code=otp,
+            code=otp,
             purpose="password_reset"
         )
         
@@ -1345,11 +1345,11 @@ async def resend_admin_otp(
         import random
         otp = str(random.randint(100000, 999999))
         
-        # Store OTP
+        # Store OTP - FIXED PARAMETER NAME
         store_verification_code(
             db=db,
             email=normalized_email,
-            code=otp,  # Fixed parameter name
+            code=otp,  # Changed from otp_code to code
             purpose=purpose
         )
         
