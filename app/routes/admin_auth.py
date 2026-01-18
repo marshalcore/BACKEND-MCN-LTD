@@ -1228,3 +1228,154 @@ async def get_all_admins(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to load admins"
         )
+
+
+        # ------------------ Additional Admin Endpoints for Frontend Compatibility ------------------
+
+@router.get("/all-applicants", status_code=status.HTTP_200_OK)
+async def get_all_applicants_admin(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_admin: Admin = Depends(get_current_admin)
+):
+    """
+    Get all applicants (frontend compatibility endpoint)
+    """
+    try:
+        applicants = db.query(Applicant).order_by(Applicant.created_at.desc()).offset(skip).limit(limit).all()
+        
+        return [{
+            "id": str(applicant.id),
+            "unique_id": applicant.unique_id,
+            "full_name": applicant.full_name,
+            "email": applicant.email,
+            "phone_number": applicant.phone_number,
+            "is_verified": applicant.is_verified,
+            "created_at": applicant.created_at.isoformat() if applicant.created_at else None
+        } for applicant in applicants]
+        
+    except Exception as e:
+        logger.error(f"Error getting applicants: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to load applicants"
+        )
+
+@router.get("/all-officers", status_code=status.HTTP_200_OK)
+async def get_all_officers_admin(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_admin: Admin = Depends(get_current_admin)
+):
+    """
+    Get all officers (frontend compatibility endpoint)
+    """
+    try:
+        officers = db.query(Officer).order_by(Officer.created_at.desc()).offset(skip).limit(limit).all()
+        
+        return [{
+            "id": str(officer.id),
+            "unique_id": officer.unique_id,
+            "full_name": officer.full_name,
+            "email": officer.email,
+            "rank": officer.rank,
+            "position": officer.position,
+            "is_active": officer.is_active,
+            "created_at": officer.created_at.isoformat() if officer.created_at else None
+        } for officer in officers]
+        
+    except Exception as e:
+        logger.error(f"Error getting officers: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to load officers"
+        )
+
+@router.get("/all-admins", status_code=status.HTTP_200_OK)
+async def get_all_admins_admin(
+    db: Session = Depends(get_db),
+    current_admin: Admin = Depends(get_current_admin)
+):
+    """
+    Get all admins (frontend compatibility endpoint)
+    """
+    try:
+        admins = db.query(Admin).all()
+        
+        return [{
+            "id": str(admin.id),
+            "email": admin.email,
+            "full_name": admin.full_name,
+            "is_superuser": admin.is_superuser,
+            "is_active": admin.is_active,
+            "created_at": admin.created_at.isoformat() if admin.created_at else None
+        } for admin in admins]
+        
+    except Exception as e:
+        logger.error(f"Error getting admins: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to load admins"
+        )
+
+@router.post("/resend-otp", status_code=status.HTTP_200_OK)
+async def resend_admin_otp(
+    email: str = Body(..., embed=True),
+    purpose: str = Body(..., embed=True),
+    background_tasks: BackgroundTasks = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Resend OTP to admin email
+    """
+    try:
+        normalized_email = email.strip().lower()
+        
+        # Check if admin exists
+        admin = db.query(Admin).filter(func.lower(Admin.email) == normalized_email).first()
+        if not admin:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Admin not found"
+            )
+        
+        # Generate new OTP
+        import random
+        otp = str(random.randint(100000, 999999))
+        
+        # Store OTP
+        store_verification_code(
+            db=db,
+            email=normalized_email,
+            code=otp,  # Fixed parameter name
+            purpose=purpose
+        )
+        
+        # Send OTP via email
+        if background_tasks:
+            background_tasks.add_task(
+                send_otp_email,
+                normalized_email,
+                admin.full_name,
+                otp,
+                purpose
+            )
+        
+        logger.info(f"OTP resent to: {normalized_email}")
+        
+        return {
+            "status": "success",
+            "message": "OTP resent to your email",
+            "email": normalized_email
+        }
+        
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Error resending OTP: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to resend OTP"
+        )

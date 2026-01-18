@@ -7,10 +7,10 @@ from fastapi.security import OAuth2PasswordBearer
 from jose import jwt, JWTError
 from sqlalchemy.orm import Session
 from app.models.officer import Officer
+from app.models.verification_code import VerificationCode
 from app.database import get_db
 from app.config import settings
 from pydantic import BaseModel
-from app.utils.otp import normalize_purpose, store_verification_code, verify_otp
 
 
 # Secret and Algorithm
@@ -101,3 +101,107 @@ def verify_refresh_token(token: str) -> dict | None:
 def generate_otp(length: int = 6) -> str:
     """Generate a numeric OTP of given length (default 6 digits)."""
     return ''.join(random.choices(string.digits, k=length))
+
+
+def store_verification_code(db: Session, email: str, code: str, purpose: str = "login") -> VerificationCode:
+    """
+    Store OTP verification code in database
+    
+    Args:
+        db: Database session
+        email: User email
+        code: 6-digit OTP code (parameter name is 'code', not 'otp_code')
+        purpose: Purpose of OTP (login, signup, password_reset, admin_login)
+        
+    Returns:
+        VerificationCode object
+    """
+    try:
+        # Delete any existing codes for this email and purpose
+        db.query(VerificationCode).filter(
+            VerificationCode.email == email,
+            VerificationCode.purpose == purpose
+        ).delete(synchronize_session=False)
+        
+        # Create new verification code
+        verification_code = VerificationCode(
+            email=email,
+            code=code,
+            purpose=purpose,
+            expires_at=datetime.utcnow() + timedelta(minutes=10)
+        )
+        
+        db.add(verification_code)
+        db.commit()
+        db.refresh(verification_code)
+        
+        return verification_code
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to store verification code: {str(e)}"
+        )
+
+
+def verify_otp(db: Session, email: str, otp_code: str, purpose: str) -> bool:
+    """
+    Verify OTP code
+    
+    Args:
+        db: Database session
+        email: User email
+        otp_code: OTP code to verify
+        purpose: Purpose of OTP
+        
+    Returns:
+        True if valid, False otherwise
+    """
+    try:
+        # Find the verification code
+        verification = db.query(VerificationCode).filter(
+            VerificationCode.email == email,
+            VerificationCode.code == otp_code,
+            VerificationCode.purpose == purpose,
+            VerificationCode.expires_at > datetime.utcnow()
+        ).first()
+        
+        if verification:
+            # Delete the used code
+            db.delete(verification)
+            db.commit()
+            return True
+        return False
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to verify OTP: {str(e)}"
+        )
+
+# Add these compatibility functions that officer_auth.py expects
+def get_current_officer():
+    """Compatibility function - just returns the async version"""
+    from functools import wraps
+    @wraps
+    async def wrapper(*args, **kwargs):
+        return await get_current_officer(*args, **kwargs)
+    return wrapper
+
+
+# Compatibility functions for officer_auth.py
+def create_access_token(data: dict, expires_delta: timedelta = None) -> str:
+    """Create JWT access token - compatibility wrapper"""
+    from app.utils.jwt_handler import create_access_token as jwt_create_access_token
+    return jwt_create_access_token(data, expires_delta)
+
+def create_refresh_token(data: dict, expires_delta: timedelta = None) -> str:
+    """Create JWT refresh token - compatibility wrapper"""
+    from app.utils.jwt_handler import create_refresh_token as jwt_create_refresh_token
+    return jwt_create_refresh_token(data, expires_delta)
+
+# Make sure decode_access_token exists
+def decode_access_token(token: str):
+    """Decode JWT token"""
+    from app.utils.jwt_handler import decode_token
+    return decode_token(token)

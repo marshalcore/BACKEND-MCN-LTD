@@ -1,3 +1,4 @@
+# app/routes/officer_auth.py
 from fastapi import APIRouter, Depends, HTTPException, status, Request, BackgroundTasks
 from sqlalchemy.orm import Session, Load, undefer
 from datetime import timedelta, datetime
@@ -14,10 +15,12 @@ from app.models.verification_code import VerificationCode
 from app.schemas.officer import OfficerSignup, OfficerLogin, OfficerResponse, OfficerSignupResponse
 from app.schemas.token import Token, TokenData
 from app.utils.hash import hash_password, verify_password
-from app.utils.token import create_access_token, decode_access_token, get_current_officer
+from app.utils.token import get_current_officer, decode_access_token, generate_otp, store_verification_code, verify_otp
 from app.config import settings
 from app.services.email_service import send_otp_email
 from app.schemas.officer import VerifyOTPResponse
+# Import create_access_token from jwt_handler instead
+from app.utils.jwt_handler import create_access_token, create_refresh_token
 
 
 router = APIRouter(prefix="/officer", tags=["Officer Auth"])
@@ -81,10 +84,7 @@ async def send_reset_email(email: str, code: str):
     except Exception as e:
         raise Exception(f"Failed to send email: {str(e)}")
 
-# Define generate_otp function BEFORE it's used
-def generate_otp() -> str:
-    """Generate a 6-digit numeric OTP"""
-    return ''.join(secrets.choice('0123456789') for _ in range(6))
+# Remove the duplicate generate_otp function (use the one from token.py)
 
 async def send_officer_signup_otp(email: str, name: str, otp_code: str):
     """Send OTP email for officer signup verification"""
@@ -264,7 +264,7 @@ def officer_login(data: OfficerLogin, db: Session = Depends(get_db)):
     )
     
     refresh_token_expires = timedelta(days=7)
-    refresh_token = create_access_token(
+    refresh_token = create_refresh_token(
         data={"sub": officer.unique_id, "type": "refresh"},
         expires_delta=refresh_token_expires
     )

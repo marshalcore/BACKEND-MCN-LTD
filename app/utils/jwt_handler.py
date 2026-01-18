@@ -1,4 +1,4 @@
-# app/utils/jwt_handler.py (compatibility version)
+# app/utils/jwt_handler.py
 from datetime import datetime, timedelta
 from typing import Optional
 import logging
@@ -42,7 +42,12 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
         "type": "access"
     })
     
-    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    # Handle both python-jose and PyJWT
+    if JWT_LIB == "python-jose":
+        encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    else:  # PyJWT
+        encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    
     return encoded_jwt
 
 
@@ -63,7 +68,12 @@ def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None):
         "type": "refresh"
     })
     
-    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    # Handle both python-jose and PyJWT
+    if JWT_LIB == "python-jose":
+        encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    else:  # PyJWT
+        encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    
     return encoded_jwt
 
 
@@ -72,7 +82,10 @@ def verify_token(token: str):
     Verify JWT token
     """
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        if JWT_LIB == "python-jose":
+            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        else:  # PyJWT
+            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         return payload
     except JWTError as e:
         logger.error(f"JWT verification failed: {str(e)}")
