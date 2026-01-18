@@ -8,12 +8,29 @@ import logging
 import datetime
 import asyncio
 
+# Import settings BEFORE setting up the app to verify config
+from app.config import settings
+
 # Init app
 app = FastAPI(title="Marshal Core Backend")
 
 # Enable logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Log configuration to verify settings are loaded correctly
+logger.info("=" * 50)
+logger.info("CONFIGURATION VERIFICATION")
+logger.info("=" * 50)
+logger.info(f"Database URL: {settings.DATABASE_URL[:50]}...")  # Show first 50 chars for security
+logger.info(f"Access Token Expire Minutes: {settings.ACCESS_TOKEN_EXPIRE_MINUTES}")
+logger.info(f"Refresh Token Expire Days: {settings.REFRESH_TOKEN_EXPIRE_DAYS}")
+logger.info(f"Resend From Email: {settings.RESEND_FROM_EMAIL}")
+logger.info(f"Resend API Key Set: {'Yes' if settings.RESEND_API_KEY else 'No'}")
+logger.info(f"Debug Mode: {settings.DEBUG}")
+logger.info(f"Running on Render: {settings.RENDER}")
+logger.info(f"Keep Alive Enabled: {settings.ENABLE_KEEP_ALIVE}")
+logger.info("=" * 50)
 
 # CORS Setup - Enhanced Configuration
 origins = [
@@ -155,7 +172,12 @@ async def root():
             "/pdf/* - PDF document download and management",
             "/health - System health check",
             "/api/health - Enhanced health check with keep-alive"
-        ]
+        ],
+        "config_info": {
+            "environment": "production" if not settings.DEBUG else "development",
+            "token_expiry_minutes": settings.ACCESS_TOKEN_EXPIRE_MINUTES,
+            "running_on_render": settings.RENDER
+        }
     }
 
 # File download route with CORS support
@@ -286,6 +308,14 @@ async def health_check():
         "timestamp": datetime.datetime.now().isoformat(),
         "service": "Marshal Core Backend API",
         "version": "1.0.0",
+        "config": {
+            "environment": "production" if not settings.DEBUG else "development",
+            "token_expiry_minutes": settings.ACCESS_TOKEN_EXPIRE_MINUTES,
+            "refresh_token_expiry_days": settings.REFRESH_TOKEN_EXPIRE_DAYS,
+            "running_on_render": settings.RENDER,
+            "keep_alive_enabled": settings.ENABLE_KEEP_ALIVE,
+            "paystack_test_mode": settings.PAYSTACK_TEST_MODE
+        }
     }
     
     try:
@@ -550,6 +580,7 @@ async def internal_error_handler(request: Request, exc: HTTPException):
         status_code=500,
         content="Internal server error"
     )
+
 # Startup event
 @app.on_event("startup")
 async def startup_event():
@@ -617,6 +648,12 @@ async def startup_event():
                 "safety_margin_minutes": 5,
                 "next_wake_check": "Continuous via keep-alive service"
             },
+            "config_info": {
+                "keep_alive_enabled": settings.ENABLE_KEEP_ALIVE,
+                "keep_alive_interval_seconds": settings.KEEP_ALIVE_INTERVAL,
+                "running_on_render": settings.RENDER,
+                "render_external_url": settings.RENDER_EXTERNAL_URL
+            },
             "message": "Service is awake and responsive. Keep-alive service prevents sleeping on Render free tier."
         }
     
@@ -633,25 +670,18 @@ async def delayed_startup():
     await asyncio.sleep(5)
     
     try:
-        # Check if we're running on Render.com
-        is_render = os.getenv("RENDER") == "true" or "render.com" in os.getenv("RENDER_EXTERNAL_URL", "")
-        
-        if is_render:
+        # Use settings.RENDER instead of checking environment variable
+        if settings.RENDER and settings.ENABLE_KEEP_ALIVE:
             from app.services.keep_alive import start_keep_alive_service
             await start_keep_alive_service()
             logger.info("✅ Keep-alive service started for Render.com")
-            logger.info("⚠️  Render free tier: Services sleep after 15 minutes of inactivity")
-            logger.info("✅ This service will ping every 10 minutes (600 seconds) to stay awake")
-            logger.info("📊 Safety margin: 5 minutes before Render's 15-minute sleep timer")
+            logger.info(f"⚠️  Render free tier: Services sleep after 15 minutes of inactivity")
+            logger.info(f"✅ This service will ping every {settings.KEEP_ALIVE_INTERVAL} seconds to stay awake")
+            logger.info(f"📊 External URL: {settings.RENDER_EXTERNAL_URL}")
         else:
-            # Local development - start with delay
-            try:
-                await asyncio.sleep(10)  # Wait longer for local
-                from app.services.keep_alive import start_keep_alive_service
-                await start_keep_alive_service()
-                logger.info("✓ Keep-alive service started (local development - delayed start)")
-            except Exception as e:
-                logger.info(f"⏸️  Keep-alive service skipped locally: {e}")
+            # Local development or keep-alive disabled
+            logger.info(f"⏸️  Keep-alive service disabled or not running on Render")
+            logger.info(f"   RENDER: {settings.RENDER}, ENABLE_KEEP_ALIVE: {settings.ENABLE_KEEP_ALIVE}")
         
     except Exception as e:
         logger.warning(f"⚠ Keep-alive service initialization failed: {e}")
