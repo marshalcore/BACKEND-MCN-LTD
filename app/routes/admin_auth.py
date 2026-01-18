@@ -175,7 +175,7 @@ async def admin_signup(
         # Hash password and store in hashed_password field
         hashed_password = hash_password(admin_data.password)
         
-        # Create new admin - FIXED: using hashed_password field
+        # Create new admin
         new_admin = Admin(
             email=admin_data.email.lower(),
             hashed_password=hashed_password,
@@ -259,7 +259,7 @@ async def admin_login(
         store_verification_code(
             db=db,
             email=admin.email.lower(),
-            code=otp,  # Changed from otp_code to code
+            otp_code=otp,
             purpose="admin_login"
         )
         
@@ -302,11 +302,11 @@ async def verify_otp_login(
         normalized_email = otp_data.email.strip().lower()
         logger.info(f"OTP verification for: {normalized_email} | Purpose: {otp_data.purpose}")
         
-        # Verify OTP
+        # Verify OTP - FIXED: using otp_data.code
         is_valid = verify_otp(
             db=db,
             email=normalized_email,
-            code=otp_data.code,
+            otp_code=otp_data.code,  # Changed from otp_data.otp to otp_data.code
             purpose=otp_data.purpose
         )
         
@@ -566,11 +566,11 @@ async def request_password_reset(
         import random
         otp = str(random.randint(100000, 999999))
         
-        # Store OTP
+        # Store OTP - FIXED PARAMETER NAME
         store_verification_code(
             db=db,
             email=normalized_email,
-            code=otp,
+            otp_code=otp,
             purpose="password_reset"
         )
         
@@ -613,11 +613,11 @@ async def verify_password_reset(
     try:
         normalized_email = email.strip().lower()
         
-        # Verify OTP
+        # Verify OTP - FIXED PARAMETER NAME
         is_valid = verify_otp(
             db=db,
             email=normalized_email,
-            code=otp,
+            otp_code=otp,
             purpose="password_reset"
         )
         
@@ -1349,7 +1349,7 @@ async def resend_admin_otp(
         store_verification_code(
             db=db,
             email=normalized_email,
-            code=otp,  # Changed from otp_code to code
+            otp_code=otp,
             purpose=purpose
         )
         
