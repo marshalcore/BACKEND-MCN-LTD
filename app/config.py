@@ -17,8 +17,8 @@ class Settings(BaseSettings):
         description="Secret key for JWT token signing"
     )
     ALGORITHM: str = Field(default="HS256", description="JWT algorithm")
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=30, description="JWT token expiration time in minutes")
-    REFRESH_TOKEN_EXPIRE_DAYS: int = Field(default=7, description="Refresh token expiration time in days")
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=1440, description="JWT token expiration time in minutes")  # 24 hours
+    REFRESH_TOKEN_EXPIRE_DAYS: int = Field(default=30, description="Refresh token expiration time in days")
 
     # === EMAIL ===
     EMAIL_HOST: str = Field(default=os.getenv("EMAIL_HOST", "smtp-relay.brevo.com"), description="SMTP host")
@@ -33,7 +33,7 @@ class Settings(BaseSettings):
         description="Resend.com API key for transactional emails"
     )
     RESEND_FROM_EMAIL: str = Field(
-        default=os.getenv("RESEND_FROM_EMAIL", "onboarding@marshalcoreofnigeria.ng"),
+        default=os.getenv("RESEND_FROM_EMAIL", "onboarding@resend.dev"),
         description="Resend sender email address"
     )
     RESEND_FROM_NAME: str = Field(

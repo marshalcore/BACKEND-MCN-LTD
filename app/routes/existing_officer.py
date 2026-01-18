@@ -23,6 +23,7 @@ from app.services.existing_officer_service import ExistingOfficerService
 from app.services.pdf_service import PDFService
 from app.services.email_service import send_existing_officer_pdfs_email, send_existing_officer_welcome_email
 from app.utils.jwt_handler import create_access_token
+from app.utils.jwt_handler import create_access_token 
 
 logger = logging.getLogger(__name__)
 router = APIRouter(
@@ -118,7 +119,7 @@ async def register_existing_officer(
         
         # Also send welcome email
         background_tasks.add_task(
-            send_welcome_email,
+            send_welcome_email_task,
             officer_id=officer.officer_id,
             db=db
         )
@@ -665,7 +666,7 @@ async def generate_existing_officer_pdfs_and_email(officer_id: str, db: Session)
         logger.error(f"❌ Error generating PDFs for {officer_id}: {str(e)}", exc_info=True)
 
 
-async def send_welcome_email(officer_id: str, db: Session):
+async def send_welcome_email_task(officer_id: str, db: Session):
     """
     Background task to send welcome email to existing officer
     """
