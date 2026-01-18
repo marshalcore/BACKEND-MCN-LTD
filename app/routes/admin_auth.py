@@ -1,4 +1,3 @@
-# app/routes/admin_auth.py
 from datetime import datetime, timedelta
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Form, Body, Request, BackgroundTasks
@@ -167,18 +166,17 @@ async def admin_signup(
                 detail="Admin with this email already exists"
             )
         
-        # Hash password
+        # Hash password and store in hashed_password field
         hashed_password = hash_password(admin_data.password)
         
-        # Create new admin
+        # Create new admin - FIXED: using hashed_password field
         new_admin = Admin(
             email=admin_data.email.lower(),
-            password=hashed_password,
+            hashed_password=hashed_password,  # FIXED: Changed from password to hashed_password
             full_name=admin_data.full_name,
-            phone=admin_data.phone,
-            role=admin_data.role,
             is_active=True,
-            is_super_admin=False
+            is_superuser=False,  # Default to False for new admins
+            is_verified=False   # New admins need verification
         )
         
         db.add(new_admin)
@@ -201,11 +199,9 @@ async def admin_signup(
             id=str(new_admin.id),
             email=new_admin.email,
             full_name=new_admin.full_name,
-            phone=new_admin.phone,
-            role=new_admin.role,
-            is_active=new_admin.is_active,
-            is_super_admin=new_admin.is_super_admin,
-            created_at=new_admin.created_at
+            is_superuser=new_admin.is_superuser,
+            is_verified=new_admin.is_verified,
+            is_active=new_admin.is_active
         )
         
     except HTTPException as he:
@@ -242,8 +238,8 @@ async def admin_login(
                 detail="Admin account is inactive"
             )
         
-        # Verify password
-        if not verify_password(login_data.password, admin.password):
+        # Verify password - FIXED: Using hashed_password field instead of password
+        if not verify_password(login_data.password, admin.hashed_password):  # FIXED
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid credentials"
@@ -356,10 +352,9 @@ async def verify_otp_login(
             "id": str(admin.id),
             "email": admin.email,
             "full_name": admin.full_name,
-            "phone": admin.phone,
-            "role": admin.role,
+            "is_superuser": admin.is_superuser,
+            "is_verified": admin.is_verified,
             "is_active": admin.is_active,
-            "is_super_admin": admin.is_super_admin,
             "last_login": admin.last_login.isoformat() if admin.last_login else None,
             "created_at": admin.created_at.isoformat() if admin.created_at else None
         }
@@ -505,8 +500,7 @@ async def admin_dashboard(
                 "id": str(current_admin.id),
                 "email": current_admin.email,
                 "full_name": current_admin.full_name,
-                "role": current_admin.role,
-                "is_super_admin": current_admin.is_super_admin,
+                "is_superuser": current_admin.is_superuser,
                 "last_login": current_admin.last_login.isoformat() if current_admin.last_login else None
             },
             "dashboard": {
@@ -590,7 +584,7 @@ async def verify_password_reset(
     db: Session = Depends(get_db)
 ):
     """
-    Verify OTP and reset password
+    Verify OTP and reset password - FIXED: Using hashed_password field
     """
     try:
         normalized_email = email.strip().lower()
@@ -617,9 +611,8 @@ async def verify_password_reset(
                 detail="Admin not found"
             )
         
-        # Update password
-        admin.password = hash_password(new_password)
-        admin.updated_at = datetime.utcnow()
+        # Update password in hashed_password field - FIXED
+        admin.hashed_password = hash_password(new_password)
         db.commit()
         
         logger.info(f"Password reset successful for: {normalized_email}")
@@ -650,12 +643,9 @@ async def get_admin_profile(
         id=str(current_admin.id),
         email=current_admin.email,
         full_name=current_admin.full_name,
-        phone=current_admin.phone,
-        role=current_admin.role,
-        is_active=current_admin.is_active,
-        is_super_admin=current_admin.is_super_admin,
-        created_at=current_admin.created_at,
-        last_login=current_admin.last_login
+        is_superuser=current_admin.is_superuser,
+        is_verified=current_admin.is_verified,
+        is_active=current_admin.is_active
     )
 
 @router.put("/profile", status_code=status.HTTP_200_OK)
@@ -669,12 +659,11 @@ async def update_admin_profile(
     """
     try:
         # Update fields
+        if update_data.email:
+            current_admin.email = update_data.email
         if update_data.full_name:
             current_admin.full_name = update_data.full_name
-        if update_data.phone:
-            current_admin.phone = update_data.phone
         
-        current_admin.updated_at = datetime.utcnow()
         db.commit()
         db.refresh(current_admin)
         
@@ -684,12 +673,9 @@ async def update_admin_profile(
             id=str(current_admin.id),
             email=current_admin.email,
             full_name=current_admin.full_name,
-            phone=current_admin.phone,
-            role=current_admin.role,
-            is_active=current_admin.is_active,
-            is_super_admin=current_admin.is_super_admin,
-            created_at=current_admin.created_at,
-            last_login=current_admin.last_login
+            is_superuser=current_admin.is_superuser,
+            is_verified=current_admin.is_verified,
+            is_active=current_admin.is_active
         )
         
     except Exception as e:
@@ -833,7 +819,7 @@ async def get_all_admins(
     """
     Get all admins (super admin only)
     """
-    if not current_admin.is_super_admin:
+    if not current_admin.is_superuser:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only super admin can list all admins"
@@ -846,12 +832,9 @@ async def get_all_admins(
             id=str(admin.id),
             email=admin.email,
             full_name=admin.full_name,
-            phone=admin.phone,
-            role=admin.role,
-            is_active=admin.is_active,
-            is_super_admin=admin.is_super_admin,
-            created_at=admin.created_at,
-            last_login=admin.last_login
+            is_superuser=admin.is_superuser,
+            is_verified=admin.is_verified,
+            is_active=admin.is_active
         ) for admin in admins]
         
     except Exception as e:

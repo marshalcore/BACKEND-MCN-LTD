@@ -1,6 +1,7 @@
 # app/schemas/admin.py
 from pydantic import BaseModel, EmailStr, validator
 from typing import Optional
+from datetime import datetime
 
 class AdminSignup(BaseModel):
     full_name: str
@@ -24,6 +25,8 @@ class AdminResponse(BaseModel):
     is_superuser: bool
     is_verified: bool
     is_active: bool
+    created_at: Optional[datetime] = None
+    last_login: Optional[datetime] = None
 
     @validator('is_verified', 'is_active', 'is_superuser', pre=True)
     def convert_none_to_false(cls, v):
@@ -34,12 +37,8 @@ class AdminResponse(BaseModel):
         from_attributes = True
 
 class AdminUpdateUser(BaseModel):
-    email: Optional[EmailStr]
-    phone: Optional[str]
-    unique_id: Optional[str]
-    rank: Optional[str] = None
-    position: Optional[str] = None
-    is_active: Optional[bool]
+    email: Optional[EmailStr] = None
+    full_name: Optional[str] = None
 
     class Config:
         title = "AdminUpdateUser"
