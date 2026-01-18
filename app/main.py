@@ -661,6 +661,7 @@ async def startup_event():
     logger.info("✅ Server is ready to handle requests")
 
 # Start keep-alive service AFTER server is fully started
+# In app/main.py - update the delayed_startup function
 @app.on_event("startup")
 async def delayed_startup():
     """
@@ -670,18 +671,23 @@ async def delayed_startup():
     await asyncio.sleep(5)
     
     try:
-        # Use settings.RENDER instead of checking environment variable
-        if settings.RENDER and settings.ENABLE_KEEP_ALIVE:
+        # ALWAYS start keep-alive on Render.com (check by URL or environment)
+        render_url = settings.RENDER_EXTERNAL_URL or ""
+        is_render = "render.com" in render_url or os.getenv("RENDER_EXTERNAL_URL", "").endswith(".onrender.com")
+        
+        if (settings.ENABLE_KEEP_ALIVE and is_render) or os.getenv("RENDER") == "true":
             from app.services.keep_alive import start_keep_alive_service
             await start_keep_alive_service()
             logger.info("✅ Keep-alive service started for Render.com")
             logger.info(f"⚠️  Render free tier: Services sleep after 15 minutes of inactivity")
             logger.info(f"✅ This service will ping every {settings.KEEP_ALIVE_INTERVAL} seconds to stay awake")
-            logger.info(f"📊 External URL: {settings.RENDER_EXTERNAL_URL}")
+            logger.info(f"📊 External URL: {settings.RENDER_EXTERNAL_URL or 'https://backend-mcn-ltd.onrender.com'}")
         else:
             # Local development or keep-alive disabled
             logger.info(f"⏸️  Keep-alive service disabled or not running on Render")
-            logger.info(f"   RENDER: {settings.RENDER}, ENABLE_KEEP_ALIVE: {settings.ENABLE_KEEP_ALIVE}")
+            logger.info(f"   RENDER setting: {settings.RENDER}")
+            logger.info(f"   ENABLE_KEEP_ALIVE: {settings.ENABLE_KEEP_ALIVE}")
+            logger.info(f"   RENDER_EXTERNAL_URL: {settings.RENDER_EXTERNAL_URL}")
         
     except Exception as e:
         logger.warning(f"⚠ Keep-alive service initialization failed: {e}")
