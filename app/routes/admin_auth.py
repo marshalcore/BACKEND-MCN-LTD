@@ -617,7 +617,7 @@ async def verify_password_reset(
         is_valid = verify_otp(
             db=db,
             email=normalized_email,
-            otp_code=otp,
+            code=otp,
             purpose="password_reset"
         )
         
