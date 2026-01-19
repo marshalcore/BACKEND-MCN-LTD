@@ -1,5 +1,5 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Request, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Request, BackgroundTasks  # ✅ ADDED BackgroundTasks
 from sqlalchemy.orm import Session
 from uuid import UUID
 from datetime import datetime
@@ -8,7 +8,6 @@ import os
 
 from app.database import get_db
 from app.auth.dependencies import get_current_admin, get_current_existing_officer_dict
-# ✅ ADD THIS IMPORT
 from app.models.existing_officer import ExistingOfficer
 from app.schemas.existing_officer import (
     ExistingOfficerVerify,
@@ -88,7 +87,7 @@ async def verify_officer_credentials(
 async def register_existing_officer(
     register_data: ExistingOfficerRegister,
     request: Request,
-    background_tasks: BackgroundTasks,
+    background_tasks: BackgroundTasks,  # ✅ ADDED: BackgroundTasks parameter
     db: Session = Depends(get_db)
 ):
     """
@@ -111,12 +110,12 @@ async def register_existing_officer(
         
         logger.info(f"Officer registered successfully with enlistment date: {register_data.date_of_enlistment}")
         
-        # ✅ CRITICAL: AUTO-GENERATE PDFs AND SEND EMAIL IN BACKGROUND
+        # ✅ CRITICAL FIX: AUTO-GENERATE PDFs AND SEND EMAIL IN BACKGROUND
         background_tasks.add_task(
             generate_existing_officer_pdfs_and_email,
             officer_id=officer.officer_id,
             email=officer.email,
-            full_name=officer.full_name,
+            full_name=officer.full_name,  # ✅ ADDED: full_name parameter
             db=db
         )
         
@@ -510,7 +509,7 @@ async def generate_pdfs_for_officer(
             generate_existing_officer_pdfs_and_email,
             officer_id=officer_id,
             email=officer.email,
-            full_name=officer.full_name,
+            full_name=officer.full_name,  # ✅ ADDED: full_name parameter
             db=db
         )
         
@@ -530,7 +529,7 @@ async def generate_pdfs_for_officer(
         result = await generate_existing_officer_pdfs_and_email(
             officer_id=officer_id,
             email=officer.email,
-            full_name=officer.full_name,
+            full_name=officer.full_name,  # ✅ ADDED: full_name parameter
             db=db
         )
         
@@ -641,7 +640,7 @@ async def logout_existing_officer(
 async def generate_existing_officer_pdfs_and_email(
     officer_id: str,
     email: str,
-    full_name: str,
+    full_name: str,  # ✅ ADDED: full_name parameter
     db: Session
 ):
     """
@@ -696,10 +695,9 @@ async def generate_existing_officer_pdfs_and_email(
         )
         
         # ✅ Send email with DIRECT DOWNLOAD LINKS
-        from app.services.email_service import send_existing_officer_pdfs_email
         email_result = await send_existing_officer_pdfs_email(
             to_email=email,
-            name=full_name,
+            name=full_name,  # ✅ FIXED: Use full_name parameter
             officer_id=officer_id,
             terms_pdf_path=terms_pdf_path,
             registration_pdf_path=registration_pdf_path

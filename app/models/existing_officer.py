@@ -24,8 +24,8 @@ class ExistingOfficer(Base):
     phone = Column(String(20), nullable=False, comment='Officer phone number')
     password_hash = Column(String(255), nullable=False, comment='Hashed password')
     
-    # NEW FIELDS: Service Dates (from master prompt)
-    date_of_enlistment = Column(Date, nullable=False, comment='Date officer enlisted - REQUIRED')
+    # NEW FIELDS: Service Dates (from master prompt) - FIXED: date_of_enlistment NOT NULL
+    date_of_enlistment = Column(Date, nullable=False, comment='Date officer enlisted - REQUIRED')  # ✅ FIXED: NOT NULL
     date_of_promotion = Column(Date, nullable=True, comment='Date of last promotion - OPTIONAL')
     
     # Category Field - MCN, MBT, MBC (extracted from officer_id)

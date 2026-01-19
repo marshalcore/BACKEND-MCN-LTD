@@ -1,4 +1,3 @@
-# app/services/pdf_service.py
 import logging
 from typing import Dict, Any, Optional
 from datetime import datetime
@@ -442,6 +441,7 @@ class PDFService:
                 "success": True,
                 "officer_id": officer_id,
                 "email": officer.email,
+                "full_name": officer.full_name,  # ✅ ADDED: Include full_name
                 "terms_pdf_path": terms_pdf_path,
                 "registration_pdf_path": registration_pdf_path,
                 "email_pending": True,  # Email will be sent by background task
