@@ -1,4 +1,3 @@
-# app/schemas/existing_officer.py
 from typing import Optional, List
 from pydantic import BaseModel, EmailStr, Field, validator
 from datetime import date, datetime
@@ -79,14 +78,14 @@ class ExistingOfficerRegister(BaseModel):
     gender: str = Field(..., max_length=10)
     date_of_birth: date
     place_of_birth: Optional[str] = Field(None, max_length=100)
-    nationality: str = Field(default="Nigerian", max_length=50)
+    nationality: Optional[str] = Field(None, max_length=50)
     marital_status: Optional[str] = Field(None, max_length=20)
     
     # Contact Information
     residential_address: str = Field(..., max_length=500)
     state_of_residence: Optional[str] = Field(None, max_length=50)
     local_government_residence: Optional[str] = Field(None, max_length=50)
-    country_of_residence: str = Field(default="Nigeria", max_length=50)
+    country_of_residence: Optional[str] = Field(None, max_length=50)
     
     # Origin Information
     state_of_origin: Optional[str] = Field(None, max_length=50)
@@ -191,6 +190,32 @@ class ExistingOfficerRegister(BaseModel):
                 logger.warning(f"Non-standard email domain used: {domain}")
         
         return v
+    
+    @validator('place_of_birth', 'nationality', 'marital_status', 'state_of_residence',
+               'local_government_residence', 'country_of_residence', 'state_of_origin',
+               'local_government_origin', 'religion', 'position', 'years_of_service',
+               'service_number', 'additional_skills', 'bank_name', 'account_number')
+    def convert_empty_to_none(cls, v):
+        """Convert empty strings to None for optional fields"""
+        if isinstance(v, str):
+            v = v.strip()
+            if v == "" or v == "Select Marital Status" or v == "Select Religion":
+                return None
+        return v
+    
+    @validator('nationality')
+    def set_default_nationality(cls, v):
+        """Set default nationality if empty"""
+        if not v:
+            return "Nigerian"
+        return v
+    
+    @validator('country_of_residence')
+    def set_default_country(cls, v):
+        """Set default country if empty"""
+        if not v:
+            return "Nigeria"
+        return v
 
 
 class ExistingOfficerDocument(BaseModel):
@@ -217,7 +242,7 @@ class ExistingOfficerResponse(BaseModel):
     position: Optional[str]
     category: Optional[str]
     # NEW FIELDS
-    date_of_enlistment: Optional[date]
+    date_of_enlistment: date  # ✅ CHANGED: Not Optional (required)
     date_of_promotion: Optional[date]
     # NEW: Simplified document status
     passport_uploaded: bool
@@ -235,12 +260,12 @@ class ExistingOfficerDetailResponse(ExistingOfficerResponse):
     gender: str
     date_of_birth: date
     place_of_birth: Optional[str]
-    nationality: str
+    nationality: Optional[str]
     marital_status: Optional[str]
     residential_address: str
     state_of_residence: Optional[str]
     local_government_residence: Optional[str]
-    country_of_residence: str
+    country_of_residence: Optional[str]
     state_of_origin: Optional[str]
     local_government_origin: Optional[str]
     years_of_service: Optional[str]
@@ -295,7 +320,7 @@ class RegisterResponse(BaseModel):
     next_steps: List[str] = Field(default_factory=list)
     registration_id: Optional[str] = None
     # NEW: Include dates in response
-    date_of_enlistment: Optional[date] = None
+    date_of_enlistment: date  # ✅ CHANGED: Not Optional (required)
     date_of_promotion: Optional[date] = None
     # NEW: Document upload instructions
     upload_instructions: List[str] = Field(default_factory=lambda: [
@@ -317,7 +342,7 @@ class ExistingOfficerDashboard(BaseModel):
     status: str
     is_verified: bool
     is_active: bool
-    date_of_enlistment: Optional[date]
+    date_of_enlistment: date  # ✅ CHANGED: Not Optional (required)
     date_of_promotion: Optional[date]
     category: Optional[str]
     

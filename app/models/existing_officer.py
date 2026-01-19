@@ -24,8 +24,8 @@ class ExistingOfficer(Base):
     phone = Column(String(20), nullable=False, comment='Officer phone number')
     password_hash = Column(String(255), nullable=False, comment='Hashed password')
     
-    # NEW FIELDS: Service Dates (from master prompt) - FIXED: date_of_enlistment NOT NULL
-    date_of_enlistment = Column(Date, nullable=False, comment='Date officer enlisted - REQUIRED')  # ✅ FIXED: NOT NULL
+    # NEW FIELDS: Service Dates (from master prompt)
+    date_of_enlistment = Column(Date, nullable=False, comment='Date officer enlisted - REQUIRED')
     date_of_promotion = Column(Date, nullable=True, comment='Date of last promotion - OPTIONAL')
     
     # Category Field - MCN, MBT, MBC (extracted from officer_id)
@@ -55,23 +55,23 @@ class ExistingOfficer(Base):
     nin_number = Column(String(20), nullable=False, unique=True, comment='National Identification Number')
     gender = Column(String(10), nullable=False, comment='Gender')
     date_of_birth = Column(Date, nullable=False, comment='Date of birth')
-    place_of_birth = Column(String(100), nullable=False, comment='Place of birth')
-    nationality = Column(String(50), nullable=False, comment='Nationality')
-    marital_status = Column(String(20), nullable=False, comment='Marital status')
+    place_of_birth = Column(String(100), nullable=True, comment='Place of birth')  # ✅ CHANGED: nullable=True
+    nationality = Column(String(50), nullable=True, comment='Nationality')  # ✅ CHANGED: nullable=True
+    marital_status = Column(String(20), nullable=True, comment='Marital status')  # ✅ CHANGED: nullable=True
     
     # Contact Information
     residential_address = Column(Text, nullable=False, comment='Residential address')
-    state_of_residence = Column(String(50), nullable=False, comment='State of residence')
-    local_government_residence = Column(String(50), nullable=False, comment='LGA of residence')
-    country_of_residence = Column(String(50), nullable=False, comment='Country of residence')
+    state_of_residence = Column(String(50), nullable=True, comment='State of residence')  # ✅ CHANGED: nullable=True
+    local_government_residence = Column(String(50), nullable=True, comment='LGA of residence')  # ✅ CHANGED: nullable=True
+    country_of_residence = Column(String(50), nullable=True, comment='Country of residence')  # ✅ CHANGED: nullable=True
     
     # Origin Information
-    state_of_origin = Column(String(50), nullable=False, comment='State of origin')
-    local_government_origin = Column(String(50), nullable=False, comment='LGA of origin')
+    state_of_origin = Column(String(50), nullable=True, comment='State of origin')  # ✅ CHANGED: nullable=True
+    local_government_origin = Column(String(50), nullable=True, comment='LGA of origin')  # ✅ CHANGED: nullable=True
     
     # Professional Information
     rank = Column(String(50), nullable=False, comment='Officer rank')
-    position = Column(String(100), nullable=False, comment='Position/title')
+    position = Column(String(100), nullable=True, comment='Position/title')  # ✅ CHANGED: nullable=True
     years_of_service = Column(String(20), nullable=True, comment='Years of service')
     service_number = Column(String(50), nullable=True, unique=True, comment='Service number')
     
