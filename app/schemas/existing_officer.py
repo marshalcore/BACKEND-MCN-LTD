@@ -1,9 +1,11 @@
-# app/schemas/existing_officer.py
 from typing import Optional, List
 from pydantic import BaseModel, EmailStr, Field, validator
 from datetime import date, datetime
 from uuid import UUID
 import re
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class ExistingOfficerVerify(BaseModel):
@@ -32,21 +34,28 @@ class ExistingOfficerVerify(BaseModel):
     
     @validator('email')
     def validate_email_domain(cls, v):
-        """Basic email domain validation"""
+        """Enhanced email domain validation - blocks disposable emails"""
         v = v.strip().lower()
         
-        # Check for common disposable domains
+        # Get disposable domains from URL content
         disposable_domains = [
             'tempmail.com', '10minutemail.com', 'mailinator.com',
             'yopmail.com', 'throwawaymail.com', 'trashmail.com',
-            'dispostable.com', 'maildrop.cc', 'guerrillamail.com'
+            'dispostable.com', 'maildrop.cc', 'guerrillamail.com',
+            'sharklasers.com', 'maildrop.cc'
         ]
         
-        domain = v.split('@')[1] if '@' in v else ''
-        
-        for disposable in disposable_domains:
-            if disposable in domain:
-                raise ValueError('Disposable email addresses are not allowed')
+        if '@' in v:
+            domain = v.split('@')[1]
+            
+            # Check against disposable domains
+            for disposable in disposable_domains:
+                if disposable in domain:
+                    raise ValueError('Disposable/temporary email addresses are not allowed. Please use a professional email.')
+            
+            # Additional professional email validation
+            if domain.endswith('.temp') or domain.endswith('.xyz'):
+                raise ValueError('Please use a professional email address from a recognized provider.')
         
         return v
 
@@ -157,29 +166,37 @@ class ExistingOfficerRegister(BaseModel):
     
     @validator('email')
     def validate_officer_email(cls, v):
-        """Additional email validation for officers"""
+        """Enhanced email validation for officers"""
         v = v.strip().lower()
         
-        # Check against disposable domains
+        # Get disposable domains from URL content
         disposable_domains = [
             'tempmail.com', '10minutemail.com', 'mailinator.com',
-            'yopmail.com', 'throwawaymail.com', 'trashmail.com'
+            'yopmail.com', 'throwawaymail.com', 'trashmail.com',
+            'dispostable.com', 'maildrop.cc', 'guerrillamail.com',
+            'sharklasers.com'
         ]
         
-        domain = v.split('@')[1] if '@' in v else ''
-        
-        for disposable in disposable_domains:
-            if disposable in domain:
-                raise ValueError('Professional email addresses required. Disposable emails not allowed.')
+        if '@' in v:
+            domain = v.split('@')[1]
+            
+            for disposable in disposable_domains:
+                if disposable in domain:
+                    raise ValueError('Professional email addresses required. Disposable/temporary emails are not allowed for officer registration.')
+            
+            # Check for professional domains
+            professional_domains = ['gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com', 'icloud.com']
+            if not any(domain.endswith(prof_domain) for prof_domain in professional_domains):
+                logger.warning(f"Non-standard email domain used: {domain}")
         
         return v
 
 
 class ExistingOfficerDocument(BaseModel):
-    """Schema for document upload metadata"""
+    """Schema for document upload metadata - UPDATED FOR 2-UPLOAD SYSTEM"""
     document_type: str = Field(
         ...,
-        description="Type of document being uploaded"
+        description="Type of document being uploaded: 'passport' or 'consolidated_pdf' only"
     )
     description: Optional[str] = Field(None, max_length=200)
 
@@ -201,6 +218,9 @@ class ExistingOfficerResponse(BaseModel):
     # NEW FIELDS
     date_of_enlistment: Optional[date]
     date_of_promotion: Optional[date]
+    # NEW: Simplified document status
+    passport_uploaded: bool
+    consolidated_pdf_uploaded: bool
     created_at: datetime
     updated_at: Optional[datetime]
     verification_date: Optional[datetime]
@@ -232,21 +252,13 @@ class ExistingOfficerDetailResponse(ExistingOfficerResponse):
     admin_notes: Optional[str]
     rejection_reason: Optional[str]
     
-    # Document paths
-    passport_photo: Optional[str]
-    nin_slip: Optional[str]
-    ssce_certificate: Optional[str]
-    birth_certificate: Optional[str]
-    letter_of_first_appointment: Optional[str]
-    promotion_letters: Optional[str]
-    service_certificate: Optional[str]
-    medical_certificate: Optional[str]
-    guarantor_form: Optional[str]
-    other_documents: Optional[str]
+    # NEW: Simplified document paths (only 2 uploads)
+    passport_path: Optional[str]
+    consolidated_pdf_path: Optional[str]
     
     # PDF paths
     terms_pdf_path: Optional[str]
-    application_pdf_path: Optional[str]
+    registration_pdf_path: Optional[str]
 
 
 class ExistingOfficerUpdate(BaseModel):
@@ -284,11 +296,17 @@ class RegisterResponse(BaseModel):
     # NEW: Include dates in response
     date_of_enlistment: Optional[date] = None
     date_of_promotion: Optional[date] = None
+    # NEW: Document upload instructions
+    upload_instructions: List[str] = Field(default_factory=lambda: [
+        "1. Upload Passport Photo (JPG/PNG, 2MB max)",
+        "2. Upload Consolidated PDF with all 10 documents (10MB max)",
+        "3. PDFs will be auto-generated and emailed to you"
+    ])
 
 
-# Schema for dashboard data
+# Schema for dashboard data - UPDATED FOR 2-UPLOAD SYSTEM
 class ExistingOfficerDashboard(BaseModel):
-    """Schema for existing officer dashboard data"""
+    """Schema for existing officer dashboard data - UPDATED FOR 2-UPLOAD SYSTEM"""
     officer_id: str
     full_name: str
     email: str
@@ -302,17 +320,21 @@ class ExistingOfficerDashboard(BaseModel):
     date_of_promotion: Optional[date]
     category: Optional[str]
     
-    # Document status
+    # NEW: Simplified document status (only 2 uploads)
     passport_uploaded: bool
-    nin_uploaded: bool
-    ssce_uploaded: bool
-    birth_certificate_uploaded: bool
-    appointment_letter_uploaded: bool
-    promotion_letters_uploaded: bool
+    consolidated_pdf_uploaded: bool
+    
+    # Document completion status
+    documents_completed: bool = Field(default=False)
+    documents_required: int = Field(default=2)
+    documents_uploaded: int = Field(default=0)
     
     # PDF availability
     has_terms_pdf: bool
     has_registration_pdf: bool
+    
+    # Document paths for download
+    document_paths: dict = Field(default_factory=dict)
     
     # Timestamps
     created_at: datetime
@@ -322,6 +344,33 @@ class ExistingOfficerDashboard(BaseModel):
         from_attributes = True
 
 
-# Keep officer.py schemas as they are (they're for the working portal)
-# app/schemas/officer.py remains unchanged as per master prompt
-# ... [officer.py schemas remain exactly as provided] ...
+# Schema for document upload response
+class DocumentUploadResponse(BaseModel):
+    """Response for document upload - UPDATED FOR 2-UPLOAD SYSTEM"""
+    status: str
+    message: str
+    document_type: str
+    officer_id: str
+    file_path: str
+    is_required: bool
+    upload_complete: bool = Field(default=False)
+    remaining_uploads: List[str] = Field(default_factory=list)
+    
+    class Config:
+        from_attributes = True
+
+
+# Schema for PDF generation response
+class PDFGenerationResponse(BaseModel):
+    """Response for PDF generation"""
+    status: str
+    message: str
+    officer_id: str
+    email: str
+    terms_pdf_path: Optional[str] = None
+    registration_pdf_path: Optional[str] = None
+    email_sent: bool = Field(default=False)
+    download_urls: dict = Field(default_factory=dict)
+    
+    class Config:
+        from_attributes = True

@@ -25,10 +25,6 @@
             border-radius: 10px 10px 0 0;
             margin: -30px -30px 30px -30px;
         }
-        .logo {
-            max-width: 120px;
-            margin-bottom: 15px;
-        }
         .content {
             padding: 20px 0;
         }
@@ -48,6 +44,16 @@
             border-radius: 5px;
             margin: 10px 5px;
             font-weight: bold;
+            border: none;
+            cursor: pointer;
+        }
+        .pdf-button {
+            background-color: #d32f2f;
+            display: block;
+            width: 100%;
+            text-align: center;
+            margin: 10px 0;
+            padding: 15px;
         }
         .officer-info {
             background-color: #e8f4fd;
@@ -64,53 +70,95 @@
             color: #666;
             text-align: center;
         }
+        .download-section {
+            background-color: #e8f5e9;
+            border: 1px solid #c8e6c9;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 25px 0;
+        }
+        .pdf-item {
+            background: white;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 5px;
+            border-left: 4px solid #254a93;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>Marshal Core Nigeria</h1>
-            <h2>Existing Officer Registration</h2>
+            <h1>Marshal Core of Nigeria</h1>
+            <h2>Your Verification Documents Are Ready</h2>
         </div>
         
         <div class="content">
             <h3>Dear {{ name }},</h3>
             
-            <p>Your existing officer registration with Marshal Core Nigeria has been processed successfully. Your registration documents have been generated and are ready for download.</p>
-            
-            <div class="document-list">
-                <h4>📎 Generated Documents:</h4>
-                <ul>
-                    <li><strong>Terms & Conditions</strong> - Official terms and conditions</li>
-                    <li><strong>Registration Form</strong> - Your completed officer registration form</li>
-                </ul>
-            </div>
+            <p>Your existing officer verification with <strong>Marshal Core of Nigeria</strong> has been processed successfully. Your official registration documents are now ready for download.</p>
             
             <div class="officer-info">
                 <p><strong>Officer ID:</strong> {{ officer_id }}</p>
-                <p><strong>Login Method:</strong> Use your Officer ID and password to login to the dashboard</p>
+                <p><strong>Verification Date:</strong> {{ date }}</p>
+                <p><strong>Category:</strong> {{ category }}</p>
             </div>
             
-            <h4>📋 Next Steps:</h4>
+            <div class="download-section">
+                <h4 style="text-align: center; color: #d32f2f;">📥 DOWNLOAD YOUR DOCUMENTS</h4>
+                
+                <div class="pdf-item">
+                    <h5>1. Terms & Conditions PDF</h5>
+                    <p>Official terms and conditions for Marshal Core of Nigeria officers</p>
+                    <a href="{{ terms_pdf_url }}" class="button pdf-button">
+                        📄 Download Terms & Conditions PDF
+                    </a>
+                </div>
+                
+                <div class="pdf-item">
+                    <h5>2. Verification Form PDF</h5>
+                    <p>Your completed officer registration form with all your details</p>
+                    <a href="{{ verification_pdf_url }}" class="button pdf-button">
+                        📄 Download Registration Form PDF
+                    </a>
+                </div>
+                
+                <p style="text-align: center; margin-top: 20px; font-size: 14px;">
+                    <strong>Note:</strong> Click the buttons above to download your PDF documents directly.
+                </p>
+            </div>
+            
+            <h4>📋 Important Next Steps:</h4>
             <ol>
-                <li>Login to your dashboard using your Officer ID</li>
-                <li>Download your PDF documents</li>
-                <li>Print copies for your records</li>
-                <li>Read and understand the Terms & Conditions</li>
+                <li><strong>Download</strong> both PDF documents using the links above</li>
+                <li><strong>Save</strong> them to your computer or mobile device</li>
+                <li><strong>Print</strong> copies for your official records</li>
+                <li><strong>Read carefully</strong> the Terms & Conditions</li>
+                <li><strong>Keep</strong> these documents safe for future reference</li>
             </ol>
             
             <div style="text-align: center; margin: 30px 0;">
-                <a href="https://marshal-core-frontend.onrender.com/existing-officer-dashboard.html" class="button">Go to Dashboard</a>
+                <p><strong>Need to access these documents later?</strong></p>
+                <p>You can always download them from your dashboard:</p>
+                <a href="https://marshalcoreofnigeria.ng/existing-officer-dashboard.html" class="button">
+                    📊 Go to Dashboard
+                </a>
             </div>
             
-            <p>If you have any questions, contact us at <a href="mailto:support@marshalcore.com">support@marshalcore.com</a></p>
+            <p>If you have any questions or need assistance, contact us at:</p>
+            <p style="text-align: center;">
+                <a href="mailto:support@marshalcoreofnigeria.ng" style="color: #254a93;">
+                    support@marshalcoreofnigeria.ng
+                </a>
+            </p>
             
             <p>Best regards,<br>
-            <strong>Marshal Core Nigeria Admin Team</strong></p>
+            <strong>Marshal Core of Nigeria Admin Team</strong></p>
         </div>
         
         <div class="footer">
-            <p>© 2025 Marshal Core Of Nigeria. All rights reserved.</p>
+            <p>© 2025 Marshal Core of Nigeria. All rights reserved.</p>
+            <p>Certificate No: YA/CLB/10100</p>
             <p>This is an automated message. Please do not reply.</p>
             <p>Generated: {{ date }}</p>
         </div>

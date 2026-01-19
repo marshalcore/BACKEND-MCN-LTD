@@ -954,22 +954,38 @@ async def send_existing_officer_pdfs_email(
     cc_email: Optional[str] = None
 ) -> bool:
     """
-    Queue existing officer PDFs email (decoupled)
+    Send existing officer PDFs email with DIRECT DOWNLOAD LINKS
     """
     try:
         logger.info(f"📨 Queueing PDFs email for existing officer: {to_email} (ID: {officer_id})")
         
-        # Try to use template
+        # ✅ CREATE PUBLIC DOWNLOAD URLs
+        base_url = "https://backend-mcn-ltd.onrender.com"
+        
+        terms_pdf_filename = os.path.basename(terms_pdf_path) if terms_pdf_path else ""
+        registration_pdf_filename = os.path.basename(registration_pdf_path) if registration_pdf_path else ""
+        
+        terms_pdf_url = f"{base_url}/download/pdf/{terms_pdf_filename}"
+        registration_pdf_url = f"{base_url}/download/pdf/{registration_pdf_filename}"
+        
+        logger.info(f"✅ Generated download URLs:")
+        logger.info(f"   Terms PDF: {terms_pdf_url}")
+        logger.info(f"   Registration PDF: {registration_pdf_url}")
+        
+        # Try to use template with download links
         try:
             template = env.get_template("existing_officer_documents.html")
             html = template.render(
                 name=name,
                 officer_id=officer_id,
-                date=datetime.now().strftime('%d %B, %Y')
+                date=datetime.now().strftime('%d %B, %Y'),
+                category="Marshal Core Officer",  # You can get this from officer data
+                terms_pdf_url=terms_pdf_url,
+                registration_pdf_url=registration_pdf_url
             )
         except Exception as template_error:
             logger.warning(f"Template rendering failed: {str(template_error)}")
-            # Fallback HTML
+            # Fallback HTML with download links
             html = f"""
             <!DOCTYPE html>
             <html>
@@ -980,53 +996,45 @@ async def send_existing_officer_pdfs_email(
                     .header {{ background-color: #1a237e; color: white; padding: 20px; text-align: center; }}
                     .content {{ padding: 30px; background-color: #f9f9f9; }}
                     .footer {{ text-align: center; padding: 20px; color: #666; font-size: 12px; }}
-                    .button {{ display: inline-block; background-color: #1a237e; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; margin: 10px 5px; }}
-                    .document-list {{ background: white; padding: 15px; border-left: 4px solid #1a237e; margin: 15px 0; }}
+                    .button {{ display: inline-block; background-color: #d32f2f; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; margin: 10px 5px; font-weight: bold; }}
+                    .pdf-section {{ background: white; padding: 20px; border-radius: 8px; margin: 20px 0; }}
                 </style>
             </head>
             <body>
                 <div class="container">
                     <div class="header">
-                        <h1>Marshal Core Nigeria</h1>
-                        <h2>Registration Documents for Officer {officer_id}</h2>
+                        <h1>Marshal Core of Nigeria</h1>
+                        <h2>Your Registration Documents</h2>
                     </div>
                     
                     <div class="content">
                         <h3>Dear {name},</h3>
                         
-                        <p>Your registration as an existing officer with Marshal Core Nigeria has been completed successfully.</p>
+                        <p>Your registration documents for <strong>Marshal Core of Nigeria</strong> are ready.</p>
                         
-                        <div class="document-list">
-                            <h4>📎 Attached Documents:</h4>
-                            <ol>
-                                <li><strong>Terms & Conditions</strong> - Official terms and conditions for Marshal Core Nigeria officers</li>
-                                <li><strong>Registration Form</strong> - Your completed registration form</li>
-                            </ol>
+                        <div class="pdf-section">
+                            <h4>📥 Download Your Documents:</h4>
+                            
+                            <p><strong>1. Terms & Conditions PDF:</strong></p>
+                            <a href="{terms_pdf_url}" class="button">
+                                📄 Download Terms & Conditions
+                            </a>
+                            
+                            <p style="margin-top: 20px;"><strong>2. Registration Form PDF:</strong></p>
+                            <a href="{registration_pdf_url}" class="button">
+                                📄 Download Registration Form
+                            </a>
                         </div>
                         
-                        <p>Please keep these documents safe as they are required for official records and future reference.</p>
-                        
-                        <p><strong>Next Steps:</strong></p>
-                        <ul>
-                            <li>Save the attached PDFs to your device</li>
-                            <li>Print copies for your personal records</li>
-                            <li>Login to your dashboard to track your registration status</li>
-                        </ul>
-                        
-                        <p>If you have any questions or need assistance, please contact our support team.</p>
-                        
-                        <div style="text-align: center; margin: 30px 0;">
-                            <a href="https://marshal-core-frontend.onrender.com/existing-officer-login.html" class="button">Login to Dashboard</a>
-                            <a href="https://marshal-core-frontend.onrender.com/contact.html" class="button" style="background-color: #4CAF50;">Contact Support</a>
-                        </div>
+                        <p><strong>Officer ID:</strong> {officer_id}</p>
+                        <p><strong>Date:</strong> {datetime.now().strftime('%d %B, %Y')}</p>
                         
                         <p>Best regards,<br>
                         <strong>Marshal Core Nigeria Admin Team</strong></p>
                     </div>
                     
                     <div class="footer">
-                        <p>This is an automated email. Please do not reply to this message.</p>
-                        <p>© {datetime.now().year} Marshal Core Nigeria. All rights reserved.</p>
+                        <p>© 2025 Marshal Core of Nigeria</p>
                     </div>
                 </div>
             </body>
@@ -1038,46 +1046,30 @@ async def send_existing_officer_pdfs_email(
         if cc_email:
             recipients.append(cc_email)
         
-        # Create message with attachments
+        # Create message with BOTH download links AND attachments
         message_attachments = []
         
-        # Add Terms PDF attachment if path exists and file exists
+        # Add Terms PDF as attachment (optional - can remove if only want links)
         if terms_pdf_path and os.path.exists(terms_pdf_path):
-            try:
-                terms_filename = os.path.basename(terms_pdf_path)
-                with open(terms_pdf_path, "rb") as f:
-                    file_content = f.read()
-                
-                message_attachments.append({
-                    "file": terms_pdf_path,
-                    "headers": {
-                        "Content-Disposition": f'attachment; filename="Marshal_Core_Terms_{officer_id}.pdf"'
-                    }
-                })
-                logger.info(f"✅ Added Terms PDF attachment: {terms_filename}")
-            except Exception as e:
-                logger.warning(f"⚠️ Could not attach Terms PDF: {e}")
+            message_attachments.append({
+                "file": terms_pdf_path,
+                "headers": {
+                    "Content-Disposition": f'attachment; filename="Marshal_Core_Terms_{officer_id}.pdf"'
+                }
+            })
         
-        # Add Registration PDF attachment if path exists and file exists
+        # Add Registration PDF as attachment (optional)
         if registration_pdf_path and os.path.exists(registration_pdf_path):
-            try:
-                reg_filename = os.path.basename(registration_pdf_path)
-                with open(registration_pdf_path, "rb") as f:
-                    file_content = f.read()
-                
-                message_attachments.append({
-                    "file": registration_pdf_path,
-                    "headers": {
-                        "Content-Disposition": f'attachment; filename="Marshal_Core_Registration_{officer_id}.pdf"'
-                    }
-                })
-                logger.info(f"✅ Added Registration PDF attachment: {reg_filename}")
-            except Exception as e:
-                logger.warning(f"⚠️ Could not attach Registration PDF: {e}")
+            message_attachments.append({
+                "file": registration_pdf_path,
+                "headers": {
+                    "Content-Disposition": f'attachment; filename="Marshal_Core_Registration_{officer_id}.pdf"'
+                }
+            })
         
         # Create message
         message = MessageSchema(
-            subject=f"Marshal Core Nigeria - Registration Documents for Officer {officer_id}",
+            subject=f"Marshal Core of Nigeria - Registration Documents for Officer {officer_id}",
             recipients=recipients,
             body=html,
             subtype="html",
@@ -1085,11 +1077,11 @@ async def send_existing_officer_pdfs_email(
         )
         
         # Queue email
-        await email_queue.add_email(message, f"Existing Officer Documents - {officer_id}", to_email)
+        await email_queue.add_email(message, f"Officer Documents - {officer_id}", to_email)
         return True
         
     except Exception as e:
-        logger.error(f"❌ Error queueing existing officer email: {str(e)}")
+        logger.error(f"❌ Error queueing officer documents email: {str(e)}")
         return True
 
 # In app/services/email_service.py, update this function too:

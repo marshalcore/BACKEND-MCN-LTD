@@ -1,4 +1,3 @@
-# app/models/existing_officer.py
 from sqlalchemy import Column, String, Boolean, DateTime, Text, Date, Integer, Index
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
@@ -8,7 +7,7 @@ from app.database import Base
 
 class ExistingOfficer(Base):
     __tablename__ = "existing_officers"
-    __table_args__ = {'comment': 'Table for officers who registered in the past without payment'}
+    __table_args__ = {'comment': 'Table for existing officers - UPDATED for 2-upload system'}
 
     # Primary Key
     id = Column(
@@ -20,7 +19,7 @@ class ExistingOfficer(Base):
     )
     
     # Credential Fields
-    officer_id = Column(String(50), unique=True, nullable=False, comment='Original officer ID from legacy system - NEW FORMAT: PREFIX/ALPHANUMERIC/INTAKE')
+    officer_id = Column(String(50), unique=True, nullable=False, comment='Officer ID in NEW format: PREFIX/ALPHANUMERIC/INTAKE')
     email = Column(String(255), unique=True, nullable=False, comment='Officer email')
     phone = Column(String(20), nullable=False, comment='Officer phone number')
     password_hash = Column(String(255), nullable=False, comment='Hashed password')
@@ -33,7 +32,7 @@ class ExistingOfficer(Base):
     category = Column(
         String(50), 
         nullable=True, 
-        comment='Officer category: MCN (Marshal Core Nigeria), MBT (Marshal Board of Trustees), MBC (Marshal Board Committee)'
+        comment='Officer category: MCN (Marshal Core of Nigeria), MBT (Marshal Board of Trustees), MBC (Marshal Board of Committee)'
     )
     
     # Verification Fields
@@ -84,21 +83,23 @@ class ExistingOfficer(Base):
     bank_name = Column(String(100), nullable=True, comment='Bank name')
     account_number = Column(String(20), nullable=True, comment='Bank account number')
     
-    # PDF Tracking Fields - UPDATED FOR EXISTING OFFICERS
+    # PDF Tracking Fields
     terms_pdf_path = Column(String(500), nullable=True, comment='Path to Terms & Conditions PDF')
     registration_pdf_path = Column(String(500), nullable=True, comment='Path to Existing Officer Registration Form PDF')
     terms_generated_at = Column(DateTime(timezone=True), nullable=True, comment='When Terms PDF was generated')
     registration_generated_at = Column(DateTime(timezone=True), nullable=True, comment='When Registration PDF was generated')
     
-    # Document Paths (Required from master prompt)
-    passport_photo = Column(String(255), nullable=True, comment='Passport photo path - REQUIRED')
-    nin_slip = Column(String(255), nullable=True, comment='NIN slip path - REQUIRED')
-    ssce_certificate = Column(String(255), nullable=True, comment='SSCE certificate path - REQUIRED')
-    birth_certificate = Column(String(255), nullable=True, comment='Birth certificate path - OPTIONAL')
-    letter_of_first_appointment = Column(String(255), nullable=True, comment='First appointment letter - OPTIONAL')
-    promotion_letters = Column(String(255), nullable=True, comment='Promotion letters - OPTIONAL')
+    # NEW: Simplified Document Upload Fields (ONLY 2 UPLOADS)
+    passport_uploaded = Column(Boolean, default=False, comment='Passport photo uploaded status')
+    passport_path = Column(String(255), nullable=True, comment='Passport photo path - JPG/PNG, 2MB max')
+    consolidated_pdf_uploaded = Column(Boolean, default=False, comment='Consolidated PDF uploaded status')
+    consolidated_pdf_path = Column(String(255), nullable=True, comment='Consolidated PDF path - All 10 documents in one PDF, 10MB max')
     
-    # Other documents
+    # REMOVED: Old document fields (6+ separate documents)
+    # nin_uploaded, ssce_uploaded, birth_certificate_uploaded, appointment_letter_uploaded, promotion_letters_uploaded
+    # nin_slip, ssce_certificate, birth_certificate, letter_of_first_appointment, promotion_letters
+    
+    # Other documents (keep these for backward compatibility but they're optional now)
     service_certificate = Column(String(255), nullable=True, comment='Service certificate')
     medical_certificate = Column(String(255), nullable=True, comment='Medical certificate')
     guarantor_form = Column(String(255), nullable=True, comment='Guarantor form')
@@ -125,4 +126,6 @@ class ExistingOfficer(Base):
         Index('ix_existing_officer_category', 'category'),
         Index('ix_existing_officer_status', 'status'),
         Index('ix_existing_officer_enlistment', 'date_of_enlistment'),
+        Index('ix_existing_passport_uploaded', 'passport_uploaded'),
+        Index('ix_existing_consolidated_uploaded', 'consolidated_pdf_uploaded'),
     )

@@ -1,4 +1,3 @@
-# app/services/existing_officer_service.py
 import logging
 import json
 import re
@@ -29,9 +28,9 @@ class OfficerIDValidator:
     
     # Officer categories based on ID prefix - MCN, MBT, MBC only
     OFFICER_CATEGORIES = {
-        'MCN': 'Marshal Core Nigeria',
+        'MCN': 'Marshal Core of Nigeria',
         'MBT': 'Marshal Board of Trustees', 
-        'MBC': 'Marshal Board Committee'
+        'MBC': 'Marshal Board of Committee'
     }
     
     @staticmethod
@@ -161,7 +160,7 @@ class OfficerVerificationService:
 
 
 class ExistingOfficerService:
-    """Service for managing existing officers"""
+    """Service for managing existing officers - UPDATED FOR 2-UPLOAD SYSTEM"""
     
     @staticmethod
     def verify_officer(
@@ -330,7 +329,10 @@ class ExistingOfficerService:
             "is_active": True,
             "created_by": created_by,
             # Add category field to track officer type
-            "category": parsed_id['category']
+            "category": parsed_id['category'],
+            # NEW: Initialize document fields for 2-upload system
+            "passport_uploaded": False,
+            "consolidated_pdf_uploaded": False
         }
         
         # 7. Create new officer record
@@ -349,6 +351,7 @@ class ExistingOfficerService:
                - Enlistment: {register_data.date_of_enlistment}
                - Promotion: {register_data.date_of_promotion or 'N/A'}
                - Registration ID: {officer.id}
+               - Document System: 2-upload (passport + consolidated PDF)
             """)
             return officer
         except Exception as e:
@@ -357,84 +360,6 @@ class ExistingOfficerService:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to register officer: {str(e)}"
-            )
-    
-    # FIXED: upload_document method is now INSIDE the class
-    @staticmethod
-    def upload_document(
-        db: Session,
-        officer_id: str,
-        file: UploadFile,
-        document_type: str,
-        description: Optional[str] = None
-    ) -> str:
-        """Upload document for existing officer - FIXED VERSION"""
-        logger.info(f"📤 Uploading document {document_type} for officer {officer_id}")
-        
-        # Get officer
-        officer = db.query(ExistingOfficer).filter(
-            ExistingOfficer.officer_id == officer_id
-        ).first()
-        
-        if not officer:
-            logger.error(f"Officer {officer_id} not found for document upload")
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Officer not found"
-            )
-        
-        # Validate file
-        if not file.filename:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No file provided"
-            )
-        
-        try:
-            # Save upload
-            file_path = save_upload(file, f"existing_officers/{officer_id}/{document_type}")
-            logger.info(f"✅ File saved: {file_path}")
-            
-            # Update officer record with document path - FIXED MAPPING
-            document_field_map = {
-                'passport': 'passport_photo',
-                'nin_slip': 'nin_slip',
-                'ssce': 'ssce_certificate',
-                'birth_certificate': 'birth_certificate',
-                'appointment_letter': 'letter_of_first_appointment',
-                'promotion_letters': 'promotion_letters',
-                'service_certificate': 'service_certificate',
-                'medical_certificate': 'medical_certificate',
-                'guarantor_form': 'guarantor_form',
-            }
-            
-            if document_type in document_field_map:
-                field_name = document_field_map[document_type]
-                setattr(officer, field_name, file_path)
-                logger.info(f"✅ Document saved to field: {field_name}")
-                
-                # Force commit and refresh
-                db.commit()
-                db.refresh(officer)
-                
-                # Verify the field was updated
-                updated_value = getattr(officer, field_name)
-                logger.info(f"✅ Verified field {field_name} = {updated_value}")
-            else:
-                logger.warning(f"Document type {document_type} not in field map")
-            
-            officer.updated_at = datetime.utcnow()
-            db.commit()
-            
-            logger.info(f"✅ Document uploaded successfully for {officer_id}")
-            return file_path
-            
-        except Exception as e:
-            logger.error(f"❌ Error uploading document: {str(e)}", exc_info=True)
-            db.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to upload document: {str(e)}"
             )
     
     @staticmethod
@@ -544,7 +469,7 @@ class ExistingOfficerService:
     
     @staticmethod
     def get_dashboard_data(db: Session, officer_id: str) -> Dict[str, Any]:
-        """Get dashboard data for existing officer - NEW METHOD"""
+        """Get dashboard data for existing officer - UPDATED FOR 2-UPLOAD SYSTEM"""
         officer = db.query(ExistingOfficer).filter(
             ExistingOfficer.officer_id == officer_id
         ).first()
@@ -560,7 +485,16 @@ class ExistingOfficerService:
         officer.last_dashboard_access = datetime.utcnow()
         db.commit()
         
-        # Prepare dashboard data
+        # Calculate document completion
+        documents_uploaded = 0
+        if officer.passport_uploaded:
+            documents_uploaded += 1
+        if officer.consolidated_pdf_uploaded:
+            documents_uploaded += 1
+        
+        documents_completed = (documents_uploaded == 2)  # Both required
+        
+        # Prepare dashboard data for 2-upload system
         dashboard_data = {
             "officer_id": officer.officer_id,
             "full_name": officer.full_name,
@@ -575,13 +509,14 @@ class ExistingOfficerService:
             "date_of_promotion": officer.date_of_promotion,
             "category": officer.category,
             
-            # Document status
-            "passport_uploaded": bool(officer.passport_photo),
-            "nin_uploaded": bool(officer.nin_slip),
-            "ssce_uploaded": bool(officer.ssce_certificate),
-            "birth_certificate_uploaded": bool(officer.birth_certificate),
-            "appointment_letter_uploaded": bool(officer.letter_of_first_appointment),
-            "promotion_letters_uploaded": bool(officer.promotion_letters),
+            # NEW: Simplified document status (only 2 uploads)
+            "passport_uploaded": officer.passport_uploaded,
+            "consolidated_pdf_uploaded": officer.consolidated_pdf_uploaded,
+            
+            # Document completion status
+            "documents_completed": documents_completed,
+            "documents_required": 2,
+            "documents_uploaded": documents_uploaded,
             
             # PDF availability
             "has_terms_pdf": bool(officer.terms_pdf_path),
@@ -589,12 +524,8 @@ class ExistingOfficerService:
             
             # Document paths for download
             "document_paths": {
-                "passport": officer.passport_photo,
-                "nin": officer.nin_slip,
-                "ssce": officer.ssce_certificate,
-                "birth_certificate": officer.birth_certificate,
-                "appointment_letter": officer.letter_of_first_appointment,
-                "promotion_letters": officer.promotion_letters,
+                "passport": officer.passport_path,
+                "consolidated_pdf": officer.consolidated_pdf_path,
             },
             
             # PDF paths for download
@@ -619,7 +550,7 @@ class ExistingOfficerService:
         terms_pdf_path: Optional[str] = None,
         registration_pdf_path: Optional[str] = None
     ) -> ExistingOfficer:
-        """Update PDF paths for existing officer - NEW METHOD"""
+        """Update PDF paths for existing officer"""
         officer = db.query(ExistingOfficer).filter(
             ExistingOfficer.officer_id == officer_id
         ).first()
