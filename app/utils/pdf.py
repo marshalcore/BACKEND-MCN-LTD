@@ -4,6 +4,7 @@ import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, Optional
+from sqlalchemy.orm import Session
 import uuid
 
 from reportlab.lib.pagesizes import A4, letter
@@ -31,7 +32,7 @@ for directory in [PDFS_DIR, TERMS_DIR, APPLICATIONS_DIR]:
 
 # Company information
 COMPANY_INFO = {
-    "name": "Marshal Core Nigeria Limited",
+    "name": "Marshal Core Nigeria ",
     "rc_number": "RC: 1234567",
     "address": "123 Security Plaza, Central Business District, Abuja, Nigeria",
     "phone": "+234 800 000 0000",
@@ -43,6 +44,122 @@ class PDFGenerationError(Exception):
     """Custom exception for PDF generation errors"""
     pass
 
+# Add this function to your existing pdf.py file, before the PDFGenerator class
+
+async def generate_existing_officer_pdfs_and_email(officer_id: str, email: str, full_name: str, db: Session):
+    """
+    ✅ Generate PDFs and send email with DIRECT DOWNLOAD LINKS
+    This function is called by the route handler
+    """
+    from app.models.existing_officer import ExistingOfficer
+    from app.services.email_service import send_existing_officer_pdfs_email
+    from app.services.existing_officer_service import ExistingOfficerService
+    
+    try:
+        logger.info(f"🔄 Starting PDF auto-generation for existing officer: {officer_id}")
+        
+        # Get officer
+        officer = db.query(ExistingOfficer).filter(
+            ExistingOfficer.officer_id == officer_id
+        ).first()
+        
+        if not officer:
+            logger.error(f"❌ Officer not found: {officer_id}")
+            return {"success": False, "error": "Officer not found"}
+        
+        logger.info(f"✅ Found officer: {full_name} ({email})")
+        
+        # Generate PDFs using the PDFGenerator class
+        pdf_gen = PDFGenerator()
+        
+        # Prepare officer data for PDF generation
+        officer_data = {
+            "full_name": full_name,
+            "nin_number": officer.nin_number,
+            "residential_address": officer.residential_address,
+            "rank": officer.rank,
+            "position": officer.position,
+            "unique_id": officer_id,
+            "email": email,
+            "phone": officer.phone,
+            "gender": officer.gender,
+            "marital_status": officer.marital_status,
+            "nationality": officer.nationality,
+            "religion": officer.religion,
+            "place_of_birth": officer.place_of_birth,
+            "date_of_birth": officer.date_of_birth,
+            "state_of_residence": officer.state_of_residence,
+            "local_government_residence": officer.local_government_residence,
+            "country_of_residence": officer.country_of_residence,
+            "state_of_origin": officer.state_of_origin,
+            "local_government_origin": officer.local_government_origin,
+            "years_of_service": officer.years_of_service,
+            "service_number": officer.service_number,
+            "additional_skills": officer.additional_skills,
+            "bank_name": officer.bank_name,
+            "account_number": officer.account_number,
+            "date_of_enlistment": officer.date_of_enlistment,
+            "date_of_promotion": officer.date_of_promotion,
+            "category": officer.category,
+            "passport_photo": officer.passport_path,  # Using new field
+        }
+        
+        logger.info(f"📄 Generating Terms & Conditions PDF for {officer_id}")
+        terms_pdf_path = pdf_gen.generate_terms_conditions(officer_data, str(officer.id))
+        
+        logger.info(f"📄 Generating Application Form PDF for {officer_id}")
+        app_pdf_path = pdf_gen.generate_application_form(officer_data, str(officer.id))
+        
+        # ✅ CREATE PUBLIC DOWNLOAD URLs
+        base_url = "https://backend-mcn-ltd.onrender.com"
+        terms_filename = os.path.basename(terms_pdf_path)
+        registration_filename = os.path.basename(app_pdf_path)
+        
+        terms_pdf_url = f"{base_url}/download/pdf/{terms_filename}"
+        registration_pdf_url = f"{base_url}/download/pdf/{registration_filename}"
+        
+        logger.info(f"✅ Generated download URLs:")
+        logger.info(f"   Terms: {terms_pdf_url}")
+        logger.info(f"   Registration: {registration_pdf_url}")
+        
+        # Update PDF paths in database
+        ExistingOfficerService.update_pdf_paths(
+            db,
+            officer_id,
+            terms_pdf_path,
+            app_pdf_path  # This should be registration_pdf_path
+        )
+        
+        # ✅ Send email with DIRECT DOWNLOAD LINKS
+        email_result = await send_existing_officer_pdfs_email(
+            to_email=email,
+            name=full_name,
+            officer_id=officer_id,
+            terms_pdf_path=terms_pdf_path,
+            registration_pdf_path=app_pdf_path
+        )
+        
+        if email_result:
+            logger.info(f"📧 Email with download links queued for {email}")
+        else:
+            logger.warning(f"⚠️ Email queuing failed for {email}")
+        
+        logger.info(f"✅ PDF generation and email queuing COMPLETE for {officer_id}")
+        
+        return {
+            "success": True,
+            "officer_id": officer_id,
+            "email": email,
+            "terms_pdf_path": terms_pdf_path,
+            "registration_pdf_path": app_pdf_path,
+            "terms_pdf_url": terms_pdf_url,
+            "registration_pdf_url": registration_pdf_url,
+            "email_queued": email_result
+        }
+            
+    except Exception as e:
+        logger.error(f"❌ Error generating PDFs for {officer_id}: {str(e)}", exc_info=True)
+        return {"success": False, "error": str(e)}
 class PDFGenerator:
     """PDF generation utility using ReportLab"""
     
