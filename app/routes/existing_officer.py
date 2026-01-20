@@ -1,5 +1,5 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Request, BackgroundTasks  # ✅ ADDED BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Request, BackgroundTasks
 from sqlalchemy.orm import Session
 from uuid import UUID
 from datetime import datetime
@@ -87,7 +87,7 @@ async def verify_officer_credentials(
 async def register_existing_officer(
     register_data: ExistingOfficerRegister,
     request: Request,
-    background_tasks: BackgroundTasks,  # ✅ ADDED: BackgroundTasks parameter
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
     """
@@ -106,16 +106,22 @@ async def register_existing_officer(
         origin = request.headers.get("origin")
         logger.info(f"Registration request from origin: {origin}")
         
+        # Log the incoming data for debugging
+        logger.info(f"📨 Received registration data: {register_data.dict()}")
+        
         officer = ExistingOfficerService.register_officer(db, register_data)
         
         logger.info(f"Officer registered successfully with enlistment date: {register_data.date_of_enlistment}")
         
         # ✅ CRITICAL FIX: AUTO-GENERATE PDFs AND SEND EMAIL IN BACKGROUND
+        # Import the function here to avoid circular imports
+        from app.utils.pdf import generate_existing_officer_pdfs_and_email
+        
         background_tasks.add_task(
             generate_existing_officer_pdfs_and_email,
             officer_id=officer.officer_id,
             email=officer.email,
-            full_name=officer.full_name,  # ✅ ADDED: full_name parameter
+            full_name=officer.full_name,
             db=db
         )
         
@@ -154,7 +160,7 @@ async def register_existing_officer(
         logger.error(f"Error registering officer: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to register officer"
+            detail=f"Failed to register officer: {str(e)}"
         )
 
 
@@ -461,7 +467,7 @@ async def login_existing_officer(
 )
 async def generate_pdfs_for_officer(
     officer_id: str,
-    background_tasks: BackgroundTasks = None,
+    background_tasks: BackgroundTasks,
     current_officer: dict = Depends(get_current_existing_officer_dict),
     db: Session = Depends(get_db)
 ):
@@ -504,49 +510,27 @@ async def generate_pdfs_for_officer(
         )
     
     # Generate PDFs in background
-    if background_tasks:
-        background_tasks.add_task(
-            generate_existing_officer_pdfs_and_email,
-            officer_id=officer_id,
-            email=officer.email,
-            full_name=officer.full_name,  # ✅ ADDED: full_name parameter
-            db=db
-        )
-        
-        return PDFGenerationResponse(
-            status="success",
-            message="PDF generation started. You will receive an email when completed.",
-            officer_id=officer_id,
-            email=officer.email,
-            email_sent=False,  # Will be sent by background task
-            download_urls={
-                "dashboard_url": f"/api/existing-officers/{officer_id}/dashboard",
-                "pdf_download_url": f"/pdf/existing/{officer_id}"
-            }
-        )
-    else:
-        # Generate synchronously (for testing)
-        result = await generate_existing_officer_pdfs_and_email(
-            officer_id=officer_id,
-            email=officer.email,
-            full_name=officer.full_name,  # ✅ ADDED: full_name parameter
-            db=db
-        )
-        
-        return PDFGenerationResponse(
-            status="success",
-            message="PDFs generated and emailed successfully.",
-            officer_id=officer_id,
-            email=officer.email,
-            terms_pdf_path=result.get("terms_pdf_path"),
-            registration_pdf_path=result.get("registration_pdf_path"),
-            email_sent=True,
-            download_urls={
-                "terms_pdf": f"/download/pdf/{os.path.basename(result.get('terms_pdf_path', ''))}",
-                "registration_pdf": f"/download/pdf/{os.path.basename(result.get('registration_pdf_path', ''))}",
-                "dashboard": f"/api/existing-officers/{officer_id}/dashboard"
-            }
-        )
+    from app.utils.pdf import generate_existing_officer_pdfs_and_email
+    
+    background_tasks.add_task(
+        generate_existing_officer_pdfs_and_email,
+        officer_id=officer_id,
+        email=officer.email,
+        full_name=officer.full_name,
+        db=db
+    )
+    
+    return PDFGenerationResponse(
+        status="success",
+        message="PDF generation started. You will receive an email when completed.",
+        officer_id=officer_id,
+        email=officer.email,
+        email_sent=False,  # Will be sent by background task
+        download_urls={
+            "dashboard_url": f"/api/existing-officers/{officer_id}/dashboard",
+            "pdf_download_url": f"/pdf/existing/{officer_id}"
+        }
+    )
 
 
 @router.get(
@@ -637,95 +621,6 @@ async def logout_existing_officer(
 
 # ==================== BACKGROUND TASK FUNCTIONS ====================
 
-async def generate_existing_officer_pdfs_and_email(
-    officer_id: str,
-    email: str,
-    full_name: str,  # ✅ ADDED: full_name parameter
-    db: Session
-):
-    """
-    ✅ CRITICAL: Generate PDFs and send email with DIRECT DOWNLOAD LINKS
-    """
-    try:
-        logger.info(f"🔄 Starting PDF auto-generation for existing officer: {officer_id}")
-        
-        # Get officer
-        officer = db.query(ExistingOfficer).filter(
-            ExistingOfficer.officer_id == officer_id
-        ).first()
-        
-        if not officer:
-            logger.error(f"❌ Officer not found: {officer_id}")
-            return {"success": False, "error": "Officer not found"}
-        
-        logger.info(f"✅ Found officer: {full_name} ({email})")
-        
-        # Generate PDFs
-        pdf_service = PDFService(db)
-        
-        logger.info(f"📄 Generating Terms & Conditions PDF for {officer_id}")
-        terms_pdf_path = pdf_service.generate_terms_conditions(
-            str(officer.id),
-            "existing_officer"
-        )
-        
-        logger.info(f"📄 Generating Registration Form PDF for {officer_id}")
-        registration_pdf_path = pdf_service.generate_existing_officer_registration_form(
-            str(officer.id)
-        )
-        
-        # ✅ CREATE PUBLIC DOWNLOAD URLs
-        base_url = "https://backend-mcn-ltd.onrender.com"
-        terms_filename = os.path.basename(terms_pdf_path)
-        registration_filename = os.path.basename(registration_pdf_path)
-        
-        terms_pdf_url = f"{base_url}/download/pdf/{terms_filename}"
-        registration_pdf_url = f"{base_url}/download/pdf/{registration_filename}"
-        
-        logger.info(f"✅ Generated download URLs:")
-        logger.info(f"   Terms: {terms_pdf_url}")
-        logger.info(f"   Registration: {registration_pdf_url}")
-        
-        # Update PDF paths in database
-        ExistingOfficerService.update_pdf_paths(
-            db,
-            officer_id,
-            terms_pdf_path,
-            registration_pdf_path
-        )
-        
-        # ✅ Send email with DIRECT DOWNLOAD LINKS
-        email_result = await send_existing_officer_pdfs_email(
-            to_email=email,
-            name=full_name,  # ✅ FIXED: Use full_name parameter
-            officer_id=officer_id,
-            terms_pdf_path=terms_pdf_path,
-            registration_pdf_path=registration_pdf_path
-        )
-        
-        if email_result:
-            logger.info(f"📧 Email with download links queued for {email}")
-        else:
-            logger.warning(f"⚠️ Email queuing failed for {email}")
-        
-        logger.info(f"✅ PDF generation and email queuing COMPLETE for {officer_id}")
-        
-        return {
-            "success": True,
-            "officer_id": officer_id,
-            "email": email,
-            "terms_pdf_path": terms_pdf_path,
-            "registration_pdf_path": registration_pdf_path,
-            "terms_pdf_url": terms_pdf_url,
-            "registration_pdf_url": registration_pdf_url,
-            "email_queued": email_result
-        }
-            
-    except Exception as e:
-        logger.error(f"❌ Error generating PDFs for {officer_id}: {str(e)}", exc_info=True)
-        return {"success": False, "error": str(e)}
-
-
 async def send_welcome_email_task(officer_id: str, db: Session):
     """
     Background task to send welcome email to existing officer
@@ -757,3 +652,55 @@ async def send_welcome_email_task(officer_id: str, db: Session):
             
     except Exception as e:
         logger.error(f"❌ Error sending welcome email: {str(e)}")
+
+
+# ==================== DEBUG ENDPOINT ====================
+
+@router.post(
+    "/debug-register",
+    summary="Debug endpoint for registration data",
+    status_code=status.HTTP_200_OK
+)
+async def debug_register_data(
+    register_data: dict,
+    request: Request
+):
+    """
+    Debug endpoint to see what data is being sent from frontend
+    """
+    try:
+        logger.info(f"📨 Received registration data (debug): {register_data}")
+        
+        # Log all headers
+        logger.info(f"📋 Request headers: {dict(request.headers)}")
+        
+        # Validate against schema
+        try:
+            validated = ExistingOfficerRegister(**register_data)
+            return {
+                "status": "success",
+                "message": "Data matches schema",
+                "received_keys": list(register_data.keys()),
+                "schema_keys": list(ExistingOfficerRegister.__fields__.keys()),
+                "validated_data": validated.dict()
+            }
+        except Exception as e:
+            error_details = str(e)
+            # Extract field-level errors if available
+            if hasattr(e, 'errors'):
+                error_details = e.errors()
+            
+            return {
+                "status": "error",
+                "message": error_details,
+                "received_data": register_data,
+                "schema_fields": list(ExistingOfficerRegister.__fields__.keys()),
+                "schema_field_types": {k: str(v.type_) for k, v in ExistingOfficerRegister.__fields__.items()}
+            }
+            
+    except Exception as e:
+        logger.error(f"Error in debug endpoint: {str(e)}")
+        return {
+            "status": "error",
+            "message": str(e)
+        }
