@@ -1,7 +1,7 @@
 # app/routes/admin_auth.py
 from datetime import datetime, timedelta
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Form, Body, Request, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, Form, Body, Request, BackgroundTasks, Path
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -789,9 +789,9 @@ async def get_all_existing_officers(
             detail="Failed to load existing officers"
         )
 
-@router.get("/existing-officers/{officer_id}", status_code=status.HTTP_200_OK)
+@router.get("/existing-officers/{officer_id:path}", status_code=status.HTTP_200_OK)
 async def get_existing_officer(
-    officer_id: str,
+    officer_id: str = Path(..., description="Officer ID (may contain slashes like MCN/001B/001)"),
     db: Session = Depends(get_db),
     current_admin: Admin = Depends(get_current_admin)
 ):
@@ -799,13 +799,17 @@ async def get_existing_officer(
     Get a specific existing officer by officer_id
     """
     try:
+        logger.info(f"🔍 Looking for officer with ID: {officer_id}")
+        
         officer = db.query(ExistingOfficer).filter(ExistingOfficer.officer_id == officer_id).first()
         
         if not officer:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Officer not found"
+                detail=f"Officer not found with ID: {officer_id}"
             )
+        
+        logger.info(f"✅ Found officer: {officer.full_name} ({officer_id})")
         
         return {
             "id": str(officer.id),
@@ -859,15 +863,15 @@ async def get_existing_officer(
     except HTTPException as he:
         raise he
     except Exception as e:
-        logger.error(f"Error getting existing officer: {str(e)}")
+        logger.error(f"Error getting existing officer {officer_id}: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to load officer details"
+            detail=f"Failed to load officer details for {officer_id}"
         )
 
-@router.put("/existing-officers/{officer_id}/approve", status_code=status.HTTP_200_OK)
+@router.put("/existing-officers/{officer_id:path}/approve", status_code=status.HTTP_200_OK)
 async def approve_existing_officer(
-    officer_id: str,
+    officer_id: str = Path(..., description="Officer ID (may contain slashes like MCN/001B/001)"),
     update_data: StatusUpdateRequest = Body(...),
     db: Session = Depends(get_db),
     current_admin: Admin = Depends(get_current_admin)
@@ -876,12 +880,14 @@ async def approve_existing_officer(
     Approve an existing officer
     """
     try:
+        logger.info(f"✅ Approving officer: {officer_id}")
+        
         officer = db.query(ExistingOfficer).filter(ExistingOfficer.officer_id == officer_id).first()
         
         if not officer:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Officer not found"
+                detail=f"Officer not found with ID: {officer_id}"
             )
         
         # Update officer status
@@ -914,15 +920,15 @@ async def approve_existing_officer(
     except HTTPException as he:
         raise he
     except Exception as e:
-        logger.error(f"Error approving officer: {str(e)}")
+        logger.error(f"Error approving officer {officer_id}: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to approve officer"
+            detail=f"Failed to approve officer {officer_id}"
         )
 
-@router.put("/existing-officers/{officer_id}/reject", status_code=status.HTTP_200_OK)
+@router.put("/existing-officers/{officer_id:path}/reject", status_code=status.HTTP_200_OK)
 async def reject_existing_officer(
-    officer_id: str,
+    officer_id: str = Path(..., description="Officer ID (may contain slashes like MCN/001B/001)"),
     update_data: StatusUpdateRequest = Body(...),
     db: Session = Depends(get_db),
     current_admin: Admin = Depends(get_current_admin)
@@ -931,12 +937,14 @@ async def reject_existing_officer(
     Reject an existing officer
     """
     try:
+        logger.info(f"❌ Rejecting officer: {officer_id}")
+        
         officer = db.query(ExistingOfficer).filter(ExistingOfficer.officer_id == officer_id).first()
         
         if not officer:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Officer not found"
+                detail=f"Officer not found with ID: {officer_id}"
             )
         
         # Update officer status
@@ -966,15 +974,15 @@ async def reject_existing_officer(
     except HTTPException as he:
         raise he
     except Exception as e:
-        logger.error(f"Error rejecting officer: {str(e)}")
+        logger.error(f"Error rejecting officer {officer_id}: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to reject officer"
+            detail=f"Failed to reject officer {officer_id}"
         )
 
-@router.put("/existing-officers/{officer_id}/verify", status_code=status.HTTP_200_OK)
+@router.put("/existing-officers/{officer_id:path}/verify", status_code=status.HTTP_200_OK)
 async def verify_existing_officer(
-    officer_id: str,
+    officer_id: str = Path(..., description="Officer ID (may contain slashes like MCN/001B/001)"),
     update_data: StatusUpdateRequest = Body(...),
     db: Session = Depends(get_db),
     current_admin: Admin = Depends(get_current_admin)
@@ -983,12 +991,14 @@ async def verify_existing_officer(
     Verify an existing officer (manual verification)
     """
     try:
+        logger.info(f"🔍 Verifying officer: {officer_id}")
+        
         officer = db.query(ExistingOfficer).filter(ExistingOfficer.officer_id == officer_id).first()
         
         if not officer:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Officer not found"
+                detail=f"Officer not found with ID: {officer_id}"
             )
         
         # Update officer verification status
@@ -1022,15 +1032,15 @@ async def verify_existing_officer(
     except HTTPException as he:
         raise he
     except Exception as e:
-        logger.error(f"Error verifying officer: {str(e)}")
+        logger.error(f"Error verifying officer {officer_id}: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to verify officer"
+            detail=f"Failed to verify officer {officer_id}"
         )
 
-@router.put("/existing-officers/{officer_id}/status", status_code=status.HTTP_200_OK)
+@router.put("/existing-officers/{officer_id:path}/status", status_code=status.HTTP_200_OK)
 async def update_officer_status(
-    officer_id: str,
+    officer_id: str = Path(..., description="Officer ID (may contain slashes like MCN/001B/001)"),
     update_data: StatusUpdateRequest = Body(...),
     db: Session = Depends(get_db),
     current_admin: Admin = Depends(get_current_admin)
@@ -1039,12 +1049,14 @@ async def update_officer_status(
     Update officer status (general endpoint)
     """
     try:
+        logger.info(f"✏️ Updating status for officer: {officer_id}")
+        
         officer = db.query(ExistingOfficer).filter(ExistingOfficer.officer_id == officer_id).first()
         
         if not officer:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Officer not found"
+                detail=f"Officer not found with ID: {officer_id}"
             )
         
         # Validate status
@@ -1099,10 +1111,10 @@ async def update_officer_status(
     except HTTPException as he:
         raise he
     except Exception as e:
-        logger.error(f"Error updating officer status: {str(e)}")
+        logger.error(f"Error updating officer {officer_id} status: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to update officer status"
+            detail=f"Failed to update officer {officer_id} status"
         )
 
 @router.get("/existing-officers/pending", status_code=status.HTTP_200_OK)
