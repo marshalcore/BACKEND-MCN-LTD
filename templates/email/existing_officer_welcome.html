@@ -1,54 +1,120 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="UTF-8">
     <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
-        .header { background: #d32f2f; color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0; }
-        .content { padding: 30px; background: white; }
-        .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
-        .button { display: inline-block; background: #254a93; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; }
+        body { 
+            font-family: Arial, sans-serif; 
+            line-height: 1.6; 
+            color: #333; 
+            max-width: 600px; 
+            margin: 0 auto; 
+            padding: 20px;
+            position: relative;
+            background-image: url('https://marshalcoreofnigeria.ng/images/logo.png');
+            background-repeat: no-repeat;
+            background-position: center;
+            background-size: 200px;
+            background-attachment: fixed;
+            opacity: 0.95;
+        }
+        body::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-45deg);
+            width: 300px;
+            height: 300px;
+            background-image: url('https://marshalcoreofnigeria.ng/images/logo.png');
+            background-repeat: no-repeat;
+            background-size: contain;
+            opacity: 0.1;
+            z-index: -1;
+        }
+        .content-container {
+            position: relative;
+            z-index: 1;
+            background-color: rgba(255, 255, 255, 0.95);
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        .header { 
+            background: #d32f2f; 
+            color: white; 
+            padding: 20px; 
+            text-align: center; 
+            border-radius: 10px 10px 0 0; 
+        }
+        .header-logo {
+            max-height: 60px;
+            margin-bottom: 10px;
+        }
+        .content { 
+            padding: 30px; 
+            background: white;
+            border-radius: 0 0 10px 10px;
+        }
+        .footer { 
+            text-align: center; 
+            padding: 20px; 
+            color: #666; 
+            font-size: 12px; 
+        }
+        .button { 
+            display: inline-block; 
+            background: #254a93; 
+            color: white; 
+            padding: 12px 25px; 
+            text-decoration: none; 
+            border-radius: 5px; 
+        }
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>Welcome to Marshal Core of Nigeria</h1>
-        <p>Existing Officer Registration Complete</p>
-    </div>
-    
-    <div class="content">
-        <h3>Welcome, {{ name }}!</h3>
-        
-        <p>Your existing officer registration has been completed successfully.</p>
-        
-        <p><strong>Officer ID:</strong> {{ officer_id }}</p>
-        <p><strong>Category:</strong> {{ category }}</p>
-        
-        <p>✅ Your registration documents (Terms & Conditions and Registration Form) are being generated.</p>
-        <p>✅ You will receive them via email shortly.</p>
-        <p>✅ You can also download them from your dashboard.</p>
-        
-        <p>You can now login to your dashboard using your Officer ID and password.</p>
-        
-        <div style="text-align: center; margin: 30px 0;">
-            <a href="https://marshalcoreofnigeria.ng/existing-officer-dashboard.html" class="button">Login to Dashboard</a>
+    <div class="content-container">
+        <div class="header">
+            <img src="https://marshalcoreofnigeria.ng/images/logo.png" alt="Marshal Core Logo" class="header-logo">
+            <h1>Welcome to Marshal Core of Nigeria</h1>
+            <p>Existing Officer Registration Complete</p>
         </div>
         
-        <p><strong>Next Steps:</strong></p>
-        <ol>
-            <li>Check your email for PDF documents</li>
-            <li>Upload your Passport Photo (2MB max, JPG/PNG)</li>
-            <li>Upload Consolidated PDF with all 10 documents (10MB max)</li>
-            <li>Download PDFs from dashboard if email is not accessible</li>
-        </ol>
-        
-        <p>If you have any questions, contact us at <a href="mailto:support@marshalcoreofnigeria.ng">support@marshalcoreofnigeria.ng</a></p>
+        <div class="content">
+            <h3>Welcome, {{ name }}!</h3>
             
-        <p>Best regards,<br>
-        <strong>Marshal Core of Nigeria Team</strong></p>
-    </div>
-    
-    <div class="footer">
-        <p>© 2025 Marshal Core of Nigeria</p>
+            <p>Your existing officer registration has been completed successfully.</p>
+            
+            <p><strong>Officer ID:</strong> {{ officer_id }}</p>
+            <p><strong>Category:</strong> {{ category }}</p>
+            
+            <p>✅ Your registration documents (Terms & Conditions and Registration Form) are being generated.</p>
+            <p>✅ You will receive them via email shortly.</p>
+            <p>✅ You can also download them from your dashboard.</p>
+            
+            <p>You can now login to your dashboard using your Officer ID and password.</p>
+            
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="https://marshalcoreofnigeria.ng/existing-officer-dashboard.html" class="button">Login to Dashboard</a>
+            </div>
+            
+            <p><strong>Next Steps:</strong></p>
+            <ol>
+                <li>Check your email for PDF documents</li>
+                <li>Upload your Passport Photo (2MB max, JPG/PNG)</li>
+                <li>Upload Consolidated PDF with all 10 documents (10MB max)</li>
+                <li>Download PDFs from dashboard if email is not accessible</li>
+            </ol>
+            
+            <p>If you have any questions, contact us at <a href="mailto:support@marshalcoreofnigeria.ng">support@marshalcoreofnigeria.ng</a></p>
+            
+            <p>Best regards,<br>
+            <strong>Marshal Core of Nigeria Team</strong></p>
+        </div>
+        
+        <div class="footer">
+            <p>© 2025 Marshal Core of Nigeria. All rights reserved.</p>
+            <p>Certificate No: YA/CLB/10100</p>
+        </div>
     </div>
 </body>
 </html>

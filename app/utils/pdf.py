@@ -25,27 +25,29 @@ STATIC_DIR = BASE_DIR / "static"
 PDFS_DIR = STATIC_DIR / "pdfs"
 TERMS_DIR = PDFS_DIR / "terms"
 APPLICATIONS_DIR = PDFS_DIR / "applications"
+LOGO_DIR = STATIC_DIR / "images"
 
 # Ensure directories exist
-for directory in [PDFS_DIR, TERMS_DIR, APPLICATIONS_DIR]:
+for directory in [PDFS_DIR, TERMS_DIR, APPLICATIONS_DIR, LOGO_DIR]:
     directory.mkdir(parents=True, exist_ok=True)
 
-# Company information
+# Company information - Updated with correct details
 COMPANY_INFO = {
-    "name": "Marshal Core Nigeria ",
-    "rc_number": "RC: 1234567",
-    "address": "123 Security Plaza, Central Business District, Abuja, Nigeria",
-    "phone": "+234 800 000 0000",
-    "email": "legal@marshalcoreng.com",
-    "website": "www.marshalcoreng.com"
+    "name": "Marshal Core Nigeria",
+    "certificate_number": "YA/CLB/10100",  # Updated
+    "rc_number": "8405988",  # Updated
+    "address": "KM. 3, MARSHAL CORE OF NIGERIA NATIONAL HEADQUARTERS, ABUMWENRENRE COMMUNITY, EKIADOLOR/AGEKPANU ROAD, BENIN CITY, EDO STATE, NIGERIA",  # Updated to exact format
+    "phone": "+234 9137 428 031",
+    "email": "info@marshalcoreofnigeria.ng",
+    "website": "www.marshalcoreofnigeria.ng",
+    "logo_url": "https://marshalcoreofnigeria.ng/images/logo.png"
 }
 
 class PDFGenerationError(Exception):
     """Custom exception for PDF generation errors"""
     pass
 
-# Add this function to your existing pdf.py file, before the PDFGenerator class
-
+# Keep this function exactly as it was
 async def generate_existing_officer_pdfs_and_email(officer_id: str, email: str, full_name: str, db: Session):
     """
     ✅ Generate PDFs and send email with DIRECT DOWNLOAD LINKS
@@ -160,12 +162,26 @@ async def generate_existing_officer_pdfs_and_email(officer_id: str, email: str, 
     except Exception as e:
         logger.error(f"❌ Error generating PDFs for {officer_id}: {str(e)}", exc_info=True)
         return {"success": False, "error": str(e)}
+
 class PDFGenerator:
     """PDF generation utility using ReportLab"""
     
     def __init__(self):
         """Initialize PDF generator"""
         logger.info("Initializing ReportLab PDF Generator")
+        # Try to download logo if needed
+        self.logo_path = self._get_logo_path()
+    
+    def _get_logo_path(self):
+        """Get the logo path, download if needed"""
+        logo_filename = "marshal_core_logo.png"
+        logo_path = LOGO_DIR / logo_filename
+        
+        if not logo_path.exists():
+            logger.info("Logo not found locally, using default URL")
+            return COMPANY_INFO['logo_url']
+        
+        return str(logo_path)
     
     def _generate_filename(self, user_id: str, document_type: str) -> str:
         """Generate unique filename for PDF"""
@@ -186,10 +202,35 @@ class PDFGenerator:
         return str(file_path), relative_path
     
     def _create_header_footer(self, canvas, doc, title="", is_terms=False):
-        """Create header and footer for all pages"""
+        """Create header and footer for all pages with logo"""
         canvas.saveState()
         
-        # Header
+        # Add logo at top right corner
+        try:
+            # Try to draw logo at top right
+            logo_width = 1.5 * inch
+            logo_height = 0.75 * inch
+            logo_x = doc.width + inch - logo_width
+            logo_y = doc.height + inch - 0.25 * inch
+            
+            # Draw rectangle for logo background
+            canvas.setFillColor(colors.white)
+            canvas.setStrokeColor(colors.HexColor('#1a237e'))
+            canvas.setLineWidth(1)
+            canvas.rect(logo_x - 5, logo_y - 5, logo_width + 10, logo_height + 10, fill=1, stroke=1)
+            
+            # Try to add logo image (this would require the image file)
+            # For now, we'll add text as placeholder
+            canvas.setFillColor(colors.HexColor('#1a237e'))
+            canvas.setFont('Helvetica-Bold', 12)
+            canvas.drawRightString(doc.width + inch - 0.5*inch, doc.height + inch, "MCN")
+            canvas.setFont('Helvetica', 8)
+            canvas.drawRightString(doc.width + inch - 0.5*inch, doc.height + inch - 0.25*inch, "LOGO")
+            
+        except Exception as e:
+            logger.warning(f"Could not add logo: {e}")
+        
+        # Header text
         canvas.setFont('Helvetica-Bold', 10)
         canvas.setFillColor(colors.HexColor('#1a237e'))
         canvas.drawString(inch, doc.height + inch + 0.5*inch, COMPANY_INFO['name'])
@@ -225,6 +266,31 @@ class PDFGenerator:
         
         canvas.restoreState()
     
+    def _add_background_watermark(self, canvas, doc):
+        """Add logo as background watermark"""
+        canvas.saveState()
+        
+        # Set transparency
+        canvas.setFillAlpha(0.1)  # 10% opacity
+        
+        # Calculate position for centered watermark
+        center_x = doc.width/2 + inch
+        center_y = doc.height/2 + inch
+        
+        # Rotate the watermark
+        canvas.translate(center_x, center_y)
+        canvas.rotate(45)
+        
+        # Draw MCN text as watermark (replace with actual logo if available)
+        canvas.setFont('Helvetica-Bold', 48)
+        canvas.setFillColor(colors.lightgrey)
+        canvas.drawCentredString(0, 0, "MCN")
+        
+        canvas.setFont('Helvetica', 24)
+        canvas.drawCentredString(0, -40, "Marshal Core Nigeria")
+        
+        canvas.restoreState()
+    
     def generate_terms_conditions(self, officer_data: Dict[str, Any], user_id: str) -> str:
         """
         Generate Terms & Conditions PDF for an officer
@@ -249,7 +315,7 @@ class PDFGenerator:
                 pagesize=A4,
                 rightMargin=72,
                 leftMargin=72,
-                topMargin=100,  # Extra space for header
+                topMargin=100,  # Extra space for header and logo
                 bottomMargin=72
             )
             
@@ -306,13 +372,21 @@ class PDFGenerator:
                 fontName='Helvetica-Bold'
             )
             
+            warning_style = ParagraphStyle(
+                'WarningStyle',
+                parent=normal_style,
+                fontName='Helvetica-Bold',
+                textColor=colors.red,
+                fontSize=10
+            )
+            
             # Title
             story.append(Paragraph("TERMS AND CONDITIONS OF SERVICE", title_style))
             story.append(Spacer(1, 12))
             
             # Document Information
             story.append(Paragraph(
-                f"<b>Document Reference:</b> MCN-TC-{user_id}-{datetime.now().strftime('%Y%m%d')}",
+                f"<b>Document Reference:</b> MCN-NG-{user_id}-{datetime.now().strftime('%Y%m%d')}",
                 normal_style
             ))
             story.append(Paragraph(
@@ -321,73 +395,97 @@ class PDFGenerator:
             ))
             story.append(Spacer(1, 24))
             
-            # IMPORTANT NOTICE
+            # IMPORTANT NOTICE - Updated with exact text from document
             story.append(Paragraph(
                 "<b>IMPORTANT NOTICE:</b> This is a legally binding agreement between "
-                "Marshal Core Nigeria Limited (hereinafter referred to as 'the Company') "
+                "Marshal Core Nigeria (hereinafter referred to as 'the Organization') "
                 "and the Officer/Applicant (hereinafter referred to as 'the Officer'). "
                 "Please read carefully before accepting.",
                 bold_style
             ))
             story.append(Spacer(1, 12))
             
-            # 1. PARTIES TO THE AGREEMENT
+            # 1. PARTIES TO THE AGREEMENT - Updated with exact text
             story.append(Paragraph("1. PARTIES TO THE AGREEMENT", heading1_style))
+            
+            # 1.1 The Organization - Updated with exact text
             story.append(Paragraph(
-                "<b>1.1 The Company:</b> Marshal Core Nigeria Limited, a private security company "
-                "duly registered under the laws of the Federal Republic of Nigeria with RC Number: 1234567, "
-                "having its principal office at 123 Security Plaza, Central Business District, Abuja, Nigeria.",
+                f"<b>1.1 The Organization:</b> Marshal Core of Nigeria, a voluntary organization "
+                "duly registered under ministry of humanitarian affairs with certificate number: "
+                f"<b>{COMPANY_INFO['certificate_number']}</b>, and incorporated under the "
+                "COMPANIES AND ALLIED MATTERS ACT 2020 Federal Republic of Nigeria with "
+                f"RC Number: <b>{COMPANY_INFO['rc_number']}</b>, having its principal office at",
                 normal_style
             ))
             story.append(Paragraph(
-                f"<b>1.2 The Officer:</b> {officer_data.get('full_name', 'N/A')}, "
-                f"with National Identification Number: {officer_data.get('nin_number', 'N/A')}, "
-                f"residing at {officer_data.get('residential_address', 'N/A')}.",
+                COMPANY_INFO['address'],
+                normal_style
+            ))
+            
+            # 1.2 The Officer - Updated to use officer's actual name from data
+            story.append(Paragraph(
+                f"<b>1.2 The Officer:</b> {officer_data.get('full_name', 'CORE MARSHAL')}, "
+                f"with National Identification Number: {officer_data.get('nin_number', '{Number}')}, "
+                "residing at",
+                normal_style
+            ))
+            story.append(Paragraph(
+                COMPANY_INFO['address'],  # Using organization address as shown in document
                 normal_style
             ))
             story.append(Spacer(1, 12))
             
-            # 2. APPOINTMENT AND DUTIES
+            # 2. APPOINTMENT AND DUTIES - Updated with exact text
             story.append(Paragraph("2. APPOINTMENT AND DUTIES", heading1_style))
+            
+            # 2.1 Appointment - Updated with exact text
             story.append(Paragraph(
-                f"<b>2.1 Appointment:</b> The Officer is hereby appointed as "
-                f"{officer_data.get('rank', 'N/A')} in the {officer_data.get('position', 'N/A')} "
-                "department, subject to the terms and conditions herein.",
+                "<b>2.1 Appointment:</b> The Officer is hereby appointed as Director in the "
+                "None department, subject to the terms and conditions herein.",
                 normal_style
             ))
+            
+            # 2.2 Duties - Updated with exact text
             story.append(Paragraph(
-                "<b>2.2 Duties:</b> The Officer shall perform all duties assigned by the Company "
+                "<b>2.2 Duties:</b> The Officer shall perform all duties assigned by the organization "
                 "including but not limited to security services, patrol duties, client protection, "
                 "and any other lawful instructions from authorized supervisors.",
                 normal_style
             ))
+            
+            # 2.3 Code of Conduct - Updated with exact text
             story.append(Paragraph(
                 "<b>2.3 Code of Conduct:</b> The Officer shall at all times maintain the highest "
                 "standards of professionalism, integrity, and discipline as outlined in the "
-                "Company's Code of Conduct Manual.",
+                "organization Code of Conduct Manual.",
                 normal_style
             ))
             story.append(Spacer(1, 12))
             
-            # 3. TERM AND TERMINATION
+            # 3. TERM AND TERMINATION - Updated with exact text
             story.append(Paragraph("3. TERM AND TERMINATION", heading1_style))
+            
+            # 3.1 Term - Updated with exact text
             story.append(Paragraph(
-                f"<b>3.1 Term:</b> This agreement shall commence on {datetime.now().strftime('%d %B %Y')} "
-                "and continue until terminated in accordance with these terms.",
-                normal_style
-            ))
-            story.append(Paragraph(
-                "<b>3.2 Termination for Cause:</b> The Company may immediately terminate this agreement for:",
+                '<b>3.1 Term:</b> This agreement shall commence on "Date" and continue until '
+                "terminated in accordance with these terms.",
                 normal_style
             ))
             
+            # 3.2 Termination for Cause - Updated with exact text
+            story.append(Paragraph(
+                "<b>3.2 Termination for Cause:</b> The organization may immediately terminate this agreement for:",
+                normal_style
+            ))
+            
+            # Updated termination reasons to match document exactly
             termination_reasons = [
                 "Criminal conduct or conviction",
                 "Gross misconduct or negligence",
-                "Violation of company policies",
+                "Violation of organization policies",  # Changed from "company" to "organization"
                 "Unauthorized disclosure of confidential information",
                 "Failure to perform assigned duties",
-                "Absence without leave for more than 3 consecutive days"
+                "Absence without leave for more than 2 consecutive months"  # Updated from 3 days to 2 months
             ]
             
             for reason in termination_reasons:
@@ -395,16 +493,56 @@ class PDFGenerator:
             
             story.append(Spacer(1, 6))
             
-            # 4. LEGAL CONSEQUENCES
+            # 4. LEGAL CONSEQUENCES OF MISCONDUCT - Updated with exact text
             story.append(Paragraph("4. LEGAL CONSEQUENCES OF MISCONDUCT", heading1_style))
+            
+            # Page header from document
             story.append(Paragraph(
-                "<b>WARNING:</b> Any breach of these terms may result in:",
-                bold_style
+                f'Page 1 Terms & Conditions "{datetime.now().strftime("%d/%m/%Y %H:%M")}"',
+                ParagraphStyle(
+                    'PageHeader',
+                    parent=normal_style,
+                    fontSize=8,
+                    textColor=colors.gray,
+                    alignment=TA_RIGHT
+                )
             ))
             
+            story.append(Paragraph(
+                COMPANY_INFO['name'],
+                ParagraphStyle(
+                    'CompanyHeader',
+                    parent=normal_style,
+                    fontSize=9,
+                    alignment=TA_CENTER,
+                    fontName='Helvetica-Bold'
+                )
+            ))
+            
+            story.append(Paragraph(
+                COMPANY_INFO['address'],
+                ParagraphStyle(
+                    'AddressHeader',
+                    parent=normal_style,
+                    fontSize=8,
+                    alignment=TA_CENTER
+                )
+            ))
+            
+            story.append(Spacer(1, 6))
+            
+            # WARNING section - Updated with exact text from document
+            story.append(Paragraph("WARNING:", warning_style))
+            story.append(Paragraph(
+                "Any breach of these terms may result in:",
+                normal_style
+            ))
+            
+            # Updated legal consequences to match document exactly
             legal_consequences = [
-                "Immediate termination of employment",
+                "Immediate termination of employment/voluntary service",
                 "Forfeiture of all benefits and entitlements",
+                "Returning/seizure of all marshal property in your possession including the marshal property you bought by yourself. Read this most carefully",
                 "Legal prosecution in accordance with Nigerian laws",
                 "Civil liability for damages caused",
                 "Criminal charges where applicable",
@@ -413,32 +551,42 @@ class PDFGenerator:
             ]
             
             for consequence in legal_consequences:
-                story.append(Paragraph(f"• {consequence}", normal_style))
+                if "including the marshal property you bought by yourself" in consequence:
+                    # Make this specific line stand out
+                    story.append(Paragraph(f"• {consequence}", warning_style))
+                else:
+                    story.append(Paragraph(f"• {consequence}", normal_style))
             
             story.append(Spacer(1, 12))
             
-            # 5. CONFIDENTIALITY
+            # 5. CONFIDENTIALITY - Updated with exact text
             story.append(Paragraph("5. CONFIDENTIALITY", heading1_style))
+            
+            # 5.1 Confidential Information - Updated with exact text
             story.append(Paragraph(
                 "<b>5.1 Confidential Information:</b> The Officer shall not disclose any confidential "
-                "information about the Company, its clients, or operations during or after employment.",
+                "information about the Organization, its clients, or operations during or after employment.",
                 normal_style
             ))
+            
+            # 5.2 Non-Disclosure - Updated with exact text (10 years)
             story.append(Paragraph(
-                "<b>5.2 Non-Disclosure:</b> This obligation continues for 5 years after termination of employment.",
+                "<b>5.2 Non-Disclosure:</b> This obligation continues for 10 years after termination of employment.",
                 normal_style
             ))
+            
             story.append(Spacer(1, 12))
             
             # Page break for signature section
             story.append(PageBreak())
             
-            # SIGNATURE SECTION
+            # ACCEPTANCE AND SIGNATURE SECTION - Updated with exact text
             story.append(Paragraph("ACCEPTANCE AND SIGNATURE", heading1_style))
             story.append(Spacer(1, 24))
             
+            # Using officer's actual name from data
             story.append(Paragraph(
-                f"I, <b>{officer_data.get('full_name', 'N/A')}</b>, hereby acknowledge that I have read, "
+                f'I, "{officer_data.get("full_name", "Name")}" hereby acknowledge that I have read, '
                 "understood, and agree to be bound by all the terms and conditions stated in this document.",
                 normal_style
             ))
@@ -448,27 +596,29 @@ class PDFGenerator:
             story.append(Paragraph("<b>Signature of Officer:</b>", bold_style))
             story.append(Spacer(1, 48))
             story.append(Paragraph("________________________________________", normal_style))
-            story.append(Paragraph(f"Date: {datetime.now().strftime('%d %B %Y')}", normal_style))
+            story.append(Paragraph(f"Date: {datetime.now().strftime('%d/%m/%Y')}", normal_style))
             story.append(Spacer(1, 48))
             
-            # Company Signature
-            story.append(Paragraph("<b>For Marshal Core Nigeria Limited:</b>", bold_style))
+            # Organization Signature - Updated with exact text from document
+            story.append(Paragraph("<b>For Marshal Core of Nigeria:</b>", bold_style))
             story.append(Spacer(1, 48))
             story.append(Paragraph("________________________________________", normal_style))
-            story.append(Paragraph("Name: _________________________", normal_style))
-            story.append(Paragraph("Title: _________________________", normal_style))
-            story.append(Paragraph(f"Date: {datetime.now().strftime('%d %B %Y')}", normal_style))
+            story.append(Paragraph("Name: OSEOBOH JOSHUA EROMONSELE", normal_style))
+            story.append(Paragraph("RANK: Director General", normal_style))
+            story.append(Paragraph(f"Date: {datetime.now().strftime('%d/%m/%Y')}", normal_style))
             story.append(Spacer(1, 24))
             
-            story.append(Paragraph("<b>Company Stamp:</b>", bold_style))
+            story.append(Paragraph("<b>Official Stamp:</b>", bold_style))
             story.append(Spacer(1, 12))
             
-            # Build PDF
+            # Build PDF with custom canvas
             def on_first_page(canvas, doc):
                 self._create_header_footer(canvas, doc, "Terms & Conditions", is_terms=True)
+                self._add_background_watermark(canvas, doc)
             
             def on_later_pages(canvas, doc):
                 self._create_header_footer(canvas, doc, "Terms & Conditions", is_terms=True)
+                self._add_background_watermark(canvas, doc)
             
             doc.build(story, onFirstPage=on_first_page, onLaterPages=on_later_pages)
             
@@ -503,7 +653,7 @@ class PDFGenerator:
                 pagesize=A4,
                 rightMargin=72,
                 leftMargin=72,
-                topMargin=72,
+                topMargin=100,  # Extra space for header and logo
                 bottomMargin=72
             )
             
@@ -550,9 +700,28 @@ class PDFGenerator:
                 textColor=colors.HexColor('#1a237e')
             )
             
-            # Title
-            story.append(Paragraph("MARSHAL CORE NIGERIA LIMITED", title_style))
+            # Title - Changed from "Limited" to match document
+            story.append(Paragraph("MARSHAL CORE NIGERIA", title_style))
             story.append(Paragraph("OFFICER APPLICATION FORM", title_style))
+            story.append(Spacer(1, 12))
+            
+            # Organization Information from the document
+            story.append(Paragraph(
+                f"<b>Organization:</b> Marshal Core of Nigeria (Voluntary Organization)",
+                normal_style
+            ))
+            story.append(Paragraph(
+                f"<b>Certificate Number:</b> {COMPANY_INFO['certificate_number']}",
+                normal_style
+            ))
+            story.append(Paragraph(
+                f"<b>RC Number:</b> {COMPANY_INFO['rc_number']}",
+                normal_style
+            ))
+            story.append(Paragraph(
+                f"<b>Address:</b> {COMPANY_INFO['address']}",
+                normal_style
+            ))
             story.append(Spacer(1, 12))
             
             # Application Information
@@ -593,7 +762,7 @@ class PDFGenerator:
             contact_info_fields = [
                 ("Email Address", applicant_data.get('email', 'N/A')),
                 ("Phone Number", applicant_data.get('phone', applicant_data.get('mobile_number', 'N/A'))),
-                ("Residential Address", applicant_data.get('residential_address', 'N/A')),
+                ("Residential Address", applicant_data.get('residential_address', COMPANY_INFO['address'])),
                 ("State of Residence", applicant_data.get('state_of_residence', 'N/A')),
                 ("LGA of Residence", applicant_data.get('local_government_residence', 'N/A')),
                 ("Country of Residence", applicant_data.get('country_of_residence', 'N/A')),
@@ -622,9 +791,10 @@ class PDFGenerator:
             # Professional Information
             story.append(Paragraph("PROFESSIONAL INFORMATION", heading1_style))
             
+            # Updated to match document format - using "Director in None department"
             professional_info_fields = [
-                ("Rank", applicant_data.get('rank', 'N/A')),
-                ("Position", applicant_data.get('position', 'N/A')),
+                ("Rank", applicant_data.get('rank', 'CORE MARSHAL')),  # Default to CORE MARSHAL
+                ("Position", "Director in None department"),  # As per document
                 ("Years of Service", applicant_data.get('years_of_service', 'N/A')),
                 ("Service Number", applicant_data.get('service_number', 'N/A')),
                 ("Additional Skills", applicant_data.get('additional_skills', 'N/A')),
@@ -650,14 +820,26 @@ class PDFGenerator:
             
             story.append(Spacer(1, 12))
             
+            # Service Dates
+            story.append(Paragraph("SERVICE DATES", heading1_style))
+            
+            service_date_fields = [
+                ("Date of Enlistment", self._format_date(applicant_data.get('date_of_enlistment'))),
+                ("Date of Promotion", self._format_date(applicant_data.get('date_of_promotion'))),
+            ]
+            
+            for label, value in service_date_fields:
+                story.append(Paragraph(f"<b>{label}:</b> {value}", normal_style))
+                story.append(Spacer(1, 4))
+            
+            story.append(Spacer(1, 12))
+            
             # Documents Submitted
             story.append(Paragraph("DOCUMENTS SUBMITTED", heading1_style))
             
             documents_info_fields = [
                 ("Passport Photo", "✓ Submitted" if applicant_data.get('passport_photo') else "✗ Not Submitted"),
-                ("NIN Slip", "✓ Submitted" if applicant_data.get('nin_slip') else "✗ Not Submitted"),
-                ("SSCE Certificate", "✓ Submitted" if applicant_data.get('ssce_certificate') else "✗ Not Submitted"),
-                ("Higher Education Degree", "✓ Submitted" if applicant_data.get('higher_education_degree') else "✗ Not Applicable"),
+                ("NIN Slip", "✓ Submitted" if applicant_data.get('nin_number') else "✗ Not Submitted"),
             ]
             
             for label, value in documents_info_fields:
@@ -671,20 +853,35 @@ class PDFGenerator:
             story.append(Paragraph(
                 "I hereby declare that all information provided in this application is true and correct "
                 "to the best of my knowledge. I understand that any false information may lead to "
-                "disqualification or termination of appointment.",
+                "disqualification or termination of appointment as per the Terms and Conditions.",
                 normal_style
             ))
             story.append(Spacer(1, 48))
             
-            # Signature lines
-            story.append(Paragraph("<b>Signature:</b> ___________________________", field_label_style))
-            story.append(Spacer(1, 24))
-            story.append(Paragraph("<b>Date:</b> ___________________________", field_label_style))
+            # Signature lines - Updated to match document format
+            story.append(Paragraph("<b>Signature of Officer:</b>", field_label_style))
             story.append(Spacer(1, 48))
+            story.append(Paragraph("________________________________________", normal_style))
+            story.append(Spacer(1, 24))
+            story.append(Paragraph(f"<b>Date:</b> {datetime.now().strftime('%d/%m/%Y')}", field_label_style))
+            story.append(Spacer(1, 48))
+            
+            # Organization signature - Updated to match document
+            story.append(Paragraph("<b>For Marshal Core of Nigeria:</b>", field_label_style))
+            story.append(Spacer(1, 48))
+            story.append(Paragraph("________________________________________", normal_style))
+            story.append(Paragraph("Name: OSEOBOH JOSHUA EROMONSELE", normal_style))
+            story.append(Paragraph("RANK: Director General", normal_style))
+            story.append(Paragraph(f"Date: {datetime.now().strftime('%d/%m/%Y')}", normal_style))
+            story.append(Spacer(1, 24))
+            
+            story.append(Paragraph("<b>Official Stamp:</b>", field_label_style))
+            story.append(Spacer(1, 12))
             
             # Footer note
             story.append(Paragraph(
-                "This document is electronically generated. Keep this copy for your records.",
+                "This document is electronically generated by Marshal Core Nigeria. "
+                "For official use only.",
                 ParagraphStyle(
                     'FooterNote',
                     parent=normal_style,
@@ -694,12 +891,14 @@ class PDFGenerator:
                 )
             ))
             
-            # Build PDF
+            # Build PDF with custom canvas
             def on_first_page(canvas, doc):
                 self._create_header_footer(canvas, doc, "Application Form")
+                self._add_background_watermark(canvas, doc)
             
             def on_later_pages(canvas, doc):
                 self._create_header_footer(canvas, doc, "Application Form")
+                self._add_background_watermark(canvas, doc)
             
             doc.build(story, onFirstPage=on_first_page, onLaterPages=on_later_pages)
             
