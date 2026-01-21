@@ -1,4 +1,3 @@
-# app/schemas/admin.py
 from pydantic import BaseModel, EmailStr, validator
 from typing import Optional
 from datetime import datetime
@@ -31,6 +30,10 @@ class AdminResponse(BaseModel):
     @validator('is_verified', 'is_active', 'is_superuser', pre=True)
     def convert_none_to_false(cls, v):
         return v if v is not None else False
+
+    @validator('created_at', 'last_login', pre=True)
+    def handle_none_datetime(cls, v):
+        return v if v is not None else None
 
     class Config:
         title = "AdminResponse"

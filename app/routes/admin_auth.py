@@ -1,3 +1,4 @@
+# app/routes/admin_auth.py
 from datetime import datetime, timedelta
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Form, Body, Request, BackgroundTasks
@@ -347,13 +348,18 @@ async def verify_otp_login(
             expires_delta=refresh_token_expires
         )
         
-        # Update last login
-        admin.last_login = datetime.utcnow()
-        db.commit()
+        # Update last login - SAFE ACCESS (handle missing column)
+        if hasattr(admin, 'last_login'):
+            admin.last_login = datetime.utcnow()
+            db.commit()
         
         logger.info(f"Admin logged in: {admin.email}")
         
-        # Return admin data without password
+        # Return admin data without password - SAFE ACCESS to last_login
+        last_login_value = None
+        if hasattr(admin, 'last_login') and admin.last_login:
+            last_login_value = admin.last_login.isoformat()
+        
         admin_response = {
             "id": str(admin.id),
             "email": admin.email,
@@ -361,7 +367,7 @@ async def verify_otp_login(
             "is_superuser": admin.is_superuser,
             "is_verified": admin.is_verified,
             "is_active": admin.is_active,
-            "last_login": admin.last_login.isoformat() if admin.last_login else None,
+            "last_login": last_login_value,
         }
         
         return {
@@ -491,9 +497,9 @@ async def admin_dashboard(
         total_existing_officers = db.query(func.count(ExistingOfficer.id)).scalar() or 0
         total_admins = db.query(func.count(Admin.id)).scalar() or 0
         
-        # Get pending verifications
+        # Get pending verifications - FIXED: Check both statuses
         pending_existing_officers = db.query(func.count(ExistingOfficer.id)).filter(
-            ExistingOfficer.status == 'pending_verification'
+            ExistingOfficer.status.in_(['pending_verification', 'pending'])
         ).scalar() or 0
         
         # Get pending existing officers for approval queue
@@ -515,6 +521,11 @@ async def admin_dashboard(
         
         logger.info(f"Admin dashboard accessed by: {current_admin.email}")
         
+        # SAFE ACCESS to last_login (handle missing database column)
+        last_login_value = None
+        if hasattr(current_admin, 'last_login') and current_admin.last_login:
+            last_login_value = current_admin.last_login.isoformat()
+        
         return {
             "status": "success",
             "message": "Welcome to Admin Dashboard",
@@ -523,7 +534,7 @@ async def admin_dashboard(
                 "email": current_admin.email,
                 "full_name": current_admin.full_name,
                 "is_superuser": current_admin.is_superuser,
-                "last_login": current_admin.last_login.isoformat() if current_admin.last_login else None
+                "last_login": last_login_value
             },
             "dashboard": {
                 "total_officers": total_officers,
@@ -616,9 +627,9 @@ async def verify_password_reset(
         is_valid = verify_otp(
             db=db,
             email=normalized_email,
-            code=otp,  # CHANGE otp_code to code if needed
+            code=otp,
             purpose="password_reset"
-)
+        )
         
         if not is_valid:
             raise HTTPException(
@@ -1228,8 +1239,7 @@ async def get_all_admins(
             detail="Failed to load admins"
         )
 
-
-        # ------------------ Additional Admin Endpoints for Frontend Compatibility ------------------
+# ------------------ Additional Admin Endpoints for Frontend Compatibility ------------------
 
 @router.get("/all-applicants", status_code=status.HTTP_200_OK)
 async def get_all_applicants_admin(
@@ -1298,19 +1308,31 @@ async def get_all_admins_admin(
     current_admin: Admin = Depends(get_current_admin)
 ):
     """
-    Get all admins (frontend compatibility endpoint)
+    Get all admins (frontend compatibility endpoint) - FIXED: Safe access to created_at
     """
     try:
         admins = db.query(Admin).all()
         
-        return [{
-            "id": str(admin.id),
-            "email": admin.email,
-            "full_name": admin.full_name,
-            "is_superuser": admin.is_superuser,
-            "is_active": admin.is_active,
-            "created_at": admin.created_at.isoformat() if admin.created_at else None
-        } for admin in admins]
+        result = []
+        for admin in admins:
+            # SAFE ACCESS to created_at (handle missing database column)
+            created_at_value = None
+            if hasattr(admin, 'created_at') and admin.created_at:
+                created_at_value = admin.created_at.isoformat()
+            elif not hasattr(admin, 'created_at'):
+                # If column doesn't exist, use current time as default
+                created_at_value = datetime.utcnow().isoformat()
+            
+            result.append({
+                "id": str(admin.id),
+                "email": admin.email,
+                "full_name": admin.full_name,
+                "is_superuser": admin.is_superuser,
+                "is_active": admin.is_active,
+                "created_at": created_at_value
+            })
+        
+        return result
         
     except Exception as e:
         logger.error(f"Error getting admins: {str(e)}")
