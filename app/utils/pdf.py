@@ -6,6 +6,8 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 from sqlalchemy.orm import Session
 import uuid
+import requests
+from io import BytesIO
 
 from reportlab.lib.pagesizes import A4, letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -33,10 +35,12 @@ for directory in [PDFS_DIR, TERMS_DIR, APPLICATIONS_DIR, LOGO_DIR]:
 
 # Company information - Updated with correct details
 COMPANY_INFO = {
-    "name": "Marshal Core Nigeria",
-    "certificate_number": "YA/CLB/10100",  # Updated
-    "rc_number": "8405988",  # Updated
-    "address": "KM. 3, MARSHAL CORE OF NIGERIA NATIONAL HEADQUARTERS, ABUMWENRENRE COMMUNITY, EKIADOLOR/AGEKPANU ROAD, BENIN CITY, EDO STATE, NIGERIA",  # Updated to exact format
+    "name": "Marshal Core of Nigeria",  # Changed from "Marshal Core Nigeria"
+    "certificate_number": "YA/CLB/10100",
+    "rc_number": "8405988",
+    "address_line1": "KM. 3, MARSHAL CORE OF NIGERIA NATIONAL HEADQUARTERS",
+    "address_line2": "ABUMWENRENRE COMMUNITY, EKIADOLOR/AGEKPANU ROAD",
+    "address_line3": "BENIN CITY, EDO STATE, NIGERIA",
     "phone": "+234 9137 428 031",
     "email": "info@marshalcoreofnigeria.ng",
     "website": "www.marshalcoreofnigeria.ng",
@@ -169,19 +173,34 @@ class PDFGenerator:
     def __init__(self):
         """Initialize PDF generator"""
         logger.info("Initializing ReportLab PDF Generator")
-        # Try to download logo if needed
-        self.logo_path = self._get_logo_path()
+        self.logo_image = None
+        self._try_load_logo()
     
-    def _get_logo_path(self):
-        """Get the logo path, download if needed"""
-        logo_filename = "marshal_core_logo.png"
-        logo_path = LOGO_DIR / logo_filename
+    def _try_load_logo(self):
+        """Try to load logo from URL or local file"""
+        try:
+            # Try to download logo from URL
+            response = requests.get(COMPANY_INFO['logo_url'], timeout=10)
+            if response.status_code == 200:
+                self.logo_image = BytesIO(response.content)
+                logger.info("✅ Logo loaded successfully from URL")
+                return True
+        except Exception as e:
+            logger.warning(f"⚠️ Could not load logo from URL: {e}")
         
-        if not logo_path.exists():
-            logger.info("Logo not found locally, using default URL")
-            return COMPANY_INFO['logo_url']
+        # Try local file
+        logo_path = LOGO_DIR / "logo.png"
+        if logo_path.exists():
+            try:
+                with open(logo_path, 'rb') as f:
+                    self.logo_image = BytesIO(f.read())
+                logger.info("✅ Logo loaded from local file")
+                return True
+            except Exception as e:
+                logger.warning(f"⚠️ Could not load local logo: {e}")
         
-        return str(logo_path)
+        logger.warning("❌ Could not load logo, will use text placeholder")
+        return False
     
     def _generate_filename(self, user_id: str, document_type: str) -> str:
         """Generate unique filename for PDF"""
@@ -205,44 +224,44 @@ class PDFGenerator:
         """Create header and footer for all pages with logo"""
         canvas.saveState()
         
-        # Add logo at top right corner
-        try:
-            # Try to draw logo at top right
-            logo_width = 1.5 * inch
-            logo_height = 0.75 * inch
-            logo_x = doc.width + inch - logo_width
-            logo_y = doc.height + inch - 0.25 * inch
-            
-            # Draw rectangle for logo background
-            canvas.setFillColor(colors.white)
-            canvas.setStrokeColor(colors.HexColor('#1a237e'))
-            canvas.setLineWidth(1)
-            canvas.rect(logo_x - 5, logo_y - 5, logo_width + 10, logo_height + 10, fill=1, stroke=1)
-            
-            # Try to add logo image (this would require the image file)
-            # For now, we'll add text as placeholder
-            canvas.setFillColor(colors.HexColor('#1a237e'))
-            canvas.setFont('Helvetica-Bold', 12)
-            canvas.drawRightString(doc.width + inch - 0.5*inch, doc.height + inch, "MCN")
-            canvas.setFont('Helvetica', 8)
-            canvas.drawRightString(doc.width + inch - 0.5*inch, doc.height + inch - 0.25*inch, "LOGO")
-            
-        except Exception as e:
-            logger.warning(f"Could not add logo: {e}")
+        # Add logo at top right corner if available
+        if self.logo_image:
+            try:
+                # Draw logo at top right
+                logo_width = 1.2 * inch
+                logo_height = 0.6 * inch
+                logo_x = doc.width + inch - logo_width - 0.2*inch
+                logo_y = doc.height + inch - 0.1*inch
+                
+                canvas.drawImage(self.logo_image, logo_x, logo_y, 
+                               width=logo_width, height=logo_height, 
+                               mask='auto', preserveAspectRatio=True)
+            except Exception as e:
+                logger.warning(f"Could not draw logo image: {e}")
+                # Fallback to text
+                self._draw_logo_placeholder(canvas, doc)
+        else:
+            # Draw text placeholder for logo
+            self._draw_logo_placeholder(canvas, doc)
         
         # Header text
-        canvas.setFont('Helvetica-Bold', 10)
+        canvas.setFont('Helvetica-Bold', 12)
         canvas.setFillColor(colors.HexColor('#1a237e'))
-        canvas.drawString(inch, doc.height + inch + 0.5*inch, COMPANY_INFO['name'])
+        canvas.drawString(inch, doc.height + inch + 0.6*inch, COMPANY_INFO['name'])
         
+        # Address in 3 lines
         canvas.setFont('Helvetica', 8)
         canvas.setFillColor(colors.gray)
-        canvas.drawString(inch, doc.height + inch + 0.3*inch, COMPANY_INFO['address'])
+        
+        address_y = doc.height + inch + 0.4*inch
+        canvas.drawString(inch, address_y, COMPANY_INFO['address_line1'])
+        canvas.drawString(inch, address_y - 0.15*inch, COMPANY_INFO['address_line2'])
+        canvas.drawString(inch, address_y - 0.3*inch, COMPANY_INFO['address_line3'])
         
         # Draw line under header
         canvas.setStrokeColor(colors.HexColor('#1a237e'))
         canvas.setLineWidth(1)
-        canvas.line(inch, doc.height + inch + 0.2*inch, doc.width + inch, doc.height + inch + 0.2*inch)
+        canvas.line(inch, doc.height + inch + 0.1*inch, doc.width + inch, doc.height + inch + 0.1*inch)
         
         # Footer
         canvas.setFont('Helvetica', 8)
@@ -266,11 +285,49 @@ class PDFGenerator:
         
         canvas.restoreState()
     
+    def _draw_logo_placeholder(self, canvas, doc):
+        """Draw logo placeholder text"""
+        canvas.setFillColor(colors.HexColor('#1a237e'))
+        canvas.setFont('Helvetica-Bold', 12)
+        canvas.drawRightString(doc.width + inch - 0.2*inch, doc.height + inch + 0.4*inch, "MCN")
+        canvas.setFont('Helvetica', 8)
+        canvas.drawRightString(doc.width + inch - 0.2*inch, doc.height + inch + 0.2*inch, "LOGO")
+    
     def _add_background_watermark(self, canvas, doc):
         """Add logo as background watermark"""
         canvas.saveState()
         
-        # Set transparency
+        # Only add watermark if logo is available
+        if self.logo_image:
+            try:
+                # Set transparency
+                canvas.setFillAlpha(0.08)  # 8% opacity
+                
+                # Calculate position for centered watermark
+                center_x = doc.width/2 + inch
+                center_y = doc.height/2 + inch
+                
+                # Draw logo watermark
+                logo_width = 3 * inch
+                logo_height = 1.5 * inch
+                logo_x = center_x - logo_width/2
+                logo_y = center_y - logo_height/2
+                
+                canvas.drawImage(self.logo_image, logo_x, logo_y, 
+                               width=logo_width, height=logo_height, 
+                               mask='auto', preserveAspectRatio=True)
+            except Exception as e:
+                logger.warning(f"Could not draw watermark: {e}")
+                # Fallback to text watermark
+                self._draw_text_watermark(canvas, doc)
+        else:
+            # Draw text watermark
+            self._draw_text_watermark(canvas, doc)
+        
+        canvas.restoreState()
+    
+    def _draw_text_watermark(self, canvas, doc):
+        """Draw text watermark"""
         canvas.setFillAlpha(0.1)  # 10% opacity
         
         # Calculate position for centered watermark
@@ -281,15 +338,13 @@ class PDFGenerator:
         canvas.translate(center_x, center_y)
         canvas.rotate(45)
         
-        # Draw MCN text as watermark (replace with actual logo if available)
+        # Draw MCN text as watermark
         canvas.setFont('Helvetica-Bold', 48)
         canvas.setFillColor(colors.lightgrey)
         canvas.drawCentredString(0, 0, "MCN")
         
         canvas.setFont('Helvetica', 24)
-        canvas.drawCentredString(0, -40, "Marshal Core Nigeria")
-        
-        canvas.restoreState()
+        canvas.drawCentredString(0, -40, "Marshal Core of Nigeria")
     
     def generate_terms_conditions(self, officer_data: Dict[str, Any], user_id: str) -> str:
         """
@@ -315,7 +370,7 @@ class PDFGenerator:
                 pagesize=A4,
                 rightMargin=72,
                 leftMargin=72,
-                topMargin=100,  # Extra space for header and logo
+                topMargin=120,  # Extra space for header and logo
                 bottomMargin=72
             )
             
@@ -380,6 +435,13 @@ class PDFGenerator:
                 fontSize=10
             )
             
+            nin_bold_style = ParagraphStyle(
+                'NINBoldStyle',
+                parent=normal_style,
+                fontName='Helvetica-Bold',
+                textColor=colors.black
+            )
+            
             # Title
             story.append(Paragraph("TERMS AND CONDITIONS OF SERVICE", title_style))
             story.append(Spacer(1, 12))
@@ -398,7 +460,7 @@ class PDFGenerator:
             # IMPORTANT NOTICE - Updated with exact text from document
             story.append(Paragraph(
                 "<b>IMPORTANT NOTICE:</b> This is a legally binding agreement between "
-                "Marshal Core Nigeria (hereinafter referred to as 'the Organization') "
+                "Marshal Core of Nigeria (hereinafter referred to as 'the Organization') "  # Changed
                 "and the Officer/Applicant (hereinafter referred to as 'the Officer'). "
                 "Please read carefully before accepting.",
                 bold_style
@@ -418,19 +480,27 @@ class PDFGenerator:
                 normal_style
             ))
             story.append(Paragraph(
-                COMPANY_INFO['address'],
+                f"{COMPANY_INFO['address_line1']}<br/>{COMPANY_INFO['address_line2']}<br/>{COMPANY_INFO['address_line3']}",
                 normal_style
             ))
             
             # 1.2 The Officer - Updated to use officer's actual name from data
             story.append(Paragraph(
                 f"<b>1.2 The Officer:</b> {officer_data.get('full_name', 'CORE MARSHAL')}, "
-                f"with National Identification Number: {officer_data.get('nin_number', '{Number}')}, "
+                "with National Identification Number: ",
+                normal_style
+            ))
+            # NIN in bold
+            story.append(Paragraph(
+                f"<b>{officer_data.get('nin_number', '{Number}')}</b>, ",
+                nin_bold_style
+            ))
+            story.append(Paragraph(
                 "residing at",
                 normal_style
             ))
             story.append(Paragraph(
-                COMPANY_INFO['address'],  # Using organization address as shown in document
+                f"{COMPANY_INFO['address_line1']}<br/>{COMPANY_INFO['address_line2']}<br/>{COMPANY_INFO['address_line3']}",
                 normal_style
             ))
             story.append(Spacer(1, 12))
@@ -482,10 +552,10 @@ class PDFGenerator:
             termination_reasons = [
                 "Criminal conduct or conviction",
                 "Gross misconduct or negligence",
-                "Violation of organization policies",  # Changed from "company" to "organization"
+                "Violation of organization policies",
                 "Unauthorized disclosure of confidential information",
                 "Failure to perform assigned duties",
-                "Absence without leave for more than 2 consecutive months"  # Updated from 3 days to 2 months
+                "Absence without leave for more than 2 consecutive months"
             ]
             
             for reason in termination_reasons:
@@ -509,7 +579,7 @@ class PDFGenerator:
             ))
             
             story.append(Paragraph(
-                COMPANY_INFO['name'],
+                "Marshal Core of Nigeria",  # Changed from COMPANY_INFO['name']
                 ParagraphStyle(
                     'CompanyHeader',
                     parent=normal_style,
@@ -520,7 +590,7 @@ class PDFGenerator:
             ))
             
             story.append(Paragraph(
-                COMPANY_INFO['address'],
+                f"{COMPANY_INFO['address_line1']}<br/>{COMPANY_INFO['address_line2']}<br/>{COMPANY_INFO['address_line3']}",
                 ParagraphStyle(
                     'AddressHeader',
                     parent=normal_style,
@@ -552,7 +622,6 @@ class PDFGenerator:
             
             for consequence in legal_consequences:
                 if "including the marshal property you bought by yourself" in consequence:
-                    # Make this specific line stand out
                     story.append(Paragraph(f"• {consequence}", warning_style))
                 else:
                     story.append(Paragraph(f"• {consequence}", normal_style))
@@ -653,7 +722,7 @@ class PDFGenerator:
                 pagesize=A4,
                 rightMargin=72,
                 leftMargin=72,
-                topMargin=100,  # Extra space for header and logo
+                topMargin=120,  # Extra space for header and logo
                 bottomMargin=72
             )
             
@@ -700,8 +769,15 @@ class PDFGenerator:
                 textColor=colors.HexColor('#1a237e')
             )
             
+            nin_bold_style = ParagraphStyle(
+                'NINBoldStyle',
+                parent=normal_style,
+                fontName='Helvetica-Bold',
+                textColor=colors.black
+            )
+            
             # Title - Changed from "Limited" to match document
-            story.append(Paragraph("MARSHAL CORE NIGERIA", title_style))
+            story.append(Paragraph("MARSHAL CORE OF NIGERIA", title_style))  # Changed
             story.append(Paragraph("OFFICER APPLICATION FORM", title_style))
             story.append(Spacer(1, 12))
             
@@ -719,7 +795,7 @@ class PDFGenerator:
                 normal_style
             ))
             story.append(Paragraph(
-                f"<b>Address:</b> {COMPANY_INFO['address']}",
+                f"<b>Address:</b> {COMPANY_INFO['address_line1']}<br/>{COMPANY_INFO['address_line2']}<br/>{COMPANY_INFO['address_line3']}",
                 normal_style
             ))
             story.append(Spacer(1, 12))
@@ -738,10 +814,21 @@ class PDFGenerator:
             # Personal Information Section
             story.append(Paragraph("PERSONAL INFORMATION", heading1_style))
             
+            # Full Name
+            story.append(Paragraph(f"<b>Full Name:</b> {applicant_data.get('full_name', 'N/A')}", normal_style))
+            story.append(Spacer(1, 4))
+            
+            # Officer ID
+            story.append(Paragraph(f"<b>Officer ID:</b> {applicant_data.get('unique_id', applicant_data.get('officer_id', 'N/A'))}", normal_style))
+            story.append(Spacer(1, 4))
+            
+            # NIN Number in BOLD
+            story.append(Paragraph("<b>NIN Number:</b> ", normal_style))
+            story.append(Paragraph(f"<b>{applicant_data.get('nin_number', 'N/A')}</b>", nin_bold_style))
+            story.append(Spacer(1, 4))
+            
+            # Other personal info
             personal_info_fields = [
-                ("Full Name", applicant_data.get('full_name', 'N/A')),
-                ("Officer ID", applicant_data.get('unique_id', applicant_data.get('officer_id', 'N/A'))),
-                ("NIN Number", applicant_data.get('nin_number', 'N/A')),
                 ("Date of Birth", self._format_date(applicant_data.get('date_of_birth'))),
                 ("Gender", applicant_data.get('gender', 'N/A')),
                 ("Marital Status", applicant_data.get('marital_status', 'N/A')),
@@ -762,7 +849,7 @@ class PDFGenerator:
             contact_info_fields = [
                 ("Email Address", applicant_data.get('email', 'N/A')),
                 ("Phone Number", applicant_data.get('phone', applicant_data.get('mobile_number', 'N/A'))),
-                ("Residential Address", applicant_data.get('residential_address', COMPANY_INFO['address'])),
+                ("Residential Address", f"{COMPANY_INFO['address_line1']}, {COMPANY_INFO['address_line2']}, {COMPANY_INFO['address_line3']}"),
                 ("State of Residence", applicant_data.get('state_of_residence', 'N/A')),
                 ("LGA of Residence", applicant_data.get('local_government_residence', 'N/A')),
                 ("Country of Residence", applicant_data.get('country_of_residence', 'N/A')),
@@ -793,8 +880,8 @@ class PDFGenerator:
             
             # Updated to match document format - using "Director in None department"
             professional_info_fields = [
-                ("Rank", applicant_data.get('rank', 'CORE MARSHAL')),  # Default to CORE MARSHAL
-                ("Position", "Director in None department"),  # As per document
+                ("Rank", applicant_data.get('rank', 'CORE MARSHAL')),
+                ("Position", "Director in None department"),
                 ("Years of Service", applicant_data.get('years_of_service', 'N/A')),
                 ("Service Number", applicant_data.get('service_number', 'N/A')),
                 ("Additional Skills", applicant_data.get('additional_skills', 'N/A')),
@@ -880,7 +967,7 @@ class PDFGenerator:
             
             # Footer note
             story.append(Paragraph(
-                "This document is electronically generated by Marshal Core Nigeria. "
+                "This document is electronically generated by Marshal Core of Nigeria. "
                 "For official use only.",
                 ParagraphStyle(
                     'FooterNote',
