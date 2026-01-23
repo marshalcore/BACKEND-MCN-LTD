@@ -1,16 +1,19 @@
-# app/auth/dependencies.py
+# app/auth/dependencies.py - FIXED VERSION
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import jwt, JWTError
-from jose import JWTError, jwt
 from app.database import get_db
 from sqlalchemy.orm import Session
 from app.models.admin import Admin
 from app.models.officer import Officer
-import os
 
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "secret")
-ALGORITHM = "HS256"
+# ✅ FIX: Import settings and use consistent JWT configuration
+from app.config import settings
+
+# ✅ FIX: Use settings.SECRET_KEY instead of JWT_SECRET_KEY
+# This ensures tokens created by Code 2 can be verified by Code 1
+SECRET_KEY = settings.SECRET_KEY  # ✅ Changed from os.getenv("JWT_SECRET_KEY", "secret")
+ALGORITHM = settings.ALGORITHM    # ✅ Use from settings for consistency
 
 bearer_scheme = HTTPBearer()
 
