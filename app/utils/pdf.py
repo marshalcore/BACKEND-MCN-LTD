@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 import uuid
 import requests
 from io import BytesIO
+import base64
 
 from reportlab.lib.pagesizes import A4, letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -18,24 +19,26 @@ from reportlab.pdfgen import canvas
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT, TA_JUSTIFY
+from PIL import Image as PILImage
 
 logger = logging.getLogger(__name__)
 
 # Base directories
 BASE_DIR = Path(__file__).parent.parent.parent
 STATIC_DIR = BASE_DIR / "static"
+UPLOADS_DIR = STATIC_DIR / "uploads"
 PDFS_DIR = STATIC_DIR / "pdfs"
 TERMS_DIR = PDFS_DIR / "terms"
 APPLICATIONS_DIR = PDFS_DIR / "applications"
 LOGO_DIR = STATIC_DIR / "images"
 
 # Ensure directories exist
-for directory in [PDFS_DIR, TERMS_DIR, APPLICATIONS_DIR, LOGO_DIR]:
+for directory in [PDFS_DIR, TERMS_DIR, APPLICATIONS_DIR, LOGO_DIR, UPLOADS_DIR]:
     directory.mkdir(parents=True, exist_ok=True)
 
-# Company information - Updated with correct details
+# Company information
 COMPANY_INFO = {
-    "name": "Marshal Core of Nigeria",  # Changed from "Marshal Core Nigeria"
+    "name": "Marshal Core of Nigeria",
     "certificate_number": "YA/CLB/10100",
     "rc_number": "8405988",
     "address_line1": "KM. 3, MARSHAL CORE OF NIGERIA NATIONAL HEADQUARTERS",
@@ -51,11 +54,9 @@ class PDFGenerationError(Exception):
     """Custom exception for PDF generation errors"""
     pass
 
-# Keep this function exactly as it was
 async def generate_existing_officer_pdfs_and_email(officer_id: str, email: str, full_name: str, db: Session):
     """
-    ✅ Generate PDFs and send email with DIRECT DOWNLOAD LINKS
-    This function is called by the route handler
+    Generate PDFs and send email with DIRECT DOWNLOAD LINKS
     """
     from app.models.existing_officer import ExistingOfficer
     from app.services.email_service import send_existing_officer_pdfs_email
@@ -64,7 +65,7 @@ async def generate_existing_officer_pdfs_and_email(officer_id: str, email: str, 
     try:
         logger.info(f"🔄 Starting PDF auto-generation for existing officer: {officer_id}")
         
-        # Get officer
+        # Get officer with all details
         officer = db.query(ExistingOfficer).filter(
             ExistingOfficer.officer_id == officer_id
         ).first()
@@ -78,15 +79,25 @@ async def generate_existing_officer_pdfs_and_email(officer_id: str, email: str, 
         # Generate PDFs using the PDFGenerator class
         pdf_gen = PDFGenerator()
         
+        # Get passport photo path correctly
+        passport_photo_path = None
+        if officer.passport_path:
+            passport_full_path = os.path.join(UPLOADS_DIR, officer.passport_path)
+            if os.path.exists(passport_full_path):
+                passport_photo_path = passport_full_path
+                logger.info(f"✅ Passport photo found: {passport_photo_path}")
+            else:
+                logger.warning(f"⚠️ Passport photo not found at: {passport_full_path}")
+        
         # Prepare officer data for PDF generation
         officer_data = {
-            "full_name": full_name,
+            "full_name": officer.full_name,
             "nin_number": officer.nin_number,
             "residential_address": officer.residential_address,
             "rank": officer.rank,
             "position": officer.position,
-            "unique_id": officer_id,
-            "email": email,
+            "unique_id": officer.officer_id,
+            "email": officer.email,
             "phone": officer.phone,
             "gender": officer.gender,
             "marital_status": officer.marital_status,
@@ -107,7 +118,7 @@ async def generate_existing_officer_pdfs_and_email(officer_id: str, email: str, 
             "date_of_enlistment": officer.date_of_enlistment,
             "date_of_promotion": officer.date_of_promotion,
             "category": officer.category,
-            "passport_photo": officer.passport_path,  # Using new field
+            "passport_photo_path": passport_photo_path,
         }
         
         logger.info(f"📄 Generating Terms & Conditions PDF for {officer_id}")
@@ -116,7 +127,7 @@ async def generate_existing_officer_pdfs_and_email(officer_id: str, email: str, 
         logger.info(f"📄 Generating Application Form PDF for {officer_id}")
         app_pdf_path = pdf_gen.generate_application_form(officer_data, str(officer.id))
         
-        # ✅ CREATE PUBLIC DOWNLOAD URLs
+        # Create download URLs
         base_url = "https://backend-mcn-ltd.onrender.com"
         terms_filename = os.path.basename(terms_pdf_path)
         registration_filename = os.path.basename(app_pdf_path)
@@ -133,10 +144,10 @@ async def generate_existing_officer_pdfs_and_email(officer_id: str, email: str, 
             db,
             officer_id,
             terms_pdf_path,
-            app_pdf_path  # This should be registration_pdf_path
+            app_pdf_path
         )
         
-        # ✅ Send email with DIRECT DOWNLOAD LINKS
+        # Send email
         email_result = await send_existing_officer_pdfs_email(
             to_email=email,
             name=full_name,
@@ -173,34 +184,34 @@ class PDFGenerator:
     def __init__(self):
         """Initialize PDF generator"""
         logger.info("Initializing ReportLab PDF Generator")
-        self.logo_image = None
-        self._try_load_logo()
+        self.logo_data = None
+        self._load_logo()
     
-    def _try_load_logo(self):
-        """Try to load logo from URL or local file"""
+    def _load_logo(self):
+        """Load logo from local file"""
         try:
-            # Try to download logo from URL
-            response = requests.get(COMPANY_INFO['logo_url'], timeout=10)
-            if response.status_code == 200:
-                self.logo_image = BytesIO(response.content)
-                logger.info("✅ Logo loaded successfully from URL")
-                return True
-        except Exception as e:
-            logger.warning(f"⚠️ Could not load logo from URL: {e}")
-        
-        # Try local file
-        logo_path = LOGO_DIR / "logo.png"
-        if logo_path.exists():
-            try:
+            # Try local file first
+            logo_path = LOGO_DIR / "logo.png"
+            if logo_path.exists():
                 with open(logo_path, 'rb') as f:
-                    self.logo_image = BytesIO(f.read())
-                logger.info("✅ Logo loaded from local file")
+                    self.logo_data = BytesIO(f.read())
+                logger.info("✅ Logo loaded successfully from local file")
                 return True
-            except Exception as e:
-                logger.warning(f"⚠️ Could not load local logo: {e}")
-        
-        logger.warning("❌ Could not load logo, will use text placeholder")
-        return False
+            
+            # Try backup local file
+            backup_logo_path = BASE_DIR / "logo.png"
+            if backup_logo_path.exists():
+                with open(backup_logo_path, 'rb') as f:
+                    self.logo_data = BytesIO(f.read())
+                logger.info("✅ Logo loaded from backup location")
+                return True
+            
+            logger.warning("❌ Could not find logo file")
+            return False
+            
+        except Exception as e:
+            logger.warning(f"⚠️ Could not load logo: {e}")
+            return False
     
     def _generate_filename(self, user_id: str, document_type: str) -> str:
         """Generate unique filename for PDF"""
@@ -211,74 +222,90 @@ class PDFGenerator:
     def _save_pdf(self, category: str, filename: str) -> str:
         """Get filepath for saving PDF"""
         category_dir = PDFS_DIR / category
-        category_dir.mkdir(exist_ok=True)
+        category_dir.mkdir(parents=True, exist_ok=True)
         
         file_path = category_dir / filename
         
-        # Return relative path for web access
         relative_path = f"static/pdfs/{category}/{filename}"
         logger.info(f"PDF will be saved to: {relative_path}")
         return str(file_path), relative_path
+    
+    def _load_passport_photo(self, photo_path: str):
+        """Load and resize passport photo"""
+        if not photo_path or not os.path.exists(photo_path):
+            return None
+        
+        try:
+            img = PILImage.open(photo_path)
+            
+            # Calculate size for PDF
+            max_width = 1.5 * 150
+            max_height = 1.5 * 150
+            
+            width_ratio = max_width / img.width
+            height_ratio = max_height / img.height
+            ratio = min(width_ratio, height_ratio)
+            
+            new_width = int(img.width * ratio)
+            new_height = int(img.height * ratio)
+            
+            img = img.resize((new_width, new_height), PILImage.Resampling.LANCZOS)
+            
+            img_bytes = BytesIO()
+            img.save(img_bytes, format='PNG')
+            img_bytes.seek(0)
+            
+            return {
+                'data': img_bytes,
+                'width': new_width / 150,
+                'height': new_height / 150
+            }
+            
+        except Exception as e:
+            logger.warning(f"⚠️ Could not load passport photo: {e}")
+            return None
     
     def _create_header_footer(self, canvas, doc, title="", is_terms=False):
         """Create header and footer for all pages with logo"""
         canvas.saveState()
         
-        # Add logo at top right corner if available
-        if self.logo_image:
+        # Add logo at top left corner
+        if self.logo_data:
             try:
-                # Draw logo at top right
-                logo_width = 1.2 * inch
-                logo_height = 0.6 * inch
-                logo_x = doc.width + inch - logo_width - 0.2*inch
-                logo_y = doc.height + inch - 0.1*inch
+                logo_width = 1.5 * inch
+                logo_height = 0.8 * inch
+                logo_x = inch
+                logo_y = doc.height + inch - 0.2*inch
                 
-                canvas.drawImage(self.logo_image, logo_x, logo_y, 
+                canvas.drawImage(self.logo_data, logo_x, logo_y, 
                                width=logo_width, height=logo_height, 
                                mask='auto', preserveAspectRatio=True)
+                
+                # Draw company name beside logo
+                canvas.setFont('Helvetica-Bold', 16)
+                canvas.setFillColor(colors.HexColor('#1a237e'))
+                canvas.drawString(logo_x + logo_width + 0.2*inch, 
+                                 logo_y + logo_height/2 - 0.1*inch, 
+                                 COMPANY_INFO['name'])
+                
             except Exception as e:
                 logger.warning(f"Could not draw logo image: {e}")
-                # Fallback to text
                 self._draw_logo_placeholder(canvas, doc)
         else:
-            # Draw text placeholder for logo
             self._draw_logo_placeholder(canvas, doc)
-        
-        # Header text
-        canvas.setFont('Helvetica-Bold', 12)
-        canvas.setFillColor(colors.HexColor('#1a237e'))
-        canvas.drawString(inch, doc.height + inch + 0.6*inch, COMPANY_INFO['name'])
-        
-        # Address in 3 lines
-        canvas.setFont('Helvetica', 8)
-        canvas.setFillColor(colors.gray)
-        
-        address_y = doc.height + inch + 0.4*inch
-        canvas.drawString(inch, address_y, COMPANY_INFO['address_line1'])
-        canvas.drawString(inch, address_y - 0.15*inch, COMPANY_INFO['address_line2'])
-        canvas.drawString(inch, address_y - 0.3*inch, COMPANY_INFO['address_line3'])
-        
-        # Draw line under header
-        canvas.setStrokeColor(colors.HexColor('#1a237e'))
-        canvas.setLineWidth(1)
-        canvas.line(inch, doc.height + inch + 0.1*inch, doc.width + inch, doc.height + inch + 0.1*inch)
         
         # Footer
         canvas.setFont('Helvetica', 8)
         canvas.setFillColor(colors.gray)
         
-        # Left footer - page number
         canvas.drawString(inch, 0.5*inch, f"Page {doc.page}")
         
-        # Center footer - document info
         doc_info = "Terms & Conditions" if is_terms else "Application Form"
         canvas.drawCentredString(doc.width/2 + inch, 0.5*inch, doc_info)
         
-        # Right footer - date
         date_str = datetime.now().strftime("%d/%m/%Y %H:%M")
         canvas.drawRightString(doc.width + inch, 0.5*inch, date_str)
         
-        # Draw line above footer
         canvas.setStrokeColor(colors.lightgrey)
         canvas.setLineWidth(0.5)
         canvas.line(inch, 0.7*inch, doc.width + inch, 0.7*inch)
@@ -288,99 +315,32 @@ class PDFGenerator:
     def _draw_logo_placeholder(self, canvas, doc):
         """Draw logo placeholder text"""
         canvas.setFillColor(colors.HexColor('#1a237e'))
-        canvas.setFont('Helvetica-Bold', 12)
-        canvas.drawRightString(doc.width + inch - 0.2*inch, doc.height + inch + 0.4*inch, "MCN")
-        canvas.setFont('Helvetica', 8)
-        canvas.drawRightString(doc.width + inch - 0.2*inch, doc.height + inch + 0.2*inch, "LOGO")
-    
-    def _add_background_watermark(self, canvas, doc):
-        """Add logo as background watermark"""
-        canvas.saveState()
-        
-        # Only add watermark if logo is available
-        if self.logo_image:
-            try:
-                # Set transparency
-                canvas.setFillAlpha(0.08)  # 8% opacity
-                
-                # Calculate position for centered watermark
-                center_x = doc.width/2 + inch
-                center_y = doc.height/2 + inch
-                
-                # Draw logo watermark
-                logo_width = 3 * inch
-                logo_height = 1.5 * inch
-                logo_x = center_x - logo_width/2
-                logo_y = center_y - logo_height/2
-                
-                canvas.drawImage(self.logo_image, logo_x, logo_y, 
-                               width=logo_width, height=logo_height, 
-                               mask='auto', preserveAspectRatio=True)
-            except Exception as e:
-                logger.warning(f"Could not draw watermark: {e}")
-                # Fallback to text watermark
-                self._draw_text_watermark(canvas, doc)
-        else:
-            # Draw text watermark
-            self._draw_text_watermark(canvas, doc)
-        
-        canvas.restoreState()
-    
-    def _draw_text_watermark(self, canvas, doc):
-        """Draw text watermark"""
-        canvas.setFillAlpha(0.1)  # 10% opacity
-        
-        # Calculate position for centered watermark
-        center_x = doc.width/2 + inch
-        center_y = doc.height/2 + inch
-        
-        # Rotate the watermark
-        canvas.translate(center_x, center_y)
-        canvas.rotate(45)
-        
-        # Draw MCN text as watermark
-        canvas.setFont('Helvetica-Bold', 48)
-        canvas.setFillColor(colors.lightgrey)
-        canvas.drawCentredString(0, 0, "MCN")
-        
-        canvas.setFont('Helvetica', 24)
-        canvas.drawCentredString(0, -40, "Marshal Core of Nigeria")
+        canvas.setFont('Helvetica-Bold', 16)
+        canvas.drawString(inch, doc.height + inch + 0.5*inch, COMPANY_INFO['name'])
     
     def generate_terms_conditions(self, officer_data: Dict[str, Any], user_id: str) -> str:
         """
         Generate Terms & Conditions PDF for an officer
-        
-        Args:
-            officer_data: Dictionary containing officer information
-            user_id: Unique identifier for the user
-        
-        Returns:
-            Relative path to generated PDF file
         """
         try:
             logger.info(f"Generating Terms & Conditions PDF for user: {user_id}")
             
-            # Generate filename
             filename = self._generate_filename(user_id, "terms")
             filepath, relative_path = self._save_pdf("terms", filename)
             
-            # Create PDF document
             doc = SimpleDocTemplate(
                 filepath,
                 pagesize=A4,
                 rightMargin=72,
                 leftMargin=72,
-                topMargin=120,  # Extra space for header and logo
+                topMargin=100,
                 bottomMargin=72
             )
             
-            # Story (content) container
             story = []
             
-            # Get styles
             styles = getSampleStyleSheet()
             
-            # Custom styles
             title_style = ParagraphStyle(
                 'CustomTitle',
                 parent=styles['Title'],
@@ -402,16 +362,6 @@ class PDFGenerator:
                 fontName='Helvetica-Bold'
             )
             
-            heading2_style = ParagraphStyle(
-                'Heading2',
-                parent=styles['Heading2'],
-                fontSize=12,
-                textColor=colors.HexColor('#3949ab'),
-                spaceBefore=10,
-                spaceAfter=4,
-                fontName='Helvetica-Bold'
-            )
-            
             normal_style = ParagraphStyle(
                 'NormalJustified',
                 parent=styles['Normal'],
@@ -427,26 +377,9 @@ class PDFGenerator:
                 fontName='Helvetica-Bold'
             )
             
-            warning_style = ParagraphStyle(
-                'WarningStyle',
-                parent=normal_style,
-                fontName='Helvetica-Bold',
-                textColor=colors.red,
-                fontSize=10
-            )
-            
-            nin_bold_style = ParagraphStyle(
-                'NINBoldStyle',
-                parent=normal_style,
-                fontName='Helvetica-Bold',
-                textColor=colors.black
-            )
-            
-            # Title
             story.append(Paragraph("TERMS AND CONDITIONS OF SERVICE", title_style))
             story.append(Spacer(1, 12))
             
-            # Document Information
             story.append(Paragraph(
                 f"<b>Document Reference:</b> MCN-NG-{user_id}-{datetime.now().strftime('%Y%m%d')}",
                 normal_style
@@ -457,20 +390,17 @@ class PDFGenerator:
             ))
             story.append(Spacer(1, 24))
             
-            # IMPORTANT NOTICE - Updated with exact text from document
             story.append(Paragraph(
                 "<b>IMPORTANT NOTICE:</b> This is a legally binding agreement between "
-                "Marshal Core of Nigeria (hereinafter referred to as 'the Organization') "  # Changed
+                "Marshal Core of Nigeria (hereinafter referred to as 'the Organization') "
                 "and the Officer/Applicant (hereinafter referred to as 'the Officer'). "
                 "Please read carefully before accepting.",
                 bold_style
             ))
             story.append(Spacer(1, 12))
             
-            # 1. PARTIES TO THE AGREEMENT - Updated with exact text
             story.append(Paragraph("1. PARTIES TO THE AGREEMENT", heading1_style))
             
-            # 1.1 The Organization - Updated with exact text
             story.append(Paragraph(
                 f"<b>1.1 The Organization:</b> Marshal Core of Nigeria, a voluntary organization "
                 "duly registered under ministry of humanitarian affairs with certificate number: "
@@ -484,46 +414,39 @@ class PDFGenerator:
                 normal_style
             ))
             
-            # 1.2 The Officer - Updated to use officer's actual name from data
+            # Use officer's ACTUAL residential address
             story.append(Paragraph(
                 f"<b>1.2 The Officer:</b> {officer_data.get('full_name', 'CORE MARSHAL')}, "
                 "with National Identification Number: ",
                 normal_style
             ))
-            # NIN in bold
             story.append(Paragraph(
                 f"<b>{officer_data.get('nin_number', '{Number}')}</b>, ",
-                nin_bold_style
+                normal_style
             ))
             story.append(Paragraph(
                 "residing at",
                 normal_style
             ))
+            officer_address = officer_data.get('residential_address', 'Address not provided')
             story.append(Paragraph(
-                f"{COMPANY_INFO['address_line1']}<br/>{COMPANY_INFO['address_line2']}<br/>{COMPANY_INFO['address_line3']}",
+                f"{officer_address}",
                 normal_style
             ))
             story.append(Spacer(1, 12))
             
-            # 2. APPOINTMENT AND DUTIES - Updated with exact text
             story.append(Paragraph("2. APPOINTMENT AND DUTIES", heading1_style))
-            
-            # 2.1 Appointment - Updated with exact text
             story.append(Paragraph(
                 "<b>2.1 Appointment:</b> The Officer is hereby appointed as Director in the "
                 "None department, subject to the terms and conditions herein.",
                 normal_style
             ))
-            
-            # 2.2 Duties - Updated with exact text
             story.append(Paragraph(
                 "<b>2.2 Duties:</b> The Officer shall perform all duties assigned by the organization "
                 "including but not limited to security services, patrol duties, client protection, "
                 "and any other lawful instructions from authorized supervisors.",
                 normal_style
             ))
-            
-            # 2.3 Code of Conduct - Updated with exact text
             story.append(Paragraph(
                 "<b>2.3 Code of Conduct:</b> The Officer shall at all times maintain the highest "
                 "standards of professionalism, integrity, and discipline as outlined in the "
@@ -532,23 +455,17 @@ class PDFGenerator:
             ))
             story.append(Spacer(1, 12))
             
-            # 3. TERM AND TERMINATION - Updated with exact text
             story.append(Paragraph("3. TERM AND TERMINATION", heading1_style))
-            
-            # 3.1 Term - Updated with exact text
             story.append(Paragraph(
                 '<b>3.1 Term:</b> This agreement shall commence on "Date" and continue until '
                 "terminated in accordance with these terms.",
                 normal_style
             ))
-            
-            # 3.2 Termination for Cause - Updated with exact text
             story.append(Paragraph(
                 "<b>3.2 Termination for Cause:</b> The organization may immediately terminate this agreement for:",
                 normal_style
             ))
             
-            # Updated termination reasons to match document exactly
             termination_reasons = [
                 "Criminal conduct or conviction",
                 "Gross misconduct or negligence",
@@ -561,54 +478,15 @@ class PDFGenerator:
             for reason in termination_reasons:
                 story.append(Paragraph(f"• {reason}", normal_style))
             
-            story.append(Spacer(1, 6))
+            story.append(Spacer(1, 12))
             
-            # 4. LEGAL CONSEQUENCES OF MISCONDUCT - Updated with exact text
             story.append(Paragraph("4. LEGAL CONSEQUENCES OF MISCONDUCT", heading1_style))
-            
-            # Page header from document
-            story.append(Paragraph(
-                f'Page 1 Terms & Conditions "{datetime.now().strftime("%d/%m/%Y %H:%M")}"',
-                ParagraphStyle(
-                    'PageHeader',
-                    parent=normal_style,
-                    fontSize=8,
-                    textColor=colors.gray,
-                    alignment=TA_RIGHT
-                )
-            ))
-            
-            story.append(Paragraph(
-                "Marshal Core of Nigeria",  # Changed from COMPANY_INFO['name']
-                ParagraphStyle(
-                    'CompanyHeader',
-                    parent=normal_style,
-                    fontSize=9,
-                    alignment=TA_CENTER,
-                    fontName='Helvetica-Bold'
-                )
-            ))
-            
-            story.append(Paragraph(
-                f"{COMPANY_INFO['address_line1']}<br/>{COMPANY_INFO['address_line2']}<br/>{COMPANY_INFO['address_line3']}",
-                ParagraphStyle(
-                    'AddressHeader',
-                    parent=normal_style,
-                    fontSize=8,
-                    alignment=TA_CENTER
-                )
-            ))
-            
-            story.append(Spacer(1, 6))
-            
-            # WARNING section - Updated with exact text from document
-            story.append(Paragraph("WARNING:", warning_style))
+            story.append(Paragraph("WARNING:", bold_style))
             story.append(Paragraph(
                 "Any breach of these terms may result in:",
                 normal_style
             ))
             
-            # Updated legal consequences to match document exactly
             legal_consequences = [
                 "Immediate termination of employment/voluntary service",
                 "Forfeiture of all benefits and entitlements",
@@ -622,38 +500,29 @@ class PDFGenerator:
             
             for consequence in legal_consequences:
                 if "including the marshal property you bought by yourself" in consequence:
-                    story.append(Paragraph(f"• {consequence}", warning_style))
+                    story.append(Paragraph(f"• {consequence}", bold_style))
                 else:
                     story.append(Paragraph(f"• {consequence}", normal_style))
             
             story.append(Spacer(1, 12))
             
-            # 5. CONFIDENTIALITY - Updated with exact text
             story.append(Paragraph("5. CONFIDENTIALITY", heading1_style))
-            
-            # 5.1 Confidential Information - Updated with exact text
             story.append(Paragraph(
                 "<b>5.1 Confidential Information:</b> The Officer shall not disclose any confidential "
                 "information about the Organization, its clients, or operations during or after employment.",
                 normal_style
             ))
-            
-            # 5.2 Non-Disclosure - Updated with exact text (10 years)
             story.append(Paragraph(
                 "<b>5.2 Non-Disclosure:</b> This obligation continues for 10 years after termination of employment.",
                 normal_style
             ))
-            
             story.append(Spacer(1, 12))
             
-            # Page break for signature section
             story.append(PageBreak())
             
-            # ACCEPTANCE AND SIGNATURE SECTION - Updated with exact text
             story.append(Paragraph("ACCEPTANCE AND SIGNATURE", heading1_style))
             story.append(Spacer(1, 24))
             
-            # Using officer's actual name from data
             story.append(Paragraph(
                 f'I, "{officer_data.get("full_name", "Name")}" hereby acknowledge that I have read, '
                 "understood, and agree to be bound by all the terms and conditions stated in this document.",
@@ -661,14 +530,12 @@ class PDFGenerator:
             ))
             story.append(Spacer(1, 48))
             
-            # Officer Signature
             story.append(Paragraph("<b>Signature of Officer:</b>", bold_style))
             story.append(Spacer(1, 48))
             story.append(Paragraph("________________________________________", normal_style))
             story.append(Paragraph(f"Date: {datetime.now().strftime('%d/%m/%Y')}", normal_style))
             story.append(Spacer(1, 48))
             
-            # Organization Signature - Updated with exact text from document
             story.append(Paragraph("<b>For Marshal Core of Nigeria:</b>", bold_style))
             story.append(Spacer(1, 48))
             story.append(Paragraph("________________________________________", normal_style))
@@ -680,14 +547,11 @@ class PDFGenerator:
             story.append(Paragraph("<b>Official Stamp:</b>", bold_style))
             story.append(Spacer(1, 12))
             
-            # Build PDF with custom canvas
             def on_first_page(canvas, doc):
                 self._create_header_footer(canvas, doc, "Terms & Conditions", is_terms=True)
-                self._add_background_watermark(canvas, doc)
             
             def on_later_pages(canvas, doc):
                 self._create_header_footer(canvas, doc, "Terms & Conditions", is_terms=True)
-                self._add_background_watermark(canvas, doc)
             
             doc.build(story, onFirstPage=on_first_page, onLaterPages=on_later_pages)
             
@@ -700,39 +564,27 @@ class PDFGenerator:
     
     def generate_application_form(self, applicant_data: Dict[str, Any], user_id: str) -> str:
         """
-        Generate Application Form PDF for an applicant/officer
-        
-        Args:
-            applicant_data: Dictionary containing applicant information
-            user_id: Unique identifier for the user
-        
-        Returns:
-            Relative path to generated PDF file
+        Generate Application Form PDF for an applicant/officer with passport photo
         """
         try:
             logger.info(f"Generating Application Form PDF for user: {user_id}")
             
-            # Generate filename
             filename = self._generate_filename(user_id, "application")
             filepath, relative_path = self._save_pdf("applications", filename)
             
-            # Create PDF document
             doc = SimpleDocTemplate(
                 filepath,
                 pagesize=A4,
                 rightMargin=72,
                 leftMargin=72,
-                topMargin=120,  # Extra space for header and logo
+                topMargin=100,
                 bottomMargin=72
             )
             
-            # Story (content) container
             story = []
             
-            # Get styles
             styles = getSampleStyleSheet()
             
-            # Custom styles
             title_style = ParagraphStyle(
                 'CustomTitle',
                 parent=styles['Title'],
@@ -769,19 +621,10 @@ class PDFGenerator:
                 textColor=colors.HexColor('#1a237e')
             )
             
-            nin_bold_style = ParagraphStyle(
-                'NINBoldStyle',
-                parent=normal_style,
-                fontName='Helvetica-Bold',
-                textColor=colors.black
-            )
-            
-            # Title - Changed from "Limited" to match document
-            story.append(Paragraph("MARSHAL CORE OF NIGERIA", title_style))  # Changed
+            story.append(Paragraph("MARSHAL CORE OF NIGERIA", title_style))
             story.append(Paragraph("OFFICER APPLICATION FORM", title_style))
             story.append(Spacer(1, 12))
             
-            # Organization Information from the document
             story.append(Paragraph(
                 f"<b>Organization:</b> Marshal Core of Nigeria (Voluntary Organization)",
                 normal_style
@@ -800,7 +643,6 @@ class PDFGenerator:
             ))
             story.append(Spacer(1, 12))
             
-            # Application Information
             story.append(Paragraph(
                 f"<b>Application ID:</b> {applicant_data.get('unique_id', user_id)}",
                 normal_style
@@ -811,23 +653,42 @@ class PDFGenerator:
             ))
             story.append(Spacer(1, 24))
             
-            # Personal Information Section
-            story.append(Paragraph("PERSONAL INFORMATION", heading1_style))
+            # Table with passport photo
+            table_data = []
             
-            # Full Name
-            story.append(Paragraph(f"<b>Full Name:</b> {applicant_data.get('full_name', 'N/A')}", normal_style))
-            story.append(Spacer(1, 4))
+            passport_cell_content = []
+            passport_photo = self._load_passport_photo(applicant_data.get('passport_photo_path'))
             
-            # Officer ID
+            if passport_photo:
+                passport_cell_content.append(Image(passport_photo['data'], 
+                                                  width=passport_photo['width']*inch, 
+                                                  height=passport_photo['height']*inch))
+                passport_cell_content.append(Paragraph("<b>Passport Photo</b>", normal_style))
+            
+            table_data.append([
+                Paragraph(f"<b>Full Name:</b><br/>{applicant_data.get('full_name', 'N/A')}", normal_style),
+                passport_cell_content if passport_cell_content else Paragraph("Passport Photo<br/>(Not Submitted)", normal_style)
+            ])
+            
+            table = Table(table_data, colWidths=[3.5*inch, 2*inch])
+            table.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('ALIGN', (0, 0), (0, -1), 'LEFT'),
+                ('ALIGN', (1, 0), (1, -1), 'CENTER'),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.lightgrey),
+                ('PADDING', (0, 0), (-1, -1), 6),
+            ]))
+            
+            story.append(table)
+            story.append(Spacer(1, 12))
+            
             story.append(Paragraph(f"<b>Officer ID:</b> {applicant_data.get('unique_id', applicant_data.get('officer_id', 'N/A'))}", normal_style))
             story.append(Spacer(1, 4))
+            story.append(Paragraph(f"<b>NIN Number:</b> {applicant_data.get('nin_number', 'N/A')}", normal_style))
+            story.append(Spacer(1, 12))
             
-            # NIN Number in BOLD
-            story.append(Paragraph("<b>NIN Number:</b> ", normal_style))
-            story.append(Paragraph(f"<b>{applicant_data.get('nin_number', 'N/A')}</b>", nin_bold_style))
-            story.append(Spacer(1, 4))
+            story.append(Paragraph("PERSONAL INFORMATION", heading1_style))
             
-            # Other personal info
             personal_info_fields = [
                 ("Date of Birth", self._format_date(applicant_data.get('date_of_birth'))),
                 ("Gender", applicant_data.get('gender', 'N/A')),
@@ -843,13 +704,12 @@ class PDFGenerator:
             
             story.append(Spacer(1, 12))
             
-            # Contact Information
             story.append(Paragraph("CONTACT INFORMATION", heading1_style))
             
             contact_info_fields = [
                 ("Email Address", applicant_data.get('email', 'N/A')),
                 ("Phone Number", applicant_data.get('phone', applicant_data.get('mobile_number', 'N/A'))),
-                ("Residential Address", f"{COMPANY_INFO['address_line1']}, {COMPANY_INFO['address_line2']}, {COMPANY_INFO['address_line3']}"),
+                ("Residential Address", applicant_data.get('residential_address', 'Address not provided')),
                 ("State of Residence", applicant_data.get('state_of_residence', 'N/A')),
                 ("LGA of Residence", applicant_data.get('local_government_residence', 'N/A')),
                 ("Country of Residence", applicant_data.get('country_of_residence', 'N/A')),
@@ -861,7 +721,6 @@ class PDFGenerator:
             
             story.append(Spacer(1, 12))
             
-            # Origin Information
             story.append(Paragraph("ORIGIN INFORMATION", heading1_style))
             
             origin_info_fields = [
@@ -875,13 +734,11 @@ class PDFGenerator:
             
             story.append(Spacer(1, 12))
             
-            # Professional Information
             story.append(Paragraph("PROFESSIONAL INFORMATION", heading1_style))
             
-            # Updated to match document format - using "Director in None department"
             professional_info_fields = [
                 ("Rank", applicant_data.get('rank', 'CORE MARSHAL')),
-                ("Position", "Director in None department"),
+                ("Position", applicant_data.get('position', 'N/A')),
                 ("Years of Service", applicant_data.get('years_of_service', 'N/A')),
                 ("Service Number", applicant_data.get('service_number', 'N/A')),
                 ("Additional Skills", applicant_data.get('additional_skills', 'N/A')),
@@ -893,7 +750,6 @@ class PDFGenerator:
             
             story.append(Spacer(1, 12))
             
-            # Financial Information
             story.append(Paragraph("FINANCIAL INFORMATION", heading1_style))
             
             financial_info_fields = [
@@ -907,7 +763,6 @@ class PDFGenerator:
             
             story.append(Spacer(1, 12))
             
-            # Service Dates
             story.append(Paragraph("SERVICE DATES", heading1_style))
             
             service_date_fields = [
@@ -919,23 +774,8 @@ class PDFGenerator:
                 story.append(Paragraph(f"<b>{label}:</b> {value}", normal_style))
                 story.append(Spacer(1, 4))
             
-            story.append(Spacer(1, 12))
-            
-            # Documents Submitted
-            story.append(Paragraph("DOCUMENTS SUBMITTED", heading1_style))
-            
-            documents_info_fields = [
-                ("Passport Photo", "✓ Submitted" if applicant_data.get('passport_photo') else "✗ Not Submitted"),
-                ("NIN Slip", "✓ Submitted" if applicant_data.get('nin_number') else "✗ Not Submitted"),
-            ]
-            
-            for label, value in documents_info_fields:
-                story.append(Paragraph(f"<b>{label}:</b> {value}", normal_style))
-                story.append(Spacer(1, 4))
-            
             story.append(Spacer(1, 24))
             
-            # Declaration
             story.append(Paragraph("DECLARATION", heading1_style))
             story.append(Paragraph(
                 "I hereby declare that all information provided in this application is true and correct "
@@ -945,7 +785,6 @@ class PDFGenerator:
             ))
             story.append(Spacer(1, 48))
             
-            # Signature lines - Updated to match document format
             story.append(Paragraph("<b>Signature of Officer:</b>", field_label_style))
             story.append(Spacer(1, 48))
             story.append(Paragraph("________________________________________", normal_style))
@@ -953,7 +792,6 @@ class PDFGenerator:
             story.append(Paragraph(f"<b>Date:</b> {datetime.now().strftime('%d/%m/%Y')}", field_label_style))
             story.append(Spacer(1, 48))
             
-            # Organization signature - Updated to match document
             story.append(Paragraph("<b>For Marshal Core of Nigeria:</b>", field_label_style))
             story.append(Spacer(1, 48))
             story.append(Paragraph("________________________________________", normal_style))
@@ -965,7 +803,6 @@ class PDFGenerator:
             story.append(Paragraph("<b>Official Stamp:</b>", field_label_style))
             story.append(Spacer(1, 12))
             
-            # Footer note
             story.append(Paragraph(
                 "This document is electronically generated by Marshal Core of Nigeria. "
                 "For official use only.",
@@ -978,14 +815,11 @@ class PDFGenerator:
                 )
             ))
             
-            # Build PDF with custom canvas
             def on_first_page(canvas, doc):
                 self._create_header_footer(canvas, doc, "Application Form")
-                self._add_background_watermark(canvas, doc)
             
             def on_later_pages(canvas, doc):
                 self._create_header_footer(canvas, doc, "Application Form")
-                self._add_background_watermark(canvas, doc)
             
             doc.build(story, onFirstPage=on_first_page, onLaterPages=on_later_pages)
             
@@ -1006,7 +840,6 @@ class PDFGenerator:
         
         if isinstance(date_value, str):
             try:
-                # Try to parse various date formats
                 from datetime import datetime as dt
                 for fmt in ["%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y", "%Y%m%d"]:
                     try:
@@ -1018,37 +851,5 @@ class PDFGenerator:
                 pass
         
         return str(date_value)
-    
-    def generate_both_pdfs(self, user_data: Dict[str, Any], user_id: str) -> Dict[str, str]:
-        """
-        Generate both Terms & Conditions and Application Form PDFs
-        
-        Args:
-            user_data: Dictionary containing user information
-            user_id: Unique identifier for the user
-        
-        Returns:
-            Dictionary with paths to both PDFs
-        """
-        try:
-            logger.info(f"Generating both PDFs for user: {user_id}")
-            
-            # Generate Terms & Conditions
-            terms_pdf_path = self.generate_terms_conditions(user_data, user_id)
-            
-            # Generate Application Form
-            app_pdf_path = self.generate_application_form(user_data, user_id)
-            
-            return {
-                "terms_pdf_path": terms_pdf_path,
-                "application_pdf_path": app_pdf_path,
-                "generated_at": datetime.now().isoformat(),
-                "user_id": user_id
-            }
-            
-        except Exception as e:
-            logger.error(f"Failed to generate both PDFs: {str(e)}")
-            raise PDFGenerationError(f"Failed to generate both PDFs: {str(e)}")
 
-# Singleton instance for easy import
 pdf_generator = PDFGenerator()
