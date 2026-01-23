@@ -1,3 +1,4 @@
+# app/routes/existing_officer_dashboard.py
 from typing import Dict, Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
@@ -299,7 +300,8 @@ async def get_officer_pdfs(
 
 @router.post(
     "/generate-pdfs",
-    summary="Generate PDFs from dashboard - NEW ENDPOINT"
+    summary="Generate PDFs from dashboard - NEW ENDPOINT",
+    response_model=dict
 )
 async def generate_pdfs_from_dashboard(
     background_tasks: BackgroundTasks,
@@ -348,11 +350,10 @@ async def generate_pdfs_from_dashboard(
         
         return {
             "status": "success",
-            "message": "PDF generation started. You will receive an email when completed.",
+            "message": "PDF generation started. You will receive an email with the documents.",
             "officer_id": officer_id,
             "email": officer.email,
-            "email_sent": True,
-            "timestamp": datetime.utcnow().isoformat()
+            "generation_started": True
         }
         
     except HTTPException as he:
