@@ -181,6 +181,7 @@ async def root():
     }
 
 # File download route with CORS support
+# File download route with CORS support - IMPROVED VERSION
 @app.get("/download/pdf/{filename}", tags=["Public Downloads"])
 async def download_pdf(filename: str, request: Request):
     """
@@ -198,9 +199,17 @@ async def download_pdf(filename: str, request: Request):
     ]
     
     pdf_path = None
+    file_category = None
+    
     for path in possible_paths:
         if os.path.isfile(path):
             pdf_path = path
+            if "terms" in path:
+                file_category = "terms"
+            elif "applications" in path:
+                file_category = "applications"
+            else:
+                file_category = "general"
             break
     
     if not pdf_path:
@@ -217,28 +226,74 @@ async def download_pdf(filename: str, request: Request):
                 if os.path.isfile(path):
                     pdf_path = path
                     filename = filename_with_pdf
+                    if "terms" in path:
+                        file_category = "terms"
+                    elif "applications" in path:
+                        file_category = "applications"
+                    else:
+                        file_category = "general"
                     break
     
     if not pdf_path:
+        # Log the search for debugging
+        logger.warning(f"PDF not found: {filename}. Searched in:")
+        for path in possible_paths:
+            exists = os.path.exists(path)
+            logger.warning(f"  - {path}: {'Exists' if exists else 'Not found'}")
+        
         # Create pdfs directory if it doesn't exist
         pdfs_dir = os.path.join(STATIC_DIR, "pdfs")
         os.makedirs(pdfs_dir, exist_ok=True)
+        os.makedirs(os.path.join(STATIC_DIR, "pdfs", "terms"), exist_ok=True)
+        os.makedirs(os.path.join(STATIC_DIR, "pdfs", "applications"), exist_ok=True)
         
-        # Check again
-        pdf_path = os.path.join(STATIC_DIR, "pdfs", filename)
-        if not os.path.isfile(pdf_path):
-            raise HTTPException(status_code=404, detail="PDF file not found")
+        # Check one more time after creating directories
+        possible_paths = [
+            os.path.join(STATIC_DIR, "pdfs", filename),
+            os.path.join(STATIC_DIR, "pdfs", "terms", filename),
+            os.path.join(STATIC_DIR, "pdfs", "applications", filename),
+        ]
+        
+        for path in possible_paths:
+            if os.path.isfile(path):
+                pdf_path = path
+                break
+        
+        if not pdf_path:
+            # List available PDFs for debugging
+            available_pdfs = []
+            for category in ["", "terms", "applications"]:
+                category_dir = os.path.join(STATIC_DIR, "pdfs", category)
+                if os.path.exists(category_dir):
+                    try:
+                        files = [f for f in os.listdir(category_dir) if f.endswith('.pdf')]
+                        available_pdfs.extend([f"{category}/{f}" if category else f for f in files])
+                    except:
+                        pass
+            
+            logger.error(f"PDF file not found: {filename}")
+            logger.error(f"Available PDFs: {available_pdfs}")
+            raise HTTPException(
+                status_code=404, 
+                detail=f"PDF file '{filename}' not found. Available files: {available_pdfs[:10]}..."
+            )
     
     response = FileResponse(
         pdf_path,
         filename=filename,
-        media_type="application/pdf"
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename=\"{filename}\"",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Expose-Headers": "Content-Disposition"
+        }
     )
     
-    logger.info(f"Serving PDF: {filename}")
+    logger.info(f"Serving PDF: {filename} (from {file_category})")
     return response
 
 # PDF Preview endpoint
+# PDF Preview endpoint - IMPROVED VERSION
 @app.get("/preview/pdf/{filename}", tags=["Public Downloads"])
 async def preview_pdf(filename: str, request: Request):
     """
@@ -285,7 +340,8 @@ async def preview_pdf(filename: str, request: Request):
         filename=filename,
         media_type="application/pdf",
         headers={
-            "Content-Disposition": f"inline; filename=\"{filename}\""
+            "Content-Disposition": f"inline; filename=\"{filename}\"",
+            "Access-Control-Allow-Origin": "*"
         }
     )
     

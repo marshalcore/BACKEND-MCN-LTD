@@ -300,7 +300,7 @@ async def get_officer_pdfs(
 
 @router.post(
     "/generate-pdfs",
-    summary="Generate PDFs from dashboard - NEW ENDPOINT",
+    summary="Generate PDFs from dashboard",
     response_model=dict
 )
 async def generate_pdfs_from_dashboard(
@@ -310,15 +310,12 @@ async def generate_pdfs_from_dashboard(
 ):
     """
     Generate PDFs for the logged-in officer from dashboard.
-    
-    This endpoint uses the same PDF generation logic as the main endpoint
-    but doesn't require officer_id in the URL.
     """
     try:
         officer_id = current_officer.get("officer_id")
         logger.info(f"📄 Generating PDFs from dashboard for officer: {officer_id}")
         
-        # Get officer
+        # Get officer using officer_id from token
         officer = db.query(ExistingOfficer).filter(
             ExistingOfficer.officer_id == officer_id
         ).first()
@@ -330,13 +327,19 @@ async def generate_pdfs_from_dashboard(
             )
         
         # Check if all required documents are uploaded
-        if not officer.passport_uploaded or not officer.consolidated_pdf_uploaded:
+        if not officer.passport_uploaded:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Please upload all required documents before generating PDFs"
+                detail="Please upload passport photo before generating PDFs"
             )
         
-        # ✅ IMPORT HERE TO AVOID CIRCULAR IMPORTS
+        if not officer.consolidated_pdf_uploaded:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Please upload consolidated PDF before generating PDFs"
+            )
+        
+        # Import and run PDF generation
         from app.utils.pdf import generate_existing_officer_pdfs_and_email
         
         # Generate PDFs in background
