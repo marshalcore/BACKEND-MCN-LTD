@@ -1,4 +1,4 @@
-# app/utils/jwt_handler.py
+# app/utils/jwt_handler.py - JUST ADD LOGGING, DON'T CHANGE LOGIC
 from datetime import datetime, timedelta
 from typing import Optional
 import logging
@@ -42,15 +42,23 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
         "type": "access"
     })
     
+    # ADD LOGGING
+    logger.info(f"🔑 [create_access_token] Creating token with:")
+    logger.info(f"   Data: {to_encode}")
+    logger.info(f"   SECRET_KEY: {settings.SECRET_KEY[:20]}...")
+    logger.info(f"   ALGORITHM: {settings.ALGORITHM}")
+    
     # Handle both python-jose and PyJWT
     if JWT_LIB == "python-jose":
         encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     else:  # PyJWT
         encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     
+    logger.info(f"✅ [create_access_token] Token created: {encoded_jwt[:50]}...")
     return encoded_jwt
 
 
+# Rest of the functions stay exactly the same...
 def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None):
     """
     Create JWT refresh token

@@ -1,4 +1,3 @@
-# app/routes/existing_officer.py
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Request, BackgroundTasks
 from sqlalchemy.orm import Session
@@ -556,45 +555,6 @@ async def generate_pdfs_for_officer(
             "pdf_download_url": f"/pdf/existing/{officer_id}"
         }
     )
-
-
-@router.get(
-    "/{officer_id}/dashboard",
-    response_model=ExistingOfficerDashboard,
-    summary="Get existing officer dashboard data - UPDATED FOR 2-UPLOAD SYSTEM"
-)
-async def get_existing_officer_dashboard(
-    officer_id: str,
-    current_officer: dict = Depends(get_current_existing_officer_dict),
-    db: Session = Depends(get_db)
-):
-    """
-    Get dashboard data for existing officers - UPDATED FOR 2-UPLOAD SYSTEM
-    
-    Returns:
-    - Officer details with new fields
-    - Simplified document upload status (only 2 documents)
-    - PDF availability (auto-generated and downloadable from dashboard)
-    - Dashboard access statistics
-    """
-    # Verify the officer is accessing their own dashboard
-    if current_officer.get("officer_id") != officer_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to access this dashboard"
-        )
-    
-    try:
-        dashboard_data = ExistingOfficerService.get_dashboard_data(db, officer_id)
-        return dashboard_data
-    except HTTPException as he:
-        raise he
-    except Exception as e:
-        logger.error(f"Error getting dashboard data: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to get dashboard data"
-        )
 
 
 @router.post(

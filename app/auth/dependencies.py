@@ -1,4 +1,3 @@
-# app/auth/dependencies.py - FIXED VERSION
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import jwt, JWTError
@@ -16,6 +15,10 @@ SECRET_KEY = settings.SECRET_KEY  # ✅ Changed from os.getenv("JWT_SECRET_KEY",
 ALGORITHM = settings.ALGORITHM    # ✅ Use from settings for consistency
 
 bearer_scheme = HTTPBearer()
+
+# ADD LOGGING
+import logging
+logger = logging.getLogger(__name__)
 
 def get_current_admin(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
@@ -65,12 +68,20 @@ def get_current_existing_officer(
 ):
     """Get current existing officer from JWT token"""
     token = credentials.credentials
+    
+    # ADD LOGGING
+    logger.info(f"🔑 [get_current_existing_officer] Validating token. Token: {token[:50]}...")
+    
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         officer_id = payload.get("sub")
         role = payload.get("role")
         
+        # ADD LOGGING
+        logger.info(f"🔑 [get_current_existing_officer] Decoded payload: officer_id={officer_id}, role={role}")
+        
         if role != "existing_officer" or not officer_id:
+            logger.error(f"❌ [get_current_existing_officer] Invalid token: role={role}, officer_id={officer_id}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid existing officer token"
@@ -84,13 +95,16 @@ def get_current_existing_officer(
         ).first()
         
         if not officer:
+            logger.error(f"❌ [get_current_existing_officer] Officer not found: {officer_id}")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Existing officer not found or inactive"
             )
             
+        logger.info(f"✅ [get_current_existing_officer] Officer validated: {officer_id} ({officer.full_name})")
         return officer
-    except JWTError:
+    except JWTError as e:
+        logger.error(f"❌ [get_current_existing_officer] JWT decode error: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token"
@@ -104,12 +118,24 @@ def get_current_existing_officer_dict(
 ) -> dict:
     """Get current existing officer as dictionary for dashboard routes"""
     token = credentials.credentials
+    
+    # ADD LOGGING
+    logger.info(f"🔑 [get_current_existing_officer_dict] Dashboard token validation")
+    logger.info(f"   Token received: {token[:50]}...")
+    
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         officer_id = payload.get("sub")
         role = payload.get("role")
         
+        # ADD LOGGING
+        logger.info(f"🔑 [get_current_existing_officer_dict] Decoded payload:")
+        logger.info(f"   officer_id: {officer_id}")
+        logger.info(f"   role: {role}")
+        logger.info(f"   Full payload: {payload}")
+        
         if role != "existing_officer" or not officer_id:
+            logger.error(f"❌ [get_current_existing_officer_dict] Invalid token: role={role}, officer_id={officer_id}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid existing officer token"
@@ -123,10 +149,15 @@ def get_current_existing_officer_dict(
         ).first()
         
         if not officer:
+            logger.error(f"❌ [get_current_existing_officer_dict] Officer not found in DB: {officer_id}")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Existing officer not found or inactive"
             )
+            
+        logger.info(f"✅ [get_current_existing_officer_dict] Officer validated successfully")
+        logger.info(f"   Officer: {officer.full_name} ({officer.officer_id})")
+        logger.info(f"   Status: {officer.status}, Active: {officer.is_active}")
             
         return {
             "officer_id": officer.officer_id,
@@ -137,8 +168,17 @@ def get_current_existing_officer_dict(
             "category": officer.category,
             "rank": officer.rank
         }
-    except JWTError:
+    except JWTError as e:
+        logger.error(f"❌ [get_current_existing_officer_dict] JWT decode error: {str(e)}")
+        logger.error(f"   SECRET_KEY used: {SECRET_KEY[:20]}...")
+        logger.error(f"   ALGORITHM used: {ALGORITHM}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token"
+            detail=f"Invalid token: {str(e)}"
+        )
+    except Exception as e:
+        logger.error(f"❌ [get_current_existing_officer_dict] Unexpected error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Authentication error: {str(e)}"
         )
