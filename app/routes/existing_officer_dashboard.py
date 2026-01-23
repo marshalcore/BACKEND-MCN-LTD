@@ -12,6 +12,7 @@ from app.services.existing_officer_service import ExistingOfficerService
 from app.services.pdf_service import PDFService
 from app.services.email_service import send_existing_officer_pdfs_email
 from app.models.existing_officer import ExistingOfficer  # ✅ ADD IMPORT
+from app.utils.pdf import PDFGenerator  # ✅ IMPORT PDF GENERATOR
 
 logger = logging.getLogger(__name__)
 router = APIRouter(
@@ -151,4 +152,214 @@ async def get_officer_profile(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to fetch officer profile"
+        )
+
+
+@router.get(
+    "/documents",
+    summary="Get officer document status - NEW 2-UPLOAD SYSTEM"
+)
+async def get_officer_documents(
+    current_officer: dict = Depends(get_current_existing_officer_dict),
+    db: Session = Depends(get_db)
+):
+    """
+    Get document upload status for the existing officer.
+    
+    ✅ UPDATED: Only 2 documents required in new system:
+    1. Passport photo
+    2. Consolidated PDF (all 10 documents combined)
+    """
+    try:
+        officer_id = current_officer.get("officer_id")
+        logger.info(f"Fetching document status for officer: {officer_id}")
+        
+        officer = ExistingOfficerService.get_officer_by_id(db, officer_id)
+        if not officer:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Officer not found"
+            )
+        
+        # Return document status for 2-upload system
+        document_data = {
+            "officer_id": officer.officer_id,
+            "passport_uploaded": officer.passport_uploaded,
+            "consolidated_pdf_uploaded": officer.consolidated_pdf_uploaded,
+            "all_documents_uploaded": officer.passport_uploaded and officer.consolidated_pdf_uploaded,
+            "required_documents": [
+                {
+                    "document_type": "passport",
+                    "display_name": "Passport Photo",
+                    "uploaded": officer.passport_uploaded,
+                    "required": True,
+                    "max_size_mb": 2,
+                    "allowed_formats": ["jpg", "jpeg", "png"]
+                },
+                {
+                    "document_type": "consolidated_pdf",
+                    "display_name": "Consolidated PDF (All Documents)",
+                    "uploaded": officer.consolidated_pdf_uploaded,
+                    "required": True,
+                    "max_size_mb": 10,
+                    "allowed_formats": ["pdf"]
+                }
+            ],
+            "upload_progress": f"{int(officer.passport_uploaded) + int(officer.consolidated_pdf_uploaded)}/2"
+        }
+        
+        return document_data
+        
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Error fetching officer documents: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch officer documents"
+        )
+
+
+@router.get(
+    "/pdfs",
+    summary="Get officer PDF documents status"
+)
+async def get_officer_pdfs(
+    current_officer: dict = Depends(get_current_existing_officer_dict),
+    db: Session = Depends(get_db)
+):
+    """
+    Get PDF documents status for the existing officer.
+    
+    Returns:
+    - Terms & Conditions PDF status
+    - Registration Form PDF status
+    - Download URLs for both
+    """
+    try:
+        officer_id = current_officer.get("officer_id")
+        logger.info(f"Fetching PDF status for officer: {officer_id}")
+        
+        officer = ExistingOfficerService.get_officer_by_id(db, officer_id)
+        if not officer:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Officer not found"
+            )
+        
+        base_url = "https://backend-mcn-ltd.onrender.com"
+        
+        # Check if PDFs exist and create download URLs
+        pdf_data = {
+            "officer_id": officer.officer_id,
+            "full_name": officer.full_name,
+            "email": officer.email,
+            "pdf_paths": {},
+            "pdf_status": {
+                "terms_and_conditions": {
+                    "generated": bool(officer.terms_pdf_path),
+                    "file_path": officer.terms_pdf_path,
+                    "last_generated": officer.terms_generated_at
+                },
+                "registration_form": {
+                    "generated": bool(officer.registration_pdf_path),
+                    "file_path": officer.registration_pdf_path,
+                    "last_generated": officer.registration_generated_at
+                }
+            }
+        }
+        
+        # Add download URLs if PDFs exist
+        if officer.terms_pdf_path:
+            terms_filename = os.path.basename(officer.terms_pdf_path)
+            pdf_data["pdf_paths"]["terms"] = f"{base_url}/download/pdf/{terms_filename}"
+            pdf_data["pdf_download_urls"] = {
+                "terms": f"{base_url}/download/pdf/{terms_filename}"
+            }
+        
+        if officer.registration_pdf_path:
+            reg_filename = os.path.basename(officer.registration_pdf_path)
+            pdf_data["pdf_paths"]["registration"] = f"{base_url}/download/pdf/{reg_filename}"
+            pdf_data["pdf_download_urls"] = {
+                **pdf_data.get("pdf_download_urls", {}),
+                "registration": f"{base_url}/download/pdf/{reg_filename}"
+            }
+        
+        return pdf_data
+        
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Error fetching officer PDFs: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch officer PDFs"
+        )
+
+
+@router.post(
+    "/generate-pdfs",
+    summary="Generate PDFs from dashboard - NEW ENDPOINT"
+)
+async def generate_pdfs_from_dashboard(
+    background_tasks: BackgroundTasks,
+    current_officer: dict = Depends(get_current_existing_officer_dict),
+    db: Session = Depends(get_db)
+):
+    """
+    Generate PDFs for the logged-in officer from dashboard.
+    
+    This endpoint uses the same PDF generation logic as the main endpoint
+    but doesn't require officer_id in the URL.
+    """
+    try:
+        officer_id = current_officer.get("officer_id")
+        logger.info(f"📄 Generating PDFs from dashboard for officer: {officer_id}")
+        
+        # Get officer
+        officer = db.query(ExistingOfficer).filter(
+            ExistingOfficer.officer_id == officer_id
+        ).first()
+        
+        if not officer:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Officer not found"
+            )
+        
+        # Check if all required documents are uploaded
+        if not officer.passport_uploaded or not officer.consolidated_pdf_uploaded:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Please upload all required documents before generating PDFs"
+            )
+        
+        # ✅ IMPORT HERE TO AVOID CIRCULAR IMPORTS
+        from app.utils.pdf import generate_existing_officer_pdfs_and_email
+        
+        # Generate PDFs in background
+        background_tasks.add_task(
+            generate_existing_officer_pdfs_and_email,
+            officer_id=officer_id,
+            email=officer.email,
+            full_name=officer.full_name,
+            db=db
+        )
+        
+        return {
+            "status": "success",
+            "message": "PDF generation started. You will receive an email when completed.",
+            "officer_id": officer_id,
+            "email": officer.email,
+            "email_sent": True,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Error generating PDFs from dashboard: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate PDFs: {str(e)}"
         )

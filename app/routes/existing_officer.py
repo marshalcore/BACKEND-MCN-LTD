@@ -482,13 +482,6 @@ async def login_existing_officer(
         "category": officer.category
     }
 
-
-@router.post(
-    "/{officer_id}/generate-pdfs",
-    response_model=PDFGenerationResponse,
-    summary="Generate PDFs for existing officer - WITH AUTO-EMAIL",
-    status_code=status.HTTP_200_OK
-)
 async def generate_pdfs_for_officer(
     officer_id: str,
     background_tasks: BackgroundTasks,
