@@ -1,204 +1,209 @@
 # app/utils/token.py
+import os
+import secrets
 from datetime import datetime, timedelta
-import random
-import string
+from typing import Optional, Dict, Any
+import logging
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from jose import jwt, JWTError
 from sqlalchemy.orm import Session
-from app.models.officer import Officer
-from app.models.verification_code import VerificationCode
+from jose import JWTError, jwt
+
 from app.database import get_db
+from app.models.officer import Officer
 from app.config import settings
-from pydantic import BaseModel
 
+logger = logging.getLogger(__name__)
 
-# Secret and Algorithm
+# JWT Configuration
 SECRET_KEY = settings.SECRET_KEY
 ALGORITHM = settings.ALGORITHM
-ACCESS_TOKEN_EXPIRE_MINUTES = int(settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-REFRESH_TOKEN_EXPIRE_DAYS = 7  # 7 days for refresh tokens
+ACCESS_TOKEN_EXPIRE_MINUTES = settings.ACCESS_TOKEN_EXPIRE_MINUTES
 
 # OAuth2 scheme
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="officer/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/officer/login")
 
+# In-memory OTP store (for development - use Redis in production)
+otp_store = {}
 
-class TokenData(BaseModel):
-    unique_id: str | None = None
-    type: str | None = None  # 'access' or 'refresh'
+# ==================== JWT FUNCTIONS ====================
 
-
-async def get_current_officer(
-    token: str = Depends(oauth2_scheme),
-    db: Session = Depends(get_db)
-) -> Officer:
+def decode_access_token(token: str) -> Dict[str, Any]:
     """
-    Dependency to get current authenticated officer from JWT token
+    Decode and verify JWT token
+    """
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload
+    except JWTError as e:
+        logger.error(f"JWT decode error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
+    """
+    Create a JWT access token
+    """
+    to_encode = data.copy()
+    
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    
+    to_encode.update({
+        "exp": expire,
+        "iat": datetime.utcnow(),
+        "type": "access"
+    })
+    
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+# ==================== AUTH DEPENDENCIES ====================
+
+async def get_current_officer(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> Officer:
+    """
+    Get current officer from JWT token
     """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+    
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        unique_id: str = payload.get("sub")
-        if unique_id is None:
+        payload = decode_access_token(token)
+        officer_id: str = payload.get("sub")
+        role: str = payload.get("role")
+        
+        if officer_id is None or role != "officer":
             raise credentials_exception
-        token_data = TokenData(unique_id=unique_id)
+        
+        officer = db.query(Officer).filter(Officer.officer_id == officer_id).first()
+        if officer is None:
+            raise credentials_exception
+        
+        if not officer.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Officer account is deactivated"
+            )
+        
+        return officer
+        
     except JWTError:
         raise credentials_exception
-    
-    officer = db.query(Officer).filter(Officer.unique_id == token_data.unique_id).first()
-    if officer is None:
-        raise credentials_exception
-    return officer
 
+# ==================== OTP FUNCTIONS ====================
 
-def create_access_token(data: dict, expires_delta: timedelta = None) -> str:
-    """
-    Create JWT token with expiration
-    """
-    to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.utcnow() + expires_delta
-    else:
-        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-
-
-def decode_access_token(token: str):
-    """
-    Decode JWT token without validation (for internal use)
-    """
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        return payload
-    except JWTError:
-        return None
-
-
-def create_refresh_token(data: dict) -> str:
-    """
-    Create refresh token with longer expiration
-    """
-    expires_delta = timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
-    return create_access_token(data, expires_delta)
-
-
-def verify_refresh_token(token: str) -> dict | None:
-    """
-    Verify if token is a valid refresh token
-    """
-    payload = decode_access_token(token)
-    if payload and payload.get("type") == "refresh":
-        return payload
-    return None
-
-
-# -------------------- OTP UTILS --------------------
 def generate_otp(length: int = 6) -> str:
-    """Generate a numeric OTP of given length (default 6 digits)."""
-    return ''.join(random.choices(string.digits, k=length))
-
-
-def store_verification_code(db: Session, email: str, code: str, purpose: str = "login") -> VerificationCode:
     """
-    Store OTP verification code in database
+    Generate a numeric OTP
+    """
+    digits = "0123456789"
+    return ''.join(secrets.choice(digits) for _ in range(length))
+
+def store_verification_code(email: str, otp: str, purpose: str = "password_reset") -> None:
+    """
+    Store OTP for verification
+    """
+    key = f"{email}:{purpose}"
+    otp_store[key] = {
+        "otp": otp,
+        "created_at": datetime.utcnow(),
+        "purpose": purpose
+    }
+    logger.info(f"OTP stored for {email} ({purpose})")
+
+def verify_otp(email: str, otp: str, purpose: str = "password_reset") -> bool:
+    """
+    Verify OTP
+    """
+    key = f"{email}:{purpose}"
     
-    Args:
-        db: Database session
-        email: User email
-        code: 6-digit OTP code  # ALREADY CORRECT
-        purpose: Purpose of OTP (login, signup, password_reset, admin_login)
-    """
-    try:
-        # Delete any existing codes for this email and purpose
-        db.query(VerificationCode).filter(
-            VerificationCode.email == email,
-            VerificationCode.purpose == purpose
-        ).delete(synchronize_session=False)
-        
-        # Create new verification code
-        verification_code = VerificationCode(
-            email=email,
-            code=code,
-            purpose=purpose,
-            expires_at=datetime.utcnow() + timedelta(minutes=10)
-        )
-        
-        db.add(verification_code)
-        db.commit()
-        db.refresh(verification_code)
-        
-        return verification_code
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to store verification code: {str(e)}"
-        )
-
-
-def verify_otp(db: Session, email: str, code: str, purpose: str) -> bool:
-    """
-    Verify OTP code
-    
-    Args:
-        db: Database session
-        email: User email
-        code: OTP code to verify  # CHANGED FROM otp_code to code
-        purpose: Purpose of OTP
-        
-    Returns:
-        True if valid, False otherwise
-    """
-    try:
-        # Find the verification code
-        verification = db.query(VerificationCode).filter(
-            VerificationCode.email == email,
-            VerificationCode.code == code,  # CHANGED FROM otp_code to code
-            VerificationCode.purpose == purpose,
-            VerificationCode.expires_at > datetime.utcnow()
-        ).first()
-        
-        if verification:
-            # Delete the used code
-            db.delete(verification)
-            db.commit()
-            return True
+    if key not in otp_store:
+        logger.warning(f"No OTP found for {email} ({purpose})")
         return False
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to verify OTP: {str(e)}"
-        )
+    
+    otp_data = otp_store[key]
+    
+    # Check if OTP is expired (10 minutes)
+    if (datetime.utcnow() - otp_data["created_at"]).total_seconds() > 600:
+        logger.warning(f"OTP expired for {email}")
+        del otp_store[key]
+        return False
+    
+    # Verify OTP
+    if otp_data["otp"] == otp:
+        logger.info(f"OTP verified for {email} ({purpose})")
+        del otp_store[key]  # Remove OTP after successful verification
+        return True
+    
+    logger.warning(f"Invalid OTP for {email}")
+    return False
 
-# Add these compatibility functions that officer_auth.py expects
-def get_current_officer():
-    """Compatibility function - just returns the async version"""
-    from functools import wraps
-    @wraps
-    async def wrapper(*args, **kwargs):
-        return await get_current_officer(*args, **kwargs)
-    return wrapper
+# ==================== PASSWORD FUNCTIONS ====================
 
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """
+    Verify a password against its hash
+    """
+    from passlib.context import CryptContext
+    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+    return pwd_context.verify(plain_password, hashed_password)
 
-# Compatibility functions for officer_auth.py
-def create_access_token(data: dict, expires_delta: timedelta = None) -> str:
-    """Create JWT access token - compatibility wrapper"""
-    from app.utils.jwt_handler import create_access_token as jwt_create_access_token
-    return jwt_create_access_token(data, expires_delta)
+def get_password_hash(password: str) -> str:
+    """
+    Generate password hash
+    """
+    from passlib.context import CryptContext
+    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+    return pwd_context.hash(password)
 
-def create_refresh_token(data: dict, expires_delta: timedelta = None) -> str:
-    """Create JWT refresh token - compatibility wrapper"""
-    from app.utils.jwt_handler import create_refresh_token as jwt_create_refresh_token
-    return jwt_create_refresh_token(data, expires_delta)
+# ==================== UTILITY FUNCTIONS ====================
 
-# Make sure decode_access_token exists
-def decode_access_token(token: str):
-    """Decode JWT token"""
-    from app.utils.jwt_handler import decode_token
-    return decode_token(token)
+def cleanup_expired_otps() -> None:
+    """
+    Clean up expired OTPs from store
+    """
+    expired_keys = []
+    current_time = datetime.utcnow()
+    
+    for key, otp_data in otp_store.items():
+        if (current_time - otp_data["created_at"]).total_seconds() > 600:
+            expired_keys.append(key)
+    
+    for key in expired_keys:
+        del otp_store[key]
+    
+    if expired_keys:
+        logger.info(f"Cleaned up {len(expired_keys)} expired OTPs")
+
+def validate_password_strength(password: str) -> Dict[str, Any]:
+    """
+    Validate password strength
+    """
+    errors = []
+    
+    if len(password) < 8:
+        errors.append("Password must be at least 8 characters long")
+    
+    if not any(char.isdigit() for char in password):
+        errors.append("Password must contain at least one digit")
+    
+    if not any(char.isupper() for char in password):
+        errors.append("Password must contain at least one uppercase letter")
+    
+    if not any(char.islower() for char in password):
+        errors.append("Password must contain at least one lowercase letter")
+    
+    return {
+        "is_valid": len(errors) == 0,
+        "errors": errors,
+        "strength": "strong" if len(errors) == 0 else "weak"
+    }

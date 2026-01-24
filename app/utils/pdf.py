@@ -1,4 +1,3 @@
-# app/utils/pdf.py
 import os
 import logging
 from datetime import datetime
@@ -109,7 +108,7 @@ async def generate_existing_officer_pdfs_and_email(officer_id: str, email: str, 
             "date_of_enlistment": officer.date_of_enlistment,
             "date_of_promotion": officer.date_of_promotion,
             "category": officer.category,
-            "passport_photo": officer.passport_path,  # Using new field
+            "passport_path": officer.passport_path,  # ✅ FIXED: Use passport_path instead of passport_photo
         }
         
         logger.info(f"📄 Generating Terms & Conditions PDF for {officer_id}")
@@ -180,7 +179,7 @@ class PDFGenerator:
         self._try_load_logo()
     
     def _try_load_logo(self):
-        """Try to load logo from local file"""
+        """Try to load logo from local file with enhanced fallback"""
         try:
             # Try local file from static/images/logo.png
             logo_path = Path(COMPANY_INFO['logo_path'])
@@ -198,6 +197,8 @@ class PDFGenerator:
                     STATIC_DIR / "logo.png",
                     BASE_DIR / "static" / "images" / "logo.png",
                     BASE_DIR / "static" / "logo.png",
+                    Path("/app/static/images/logo.png"),  # For Render deployment
+                    Path("/app/static/logo.png"),  # For Render deployment
                 ]
                 
                 for path in possible_paths:
@@ -208,12 +209,50 @@ class PDFGenerator:
                         logger.info(f"✅ Logo loaded from {path}")
                         return True
                 
-                logger.warning("❌ Logo file not found in any expected location")
-                return False
+                # Try to create a placeholder logo
+                logger.warning("❌ Logo file not found in any expected location, creating placeholder")
+                self._create_placeholder_logo()
+                return True
                 
         except Exception as e:
             logger.warning(f"⚠️ Could not load logo: {e}")
-            return False
+            self._create_placeholder_logo()
+            return True
+    
+    def _create_placeholder_logo(self):
+        """Create a placeholder logo if real logo is not found"""
+        try:
+            from reportlab.lib.utils import ImageReader
+            from PIL import Image, ImageDraw, ImageFont
+            import io
+            
+            # Create a simple image with text
+            img = Image.new('RGB', (200, 100), color=(26, 35, 126))  # Dark blue background
+            draw = ImageDraw.Draw(img)
+            
+            # Try to use a font
+            try:
+                font = ImageFont.truetype("arial.ttf", 24)
+            except:
+                font = ImageFont.load_default()
+            
+            # Draw text
+            draw.text((10, 10), "MCN", fill=(255, 255, 255), font=font)
+            draw.text((10, 50), "Marshal Core", fill=(255, 255, 255), font=font)
+            
+            # Convert to bytes
+            img_bytes = io.BytesIO()
+            img.save(img_bytes, format='PNG')
+            img_bytes.seek(0)
+            
+            self.logo_image = img_bytes
+            self.logo_bytes = img_bytes.getvalue()
+            logger.info("✅ Created placeholder logo")
+            
+        except Exception as e:
+            logger.error(f"Failed to create placeholder logo: {e}")
+            self.logo_image = None
+            self.logo_bytes = None
     
     def _generate_filename(self, user_id: str, document_type: str) -> str:
         """Generate unique filename for PDF"""
@@ -789,37 +828,63 @@ class PDFGenerator:
                 textColor=colors.black
             )
             
-            # ✅ ADD PASSPORT PHOTO SECTION
-            passport_path = applicant_data.get('passport_photo')
+            # ✅ ADD PASSPORT PHOTO SECTION - FIXED
+            passport_path = applicant_data.get('passport_path')  # ✅ FIXED: Use passport_path
             passport_available = False
+            passport_image = None
             
-            if passport_path and os.path.exists(passport_path):
-                try:
-                    # Create a table for passport photo layout
-                    passport_data = [
-                        [Paragraph("<b>PASSPORT PHOTO</b>", field_label_style)],
-                        [Image(passport_path, width=1.5*inch, height=2*inch)]
+            if passport_path:
+                # Try to resolve absolute path
+                absolute_path = None
+                
+                # Check if it's already an absolute path
+                if os.path.isabs(passport_path):
+                    absolute_path = passport_path
+                else:
+                    # Try relative paths
+                    possible_paths = [
+                        passport_path,
+                        os.path.join(UPLOADS_DIR, passport_path),
+                        os.path.join(STATIC_DIR, passport_path),
+                        os.path.join(BASE_DIR, passport_path),
                     ]
                     
-                    passport_table = Table(passport_data, colWidths=[2*inch])
-                    passport_table.setStyle(TableStyle([
-                        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                        ('BOX', (0, 0), (-1, -1), 1, colors.grey),
-                        ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
-                    ]))
-                    
-                    story.append(passport_table)
-                    story.append(Spacer(1, 12))
-                    passport_available = True
-                    logger.info("✅ Passport photo added to application form")
-                    
-                except Exception as e:
-                    logger.warning(f"Could not add passport photo to PDF: {e}")
-                    story.append(Paragraph("<b>Passport Photo:</b> [File exists but could not be embedded]", normal_style))
+                    for path in possible_paths:
+                        if os.path.exists(path):
+                            absolute_path = path
+                            break
+                
+                if absolute_path and os.path.exists(absolute_path):
+                    try:
+                        # Create a table for passport photo layout
+                        passport_data = [
+                            [Paragraph("<b>PASSPORT PHOTO</b>", field_label_style)],
+                            [Image(absolute_path, width=1.5*inch, height=2*inch)]
+                        ]
+                        
+                        passport_table = Table(passport_data, colWidths=[2*inch])
+                        passport_table.setStyle(TableStyle([
+                            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                            ('BOX', (0, 0), (-1, -1), 1, colors.grey),
+                            ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+                        ]))
+                        
+                        story.append(passport_table)
+                        story.append(Spacer(1, 12))
+                        passport_available = True
+                        logger.info(f"✅ Passport photo added to application form from: {absolute_path}")
+                        
+                    except Exception as e:
+                        logger.warning(f"Could not add passport photo to PDF: {e}")
+                        story.append(Paragraph("<b>Passport Photo:</b> [File exists but could not be embedded]", normal_style))
+                        story.append(Spacer(1, 12))
+                else:
+                    logger.warning(f"Passport path not found: {passport_path}")
+                    story.append(Paragraph("<b>Passport Photo:</b> [Not Available]", normal_style))
                     story.append(Spacer(1, 12))
             else:
-                story.append(Paragraph("<b>Passport Photo:</b> [Not Available]", normal_style))
+                story.append(Paragraph("<b>Passport Photo:</b> [Not Uploaded]", normal_style))
                 story.append(Spacer(1, 12))
             
             # Title

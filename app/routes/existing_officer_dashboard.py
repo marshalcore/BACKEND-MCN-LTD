@@ -309,7 +309,8 @@ async def generate_pdfs_from_dashboard(
     db: Session = Depends(get_db)
 ):
     """
-    Generate PDFs for the logged-in officer from dashboard.
+    ✅ FIXED: Generate PDFs for the logged-in officer from dashboard.
+    This endpoint has no URL parameter, only uses JWT token for authorization.
     """
     try:
         officer_id = current_officer.get("officer_id")

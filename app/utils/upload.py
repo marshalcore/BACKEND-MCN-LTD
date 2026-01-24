@@ -1,4 +1,3 @@
-# app/utils/upload.py
 import os
 from fastapi import UploadFile, HTTPException
 from uuid import uuid4
@@ -10,6 +9,16 @@ UPLOAD_DIR = "static/uploads"
 # Allowed file types and sizes
 ALLOWED_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.pdf'}
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
+
+
+def normalize_officer_id(officer_id: str) -> str:
+    """
+    Normalize officer ID for file paths (replace / with -)
+    
+    Example: "MCN/001B/001" → "MCN-001B-001"
+    """
+    return officer_id.replace("/", "-").replace("\\", "-")
+
 
 def validate_file(file: UploadFile) -> None:
     """Validate uploaded file"""

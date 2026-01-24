@@ -27,7 +27,7 @@ from app.services.existing_officer_service import ExistingOfficerService
 from app.services.pdf_service import PDFService
 from app.services.email_service import send_existing_officer_pdfs_email, send_existing_officer_welcome_email
 from app.utils.jwt_handler import create_access_token
-from app.utils.upload import save_upload
+from app.utils.upload import save_upload, normalize_officer_id  # ✅ ADD normalize_officer_id
 
 
 logger = logging.getLogger(__name__)
@@ -182,7 +182,7 @@ async def register_existing_officer(
         logger.warning(f"HTTP Exception in register: {he.detail}")
         raise he
     except Exception as e:
-        logger.error(f"Error registering officer: {str(e)}", exc_info=True)
+        logger.error(f"Error registering officer: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to register officer: {str(e)}"
@@ -272,8 +272,9 @@ async def upload_document(
                 detail=f"File size {file_size/1024/1024:.2f}MB exceeds maximum size of {size_mb}MB"
             )
         
-        # Save upload with new structure
-        subfolder = f"existing_officers/{officer_id}/{document_type}"
+        # Save upload with new structure - using normalized officer ID
+        normalized_officer_id = normalize_officer_id(officer_id)
+        subfolder = f"existing_officers/{normalized_officer_id}/{document_type}"
         file_path = save_upload(file, subfolder)
         
         # Update officer record
@@ -439,7 +440,7 @@ async def login_existing_officer(
     
     if not officer:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
+            status_code=status.HTTP_401_UNAIZED,
             detail="Invalid credentials"
         )
     
@@ -483,7 +484,13 @@ async def login_existing_officer(
         "category": officer.category
     }
 
-async def generate_pdfs_for_officer(
+@router.post(
+    "/{officer_id}/generate-pdfs",
+    response_model=PDFGenerationResponse,
+    summary="Manually trigger PDF generation",
+    status_code=status.HTTP_202_ACCEPTED
+)
+async def generate_pdfs_for_officer_route(
     officer_id: str,
     background_tasks: BackgroundTasks,
     current_officer: dict = Depends(get_current_existing_officer_dict),
@@ -514,12 +521,14 @@ async def generate_pdfs_for_officer(
         )
     
     # Check if all required documents are uploaded (NEW: only 2 required)
-    required_docs = ['passport_uploaded', 'consolidated_pdf_uploaded']
-    missing_docs = []
+    passport_uploaded = officer.passport_uploaded
+    consolidated_uploaded = officer.consolidated_pdf_uploaded
     
-    for doc in required_docs:
-        if not getattr(officer, doc, False):
-            missing_docs.append(doc.replace('_uploaded', '').replace('_', ' ').title())
+    missing_docs = []
+    if not passport_uploaded:
+        missing_docs.append("Passport Photo")
+    if not consolidated_uploaded:
+        missing_docs.append("Consolidated PDF")
     
     if missing_docs:
         raise HTTPException(
@@ -695,9 +704,8 @@ async def get_passport_photo(
     db: Session = Depends(get_db)
 ):
     """
-    Get passport photo URL for an officer
-    
-    ✅ This endpoint is called by the frontend to display passport photo
+    ✅ FIXED: Get passport photo URL for an officer
+    Uses normalized paths for officer IDs with slashes
     """
     try:
         # Verify the officer is accessing their own data
@@ -718,30 +726,49 @@ async def get_passport_photo(
             )
         
         # Check if passport exists
-        if not officer.passport_path or not os.path.exists(officer.passport_path):
+        if not officer.passport_path:
             return {
                 "passport_url": None,
                 "has_passport": False,
                 "message": "Passport photo not uploaded"
             }
         
-        # Get the filename
+        # Get normalized officer ID for URL
+        normalized_officer_id = normalize_officer_id(officer_id)
+        
+        # Get the filename from the path
         passport_filename = os.path.basename(officer.passport_path)
         
-        # Construct URL - match the upload structure in upload_document endpoint
+        # ✅ FIXED: Construct URL with normalized officer ID
         base_url = "https://backend-mcn-ltd.onrender.com"
-        passport_url = f"{base_url}/static/uploads/existing_officers/{officer_id}/passport/{passport_filename}"
+        passport_url = f"{base_url}/static/uploads/existing_officers/{normalized_officer_id}/passport/{passport_filename}"
         
-        # Also provide relative path for direct file access
-        relative_path = officer.passport_path
+        # Also check if file exists physically
+        file_exists = False
+        file_size = 0
+        
+        # Check multiple possible locations
+        possible_paths = [
+            officer.passport_path,  # Original path from database
+            f"static/uploads/existing_officers/{normalized_officer_id}/passport/{passport_filename}",
+            f"static/uploads/existing_officers/{officer_id}/passport/{passport_filename}".replace('/', '-'),  # Original with hyphens
+        ]
+        
+        for path in possible_paths:
+            if os.path.exists(path):
+                file_exists = True
+                file_size = os.path.getsize(path)
+                break
         
         return {
             "passport_url": passport_url,
-            "relative_path": relative_path,
+            "relative_path": officer.passport_path,
             "filename": passport_filename,
-            "has_passport": True,
-            "upload_date": officer.updated_at,  # Use updated_at as upload timestamp
-            "file_size": os.path.getsize(officer.passport_path) if os.path.exists(officer.passport_path) else 0
+            "has_passport": file_exists,
+            "upload_date": officer.updated_at,
+            "file_size": file_size,
+            "officer_id": officer_id,
+            "normalized_officer_id": normalized_officer_id
         }
         
     except HTTPException as he:
@@ -793,11 +820,12 @@ async def get_main_dashboard(
             reg_filename = os.path.basename(officer.registration_pdf_path)
             pdf_download_urls["registration"] = f"{base_url}/download/pdf/{reg_filename}"
         
-        # Check passport URL
+        # Check passport URL with normalized ID
         passport_url = None
-        if officer.passport_path and os.path.exists(officer.passport_path):
+        if officer.passport_path:
             passport_filename = os.path.basename(officer.passport_path)
-            passport_url = f"{base_url}/static/uploads/existing_officers/{officer_id}/passport/{passport_filename}"
+            normalized_officer_id = normalize_officer_id(officer_id)
+            passport_url = f"{base_url}/static/uploads/existing_officers/{normalized_officer_id}/passport/{passport_filename}"
         
         return {
             "officer_id": officer.officer_id,
@@ -849,9 +877,6 @@ async def get_main_dashboard(
 
 
 # ==================== FIX PDF GENERATION ENDPOINT ====================
-
-# Your existing generate_pdfs_for_officer function is missing the route decorator
-# Fix it by adding the decorator:
 
 @router.post(
     "/{officer_id}/generate-pdfs",
@@ -927,159 +952,3 @@ async def generate_pdfs_for_officer(
             "pdf_download_url": f"/pdf/existing/{officer_id}"
         }
     )
-
-@router.get(
-    "/passport/{officer_id}",
-    summary="Get passport photo for officer",
-    response_model=dict
-)
-async def get_passport_photo(
-    officer_id: str,
-    current_officer: dict = Depends(get_current_existing_officer_dict),
-    db: Session = Depends(get_db)
-):
-    """
-    Get passport photo URL for an officer
-    """
-    try:
-        # Verify the officer is accessing their own data
-        if current_officer.get("officer_id") != officer_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not authorized to access this officer's data"
-            )
-        
-        officer = db.query(ExistingOfficer).filter(
-            ExistingOfficer.officer_id == officer_id
-        ).first()
-        
-        if not officer:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Officer not found"
-            )
-        
-        # Check if passport exists
-        if not officer.passport_path:
-            return {
-                "passport_url": None,
-                "has_passport": False,
-                "message": "Passport photo not uploaded"
-            }
-        
-        # Get the filename
-        passport_filename = os.path.basename(officer.passport_path)
-        
-        # Construct URL - match the upload structure
-        base_url = "https://backend-mcn-ltd.onrender.com"
-        passport_url = f"{base_url}/static/uploads/existing_officers/{officer_id}/passport/{passport_filename}"
-        
-        return {
-            "passport_url": passport_url,
-            "has_passport": True,
-            "filename": passport_filename,
-            "upload_date": officer.updated_at,
-            "file_size": os.path.getsize(officer.passport_path) if os.path.exists(officer.passport_path) else 0
-        }
-        
-    except HTTPException as he:
-        raise he
-    except Exception as e:
-        logger.error(f"Error getting passport photo: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to get passport photo"
-        )
-
-
-# ==================== MAIN DASHBOARD ENDPOINT ====================
-
-@router.get(
-    "/dashboard/main",
-    summary="Get main dashboard data",
-    response_model=dict
-)
-async def get_main_dashboard(
-    current_officer: dict = Depends(get_current_existing_officer_dict),
-    db: Session = Depends(get_db)
-):
-    """
-    Get main dashboard data for the frontend
-    """
-    try:
-        officer_id = current_officer.get("officer_id")
-        officer = db.query(ExistingOfficer).filter(
-            ExistingOfficer.officer_id == officer_id
-        ).first()
-        
-        if not officer:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Officer not found"
-            )
-        
-        base_url = "https://backend-mcn-ltd.onrender.com"
-        
-        # Check PDF download URLs
-        pdf_download_urls = {}
-        if officer.terms_pdf_path and os.path.exists(officer.terms_pdf_path):
-            terms_filename = os.path.basename(officer.terms_pdf_path)
-            pdf_download_urls["terms"] = f"{base_url}/download/pdf/{terms_filename}"
-        
-        if officer.registration_pdf_path and os.path.exists(officer.registration_pdf_path):
-            reg_filename = os.path.basename(officer.registration_pdf_path)
-            pdf_download_urls["registration"] = f"{base_url}/download/pdf/{reg_filename}"
-        
-        # Check passport URL
-        passport_url = None
-        if officer.passport_path and os.path.exists(officer.passport_path):
-            passport_filename = os.path.basename(officer.passport_path)
-            passport_url = f"{base_url}/static/uploads/existing_officers/{officer_id}/passport/{passport_filename}"
-        
-        return {
-            "officer_id": officer.officer_id,
-            "full_name": officer.full_name,
-            "email": officer.email,
-            "phone": officer.phone,
-            "rank": officer.rank,
-            "position": officer.position,
-            "category": officer.category,
-            "date_of_enlistment": officer.date_of_enlistment,
-            "date_of_promotion": officer.date_of_promotion,
-            "residential_address": officer.residential_address,
-            "is_verified": officer.is_verified,
-            "is_active": officer.is_active,
-            "status": officer.status,
-            "created_at": officer.created_at,
-            "last_login": officer.last_login,
-            
-            # Document status
-            "passport_uploaded": officer.passport_uploaded,
-            "consolidated_pdf_uploaded": officer.consolidated_pdf_uploaded,
-            "passport_url": passport_url,
-            
-            # PDF status
-            "terms_pdf_generated": bool(officer.terms_pdf_path),
-            "registration_pdf_generated": bool(officer.registration_pdf_path),
-            "pdf_download_urls": pdf_download_urls,
-            
-            # Status summaries
-            "profile_status": "complete",
-            "document_status": "complete" if (officer.passport_uploaded and officer.consolidated_pdf_uploaded) 
-                              else "partial" if (officer.passport_uploaded or officer.consolidated_pdf_uploaded)
-                              else "none",
-            "pdf_status": "complete" if (officer.terms_pdf_path and officer.registration_pdf_path) 
-                          else "partial" if (officer.terms_pdf_path or officer.registration_pdf_path)
-                          else "none",
-            "account_status": officer.status if officer.status else "pending",
-            "verification_status": "verified" if officer.is_verified else "pending"
-        }
-        
-    except HTTPException as he:
-        raise he
-    except Exception as e:
-        logger.error(f"Error fetching main dashboard: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to fetch dashboard data"
-        )

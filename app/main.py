@@ -153,6 +153,96 @@ for router in routers:
     app.include_router(router)
     logger.info(f"Included router: {router.prefix}")
 
+# ==================== MIDDLEWARE FOR NORMALIZED FILE PATHS ====================
+
+@app.middleware("http")
+async def normalize_static_paths(request: Request, call_next):
+    """
+    Middleware to normalize static file paths for officer IDs with slashes
+    
+    This handles the case where officer IDs contain slashes (e.g., MCN/001B/001)
+    and converts them to hyphens for file system compatibility.
+    """
+    path = request.url.path
+    
+    # Check if it's a static uploads path with existing_officers
+    if '/static/uploads/existing_officers/' in path:
+        logger.info(f"🔄 Processing static path: {path}")
+        
+        # Extract officer ID from path and normalize it
+        parts = path.split('/')
+        
+        # Find the index of 'existing_officers' in the path
+        try:
+            existing_officers_index = parts.index('existing_officers')
+            if existing_officers_index + 1 < len(parts):
+                officer_id = parts[existing_officers_index + 1]
+                
+                # Check if officer ID has slashes (e.g., MCN/001B/001)
+                if '/' in officer_id or '\\' in officer_id:
+                    logger.info(f"🔄 Found officer ID with slashes: {officer_id}")
+                    
+                    # Normalize the officer ID (replace slashes with hyphens)
+                    normalized_id = officer_id.replace('/', '-').replace('\\', '-')
+                    parts[existing_officers_index + 1] = normalized_id
+                    new_path = '/'.join(parts)
+                    
+                    # Construct the full file path for normalized version
+                    normalized_relative_path = new_path.replace('/static/', '')
+                    normalized_full_path = os.path.join(STATIC_DIR, normalized_relative_path)
+                    
+                    # Check if normalized file exists
+                    if os.path.exists(normalized_full_path):
+                        logger.info(f"✅ Serving normalized path: {new_path}")
+                        logger.info(f"   File exists at: {normalized_full_path}")
+                        
+                        # Determine file extension for proper content type
+                        if normalized_full_path.endswith('.jpg') or normalized_full_path.endswith('.jpeg'):
+                            media_type = 'image/jpeg'
+                        elif normalized_full_path.endswith('.png'):
+                            media_type = 'image/png'
+                        elif normalized_full_path.endswith('.pdf'):
+                            media_type = 'application/pdf'
+                        else:
+                            media_type = 'application/octet-stream'
+                        
+                        # Return the file response directly
+                        return FileResponse(
+                            normalized_full_path,
+                            media_type=media_type,
+                            headers={
+                                'Access-Control-Allow-Origin': '*',
+                                'Cache-Control': 'public, max-age=3600'
+                            }
+                        )
+                    else:
+                        logger.warning(f"⚠️ Normalized file not found: {normalized_full_path}")
+                        
+                        # Try the original path as well (for backward compatibility)
+                        original_relative_path = path.replace('/static/', '')
+                        original_full_path = os.path.join(STATIC_DIR, original_relative_path)
+                        
+                        if os.path.exists(original_full_path):
+                            logger.info(f"✅ Serving original path (backward compatibility): {path}")
+                            response = await call_next(request)
+                            return response
+                        else:
+                            logger.error(f"❌ Both normalized and original files not found")
+                            logger.error(f"   Normalized: {normalized_full_path}")
+                            logger.error(f"   Original: {original_full_path}")
+        
+        except ValueError:
+            # 'existing_officers' not found in path
+            pass
+        except Exception as e:
+            logger.error(f"❌ Error in normalize_static_paths middleware: {e}")
+    
+    # Continue with normal request processing
+    response = await call_next(request)
+    return response
+
+# ==================== END MIDDLEWARE ====================
+
 # Root endpoint with HEAD support
 @app.get("/", include_in_schema=False)
 @app.head("/", include_in_schema=False)
@@ -181,7 +271,6 @@ async def root():
     }
 
 # File download route with CORS support
-# File download route with CORS support - IMPROVED VERSION
 @app.get("/download/pdf/{filename}", tags=["Public Downloads"])
 async def download_pdf(filename: str, request: Request):
     """
@@ -293,7 +382,6 @@ async def download_pdf(filename: str, request: Request):
     return response
 
 # PDF Preview endpoint
-# PDF Preview endpoint - IMPROVED VERSION
 @app.get("/preview/pdf/{filename}", tags=["Public Downloads"])
 async def preview_pdf(filename: str, request: Request):
     """
@@ -647,14 +735,34 @@ async def startup_event():
     logger.info(f"📁 Static directory: {STATIC_DIR}")
     logger.info(f"🌐 CORS enabled for origins: {origins}")
     
-    # Create necessary directories
+    # Create necessary directories - UPDATED FOR NORMALIZED PATHS
     directories_to_create = [
+        # PDF directories
         os.path.join(STATIC_DIR, "pdfs"),
         os.path.join(STATIC_DIR, "pdfs", "terms"),
         os.path.join(STATIC_DIR, "pdfs", "applications"),
+        
+        # Upload directories for existing officers (with normalized structure)
         os.path.join(STATIC_DIR, "uploads", "existing_officers"),
+        
+        # Create nested directories for potential normalized officer IDs
+        # This ensures directories exist for both formats
+        os.path.join(STATIC_DIR, "uploads", "existing_officers", "MCN-001B-001", "passport"),
+        os.path.join(STATIC_DIR, "uploads", "existing_officers", "MCN-001B-001", "consolidated_pdf"),
+        os.path.join(STATIC_DIR, "uploads", "existing_officers", "MCN-001-031", "passport"),
+        os.path.join(STATIC_DIR, "uploads", "existing_officers", "MCN-001-031", "consolidated_pdf"),
+        os.path.join(STATIC_DIR, "uploads", "existing_officers", "MBT-A01-456", "passport"),
+        os.path.join(STATIC_DIR, "uploads", "existing_officers", "MBT-A01-456", "consolidated_pdf"),
+        os.path.join(STATIC_DIR, "uploads", "existing_officers", "MBC-123A-789", "passport"),
+        os.path.join(STATIC_DIR, "uploads", "existing_officers", "MBC-123A-789", "consolidated_pdf"),
+        
+        # Template directories
         os.path.join(BASE_DIR, "templates", "pdf"),
-        os.path.join(BASE_DIR, "templates", "email")
+        os.path.join(BASE_DIR, "templates", "email"),
+        
+        # Image directories
+        os.path.join(STATIC_DIR, "images"),
+        os.path.join(STATIC_DIR, "images", "logo"),
     ]
     
     for directory in directories_to_create:
@@ -681,6 +789,11 @@ async def startup_event():
     except ImportError:
         logger.warning("⚠ ReportLab is not installed. PDF generation will fail.")
         logger.info("  Install with: pip install reportlab pillow")
+    
+    # Log normalized paths middleware status
+    logger.info("✅ Normalized static paths middleware enabled")
+    logger.info("   Officer IDs with slashes (MCN/001B/001) will be normalized to hyphens (MCN-001B-001)")
+    logger.info("   This fixes passport photo 404 errors for existing officers")
     
     # Add Render status endpoint
     @app.get("/api/health/render-status", tags=["Health Check"], include_in_schema=False)
@@ -713,11 +826,57 @@ async def startup_event():
             "message": "Service is awake and responsive. Keep-alive service prevents sleeping on Render free tier."
         }
     
+    # Add normalized paths test endpoint
+    @app.get("/api/debug/normalized-paths", tags=["Debug"], include_in_schema=False)
+    async def debug_normalized_paths():
+        """
+        Debug endpoint to test normalized path resolution
+        """
+        import glob
+        
+        test_officer_ids = ["MCN/001B/001", "MCN-001B-001", "MCN/001/031", "MCN-001-031"]
+        
+        results = {}
+        for officer_id in test_officer_ids:
+            normalized_id = officer_id.replace('/', '-').replace('\\', '-')
+            
+            # Check passport directories
+            passport_path_pattern = os.path.join(STATIC_DIR, "uploads", "existing_officers", "*", "passport", "*")
+            all_passport_files = glob.glob(passport_path_pattern)
+            
+            matching_passports = []
+            for file_path in all_passport_files:
+                if normalized_id in file_path or officer_id in file_path:
+                    matching_passports.append(os.path.relpath(file_path, STATIC_DIR))
+            
+            # Check consolidated PDF directories
+            pdf_path_pattern = os.path.join(STATIC_DIR, "uploads", "existing_officers", "*", "consolidated_pdf", "*")
+            all_pdf_files = glob.glob(pdf_path_pattern)
+            
+            matching_pdfs = []
+            for file_path in all_pdf_files:
+                if normalized_id in file_path or officer_id in file_path:
+                    matching_pdfs.append(os.path.relpath(file_path, STATIC_DIR))
+            
+            results[officer_id] = {
+                "normalized_id": normalized_id,
+                "passport_files": matching_passports,
+                "pdf_files": matching_pdfs,
+                "has_passport": len(matching_passports) > 0,
+                "has_pdf": len(matching_pdfs) > 0
+            }
+        
+        return {
+            "normalized_paths_middleware": "enabled",
+            "static_dir": STATIC_DIR,
+            "test_results": results,
+            "message": "Normalized paths middleware handles officer IDs with slashes"
+        }
+    
     # Log loaded routers
     logger.info("✅ Server is ready to handle requests")
 
 # Start keep-alive service AFTER server is fully started
-# In app/main.py - update the delayed_startup function
 @app.on_event("startup")
 async def delayed_startup():
     """
@@ -786,6 +945,63 @@ async def debug_pdf_files():
         "pdf_files_count": len(pdf_files),
         "pdf_files": pdf_files,
         "static_dir": STATIC_DIR
+    }
+
+@app.get("/debug/upload-files", include_in_schema=False)
+async def debug_upload_files():
+    """
+    Debug endpoint to see what upload files exist on the server
+    """
+    import glob
+    
+    upload_files = []
+    
+    # Search for upload files recursively
+    upload_pattern = os.path.join(STATIC_DIR, "uploads", "**", "*")
+    
+    for file_path in glob.glob(upload_pattern, recursive=True):
+        if os.path.isfile(file_path):
+            relative_path = os.path.relpath(file_path, STATIC_DIR)
+            
+            # Get file info
+            try:
+                file_size = os.path.getsize(file_path)
+                file_ext = os.path.splitext(file_path)[1].lower()
+                
+                upload_files.append({
+                    "filename": os.path.basename(file_path),
+                    "path": relative_path,
+                    "full_path": file_path,
+                    "size": file_size,
+                    "extension": file_ext,
+                    "exists": True
+                })
+            except:
+                pass
+    
+    # Group by officer ID for easier analysis
+    officer_files = {}
+    for file_info in upload_files:
+        path = file_info['path']
+        if 'existing_officers' in path:
+            # Extract officer ID from path
+            parts = path.split('/')
+            try:
+                officer_index = parts.index('existing_officers')
+                if officer_index + 1 < len(parts):
+                    officer_id = parts[officer_index + 1]
+                    if officer_id not in officer_files:
+                        officer_files[officer_id] = []
+                    officer_files[officer_id].append(file_info)
+            except ValueError:
+                pass
+    
+    return {
+        "upload_files_count": len(upload_files),
+        "upload_files_sample": upload_files[:20],  # Limit to first 20 files
+        "officer_files": officer_files,
+        "static_dir": STATIC_DIR,
+        "message": f"Found {len(upload_files)} upload files, {len(officer_files)} unique officer IDs"
     }
 
 if __name__ == "__main__":

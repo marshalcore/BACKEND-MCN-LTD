@@ -1,4 +1,3 @@
-# app/routes/officer_auth.py
 from fastapi import APIRouter, Depends, HTTPException, status, Request, BackgroundTasks
 from sqlalchemy.orm import Session, Load, undefer
 from datetime import timedelta, datetime
@@ -15,7 +14,8 @@ from app.models.verification_code import VerificationCode
 from app.schemas.officer import OfficerSignup, OfficerLogin, OfficerResponse, OfficerSignupResponse
 from app.schemas.token import Token, TokenData
 from app.utils.hash import hash_password, verify_password
-from app.utils.token import get_current_officer, decode_access_token, generate_otp, store_verification_code, verify_otp
+from app.auth.dependencies import get_current_officer  # This exists in your dependencies.py
+from app.utils.token import decode_access_token, generate_otp, store_verification_code, verify_otp
 from app.config import settings
 from app.services.email_service import send_otp_email
 from app.schemas.officer import VerifyOTPResponse
