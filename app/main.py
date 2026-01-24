@@ -761,6 +761,33 @@ async def shutdown_event():
     except Exception as e:
         logger.error(f"Error stopping keep-alive: {e}")
 
+@app.get("/debug/pdf-files", include_in_schema=False)
+async def debug_pdf_files():
+    """
+    Debug endpoint to see what PDF files exist on the server
+    """
+    pdf_files = []
+
+    # Search for PDF files recursively
+    for root, dirs, files in os.walk(STATIC_DIR):
+        for file in files:
+            if file.lower().endswith('.pdf'):
+                full_path = os.path.join(root, file)
+                relative_path = os.path.relpath(full_path, STATIC_DIR)
+                pdf_files.append({
+                    "filename": file,
+                    "path": relative_path,
+                    "full_path": full_path,
+                    "size": os.path.getsize(full_path),
+                    "exists": True
+                })
+
+    return {
+        "pdf_files_count": len(pdf_files),
+        "pdf_files": pdf_files,
+        "static_dir": STATIC_DIR
+    }
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(

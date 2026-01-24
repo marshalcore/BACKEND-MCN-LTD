@@ -960,7 +960,7 @@ async def get_passport_photo(
             )
         
         # Check if passport exists
-        if not officer.passport_path or not os.path.exists(officer.passport_path):
+        if not officer.passport_path:
             return {
                 "passport_url": None,
                 "has_passport": False,
