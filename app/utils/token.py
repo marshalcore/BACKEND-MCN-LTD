@@ -13,6 +13,7 @@ from jose import JWTError, jwt
 from app.database import get_db
 from app.models.officer import Officer
 from app.config import settings
+from app.models.verification_code import VerificationCode  # ADDED
 
 logger = logging.getLogger(__name__)
 
@@ -108,44 +109,72 @@ def generate_otp(length: int = 6) -> str:
     digits = "0123456789"
     return ''.join(secrets.choice(digits) for _ in range(length))
 
-def store_verification_code(email: str, otp: str, purpose: str = "password_reset") -> None:
+def store_verification_code(db: Session, email: str, code: str, purpose: str) -> None:
     """
-    Store OTP for verification
+    Store OTP for verification in database
     """
-    key = f"{email}:{purpose}"
-    otp_store[key] = {
-        "otp": otp,
-        "created_at": datetime.utcnow(),
-        "purpose": purpose
-    }
-    logger.info(f"OTP stored for {email} ({purpose})")
+    try:
+        # First, delete any existing OTPs for this email and purpose
+        db.query(VerificationCode).filter(
+            VerificationCode.email == email,
+            VerificationCode.purpose == purpose
+        ).delete()
+        
+        # Create new verification code
+        verification_code = VerificationCode(
+            email=email,
+            code=code,
+            purpose=purpose,
+            expires_at=datetime.utcnow() + timedelta(minutes=15)  # OTP expires in 15 minutes
+        )
+        
+        db.add(verification_code)
+        db.commit()
+        
+        logger.info(f"OTP stored in database for {email} ({purpose})")
+        
+    except Exception as e:
+        logger.error(f"Error storing OTP: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to store verification code"
+        )
 
-def verify_otp(email: str, otp: str, purpose: str = "password_reset") -> bool:
+def verify_otp(db: Session, email: str, code: str, purpose: str) -> bool:
     """
-    Verify OTP
+    Verify OTP from database
     """
-    key = f"{email}:{purpose}"
-    
-    if key not in otp_store:
-        logger.warning(f"No OTP found for {email} ({purpose})")
+    try:
+        # Find the verification code
+        verification_code = db.query(VerificationCode).filter(
+            VerificationCode.email == email,
+            VerificationCode.purpose == purpose
+        ).first()
+        
+        if not verification_code:
+            logger.warning(f"No OTP found for {email} ({purpose})")
+            return False
+        
+        # Check if OTP is expired
+        if verification_code.expires_at < datetime.utcnow():
+            logger.warning(f"OTP expired for {email}")
+            db.delete(verification_code)
+            db.commit()
+            return False
+        
+        # Verify OTP
+        if verification_code.code == code:
+            logger.info(f"OTP verified for {email} ({purpose})")
+            db.delete(verification_code)  # Remove OTP after successful verification
+            db.commit()
+            return True
+        
+        logger.warning(f"Invalid OTP for {email}")
         return False
-    
-    otp_data = otp_store[key]
-    
-    # Check if OTP is expired (10 minutes)
-    if (datetime.utcnow() - otp_data["created_at"]).total_seconds() > 600:
-        logger.warning(f"OTP expired for {email}")
-        del otp_store[key]
+        
+    except Exception as e:
+        logger.error(f"Error verifying OTP: {e}")
         return False
-    
-    # Verify OTP
-    if otp_data["otp"] == otp:
-        logger.info(f"OTP verified for {email} ({purpose})")
-        del otp_store[key]  # Remove OTP after successful verification
-        return True
-    
-    logger.warning(f"Invalid OTP for {email}")
-    return False
 
 # ==================== PASSWORD FUNCTIONS ====================
 

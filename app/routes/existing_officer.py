@@ -27,7 +27,7 @@ from app.services.existing_officer_service import ExistingOfficerService
 from app.services.pdf_service import PDFService
 from app.services.email_service import send_existing_officer_pdfs_email, send_existing_officer_welcome_email
 from app.utils.jwt_handler import create_access_token
-from app.utils.upload import save_upload, normalize_officer_id  # ✅ ADD normalize_officer_id
+from app.utils.upload import save_upload, normalize_officer_id
 
 
 logger = logging.getLogger(__name__)
@@ -140,7 +140,6 @@ async def register_existing_officer(
         # ✅ CRITICAL FIX: AUTO-GENERATE PDFs AND SEND EMAIL IN BACKGROUND
         # Import the function here to avoid circular imports
         from app.utils.pdf import generate_existing_officer_pdfs_and_email
-        
         
         background_tasks.add_task(
             generate_existing_officer_pdfs_and_email,
@@ -440,7 +439,7 @@ async def login_existing_officer(
     
     if not officer:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAIZED,
+            status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials"
         )
     
@@ -483,81 +482,6 @@ async def login_existing_officer(
         "role": "existing_officer",
         "category": officer.category
     }
-
-@router.post(
-    "/{officer_id}/generate-pdfs",
-    response_model=PDFGenerationResponse,
-    summary="Manually trigger PDF generation",
-    status_code=status.HTTP_202_ACCEPTED
-)
-async def generate_pdfs_for_officer_route(
-    officer_id: str,
-    background_tasks: BackgroundTasks,
-    current_officer: dict = Depends(get_current_existing_officer_dict),
-    db: Session = Depends(get_db)
-):
-    """
-    Manually trigger PDF generation for existing officer.
-    
-    ✅ Generates:
-    1. Terms & Conditions PDF
-    2. Existing Officer Registration Form PDF (NEW template)
-    
-    ✅ Sends both via email immediately
-    ✅ Officer can also download from dashboard
-    """
-    # Verify the officer is accessing their own data
-    if current_officer.get("officer_id") != officer_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to generate PDFs for this officer"
-        )
-    
-    officer = ExistingOfficerService.get_officer_by_id(db, officer_id)
-    if not officer:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Officer not found"
-        )
-    
-    # Check if all required documents are uploaded (NEW: only 2 required)
-    passport_uploaded = officer.passport_uploaded
-    consolidated_uploaded = officer.consolidated_pdf_uploaded
-    
-    missing_docs = []
-    if not passport_uploaded:
-        missing_docs.append("Passport Photo")
-    if not consolidated_uploaded:
-        missing_docs.append("Consolidated PDF")
-    
-    if missing_docs:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Cannot generate PDFs. Missing required documents: {', '.join(missing_docs)}"
-        )
-    
-    # Generate PDFs in background
-    from app.utils.pdf import generate_existing_officer_pdfs_and_email
-    
-    background_tasks.add_task(
-        generate_existing_officer_pdfs_and_email,
-        officer_id=officer_id,
-        email=officer.email,
-        full_name=officer.full_name,
-        db=db
-    )
-    
-    return PDFGenerationResponse(
-        status="success",
-        message="PDF generation started. You will receive an email when completed.",
-        officer_id=officer_id,
-        email=officer.email,
-        email_sent=False,  # Will be sent by background task
-        download_urls={
-            "dashboard_url": f"/api/existing-officers/{officer_id}/dashboard",
-            "pdf_download_url": f"/pdf/existing/{officer_id}"
-        }
-    )
 
 
 @router.post(
@@ -692,6 +616,7 @@ async def debug_register_data(
             "status": "error",
             "message": str(e)
         }
+
 
 @router.get(
     "/passport/{officer_id}",
