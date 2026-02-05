@@ -1,4 +1,3 @@
-# app/routes/pre_register.py
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -6,6 +5,7 @@ from app.database import get_db
 from app.models.pre_applicant import PreApplicant
 from app.schemas.pre_applicant import PreApplicantCreate, PreApplicantStatusResponse
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 router = APIRouter(prefix="/pre-applicant", tags=["Pre Applicant"])
 
@@ -61,7 +61,8 @@ def register_pre_applicant(data: PreApplicantCreate, db: Session = Depends(get_d
     new_entry = PreApplicant(
         full_name=data.full_name,
         email=normalized_email,
-        status="created"
+        status="created",
+        created_at=datetime.now(ZoneInfo("UTC"))
     )
     
     db.add(new_entry)
@@ -75,3 +76,64 @@ def register_pre_applicant(data: PreApplicantCreate, db: Session = Depends(get_d
         email=normalized_email,
         pre_applicant_id=str(new_entry.id)
     )
+
+@router.post("/select-tier")
+async def select_application_tier(
+    email: str,
+    tier: str,  # 'regular' or 'vip'
+    db: Session = Depends(get_db)
+):
+    """Select application tier (Regular ₦5,180 or VIP ₦25,900)"""
+    normalized_email = email.strip().lower()
+    
+    if tier not in ["regular", "vip"]:
+        raise HTTPException(status_code=400, detail="Invalid tier. Must be 'regular' or 'vip'")
+    
+    pre_applicant = db.query(PreApplicant).filter(
+        func.lower(PreApplicant.email) == normalized_email
+    ).first()
+    
+    if not pre_applicant:
+        raise HTTPException(status_code=404, detail="Applicant not found")
+    
+    # Update tier selection
+    pre_applicant.selected_tier = tier
+    pre_applicant.tier_selected_at = datetime.now(ZoneInfo("UTC"))
+    pre_applicant.status = "tier_selected"
+    db.commit()
+    
+    # Return payment info
+    amount = 5180 if tier == "regular" else 25900
+    
+    return {
+        "status": "tier_selected",
+        "tier": tier,
+        "amount": amount,
+        "amount_display": f"₦{amount:,}",
+        "payment_reference": pre_applicant.payment_reference or "not_paid",
+        "next_step": "payment",
+        "payment_endpoint": "/api/payments/initiate"
+    }
+
+@router.get("/status/{email}")
+async def get_pre_applicant_status(email: str, db: Session = Depends(get_db)):
+    """Get pre-applicant status including tier selection"""
+    normalized_email = email.strip().lower()
+    
+    pre_applicant = db.query(PreApplicant).filter(
+        func.lower(PreApplicant.email) == normalized_email
+    ).first()
+    
+    if not pre_applicant:
+        raise HTTPException(status_code=404, detail="Applicant not found")
+    
+    return {
+        "full_name": pre_applicant.full_name,
+        "email": pre_applicant.email,
+        "has_paid": pre_applicant.has_paid,
+        "selected_tier": pre_applicant.selected_tier,
+        "tier_selected_at": pre_applicant.tier_selected_at.isoformat() if pre_applicant.tier_selected_at else None,
+        "privacy_accepted": pre_applicant.privacy_accepted,
+        "status": pre_applicant.status,
+        "created_at": pre_applicant.created_at.isoformat() if pre_applicant.created_at else None
+    }

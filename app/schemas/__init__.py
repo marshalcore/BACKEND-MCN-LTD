@@ -1,4 +1,4 @@
-# app/schemas/__init__.py
+# app/schemas/__init__.py - UPDATED
 from .officer import (
     OfficerSignup,
     OfficerLogin,
@@ -13,16 +13,32 @@ from .officer import (
 from .payment import (
     ManualPaymentRequest, 
     GatewayCallback,
-    PaymentCreate,  # NEW
-    PaymentVerify,  # NEW
-    PaymentCallback,  # NEW
-    PaymentType,  # NEW
-    UserType  # NEW
+    PaymentCreate,
+    PaymentVerify,
+    PaymentCallback,
+    PaymentType,
+    UserType
 )
 from .pre_applicant import (
     PreApplicantCreate,
     PreApplicantStatusResponse,
     PasswordValidationRequest
+)
+from .immediate_transfer import (
+    TransferRecipientType,
+    TransferStatus,
+    ImmediateTransferBase,
+    ImmediateTransferCreate,
+    ImmediateTransferUpdate,
+    ImmediateTransferResponse,
+    TransferRecipient,
+    ImmediateTransferConfig,
+    PaymentSplitConfig,
+    ProcessImmediateSplitsRequest,
+    RetryTransferRequest,
+    TransferHistoryFilters,
+    TransferSummary,
+    TransferHistoryResponse
 )
 
 __all__ = [
@@ -37,12 +53,27 @@ __all__ = [
     "ResetPasswordRequest",
     "ManualPaymentRequest",
     "GatewayCallback",
-    "PaymentCreate",  
-    "PaymentVerify",  
-    "PaymentCallback",  
-    "PaymentType",  
-    "UserType",  
+    "PaymentCreate",
+    "PaymentVerify",
+    "PaymentCallback",
+    "PaymentType",
+    "UserType",
     "PreApplicantCreate",
     "PreApplicantStatusResponse",
-    "PasswordValidationRequest"
+    "PasswordValidationRequest",
+    # Immediate Transfer Schemas
+    "TransferRecipientType",
+    "TransferStatus",
+    "ImmediateTransferBase",
+    "ImmediateTransferCreate",
+    "ImmediateTransferUpdate",
+    "ImmediateTransferResponse",
+    "TransferRecipient",
+    "ImmediateTransferConfig",
+    "PaymentSplitConfig",
+    "ProcessImmediateSplitsRequest",
+    "RetryTransferRequest",
+    "TransferHistoryFilters",
+    "TransferSummary",
+    "TransferHistoryResponse"
 ]

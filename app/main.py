@@ -1,3 +1,4 @@
+# app/main.py - UPDATED (add import and router)
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -30,6 +31,7 @@ logger.info(f"Resend API Key Set: {'Yes' if settings.RESEND_API_KEY else 'No'}")
 logger.info(f"Debug Mode: {settings.DEBUG}")
 logger.info(f"Running on Render: {settings.RENDER}")
 logger.info(f"Keep Alive Enabled: {settings.ENABLE_KEEP_ALIVE}")
+logger.info(f"Immediate Transfers Enabled: {settings.ENABLE_IMMEDIATE_TRANSFERS}")
 logger.info("=" * 50)
 
 # CORS Setup - Enhanced Configuration
@@ -86,7 +88,7 @@ def custom_openapi():
     openapi_schema = get_openapi(
         title=app.title,
         version="1.0.0",
-        description="Marshal Core API - Admin, Officer, and Applicant Management System",
+        description="Marshal Core API - Admin, Officer, and Applicant Management System with Immediate Payment Transfers",
         routes=app.routes,
     )
     
@@ -130,11 +132,12 @@ from app.routes.existing_officer import router as existing_officer_router
 from app.routes.existing_officer_dashboard import router as existing_officer_dashboard_router
 from app.routes.pdf_download import router as pdf_download_router
 from app.routes.health import router as health_router
+from app.routes.privacy import router as privacy_router
 
 # Include all routers
 routers = [
     pre_register_router,
-    payment_router,
+    payment_router,  # Includes immediate transfer endpoints
     application_access_router,
     application_form_router,
     form_submission_router,
@@ -146,7 +149,8 @@ routers = [
     existing_officer_router,               
     existing_officer_dashboard_router,     
     pdf_download_router,
-    health_router
+    health_router,
+    privacy_router, 
 ]
 
 for router in routers:
@@ -258,7 +262,7 @@ async def root():
             "/officer/* - Officer routes",
             "/api/existing-officers/* - Existing officers registration (no payment)",
             "/applicant/* - Applicant routes",
-            "/payment/* - Payment processing",
+            "/api/payments/* - Payment processing with immediate transfers",
             "/pdf/* - PDF document download and management",
             "/health - System health check",
             "/api/health - Enhanced health check with keep-alive"
@@ -266,7 +270,12 @@ async def root():
         "config_info": {
             "environment": "production" if not settings.DEBUG else "development",
             "token_expiry_minutes": settings.ACCESS_TOKEN_EXPIRE_MINUTES,
-            "running_on_render": settings.RENDER
+            "running_on_render": settings.RENDER,
+            "immediate_transfers_enabled": settings.ENABLE_IMMEDIATE_TRANSFERS,
+            "payment_amounts": {
+                "regular": f"₦{settings.REGULAR_APPLICATION_FEE:,}",
+                "vip": f"₦{settings.VIP_APPLICATION_FEE:,}"
+            }
         }
     }
 
@@ -458,7 +467,8 @@ async def health_check():
             "refresh_token_expiry_days": settings.REFRESH_TOKEN_EXPIRE_DAYS,
             "running_on_render": settings.RENDER,
             "keep_alive_enabled": settings.ENABLE_KEEP_ALIVE,
-            "paystack_test_mode": settings.PAYSTACK_TEST_MODE
+            "paystack_test_mode": settings.PAYSTACK_TEST_MODE,
+            "immediate_transfers_enabled": settings.ENABLE_IMMEDIATE_TRANSFERS
         }
     }
     
@@ -734,6 +744,8 @@ async def startup_event():
     logger.info("🚀 Marshal Core Backend starting up...")
     logger.info(f"📁 Static directory: {STATIC_DIR}")
     logger.info(f"🌐 CORS enabled for origins: {origins}")
+    logger.info(f"💰 Immediate Transfers: {'ENABLED' if settings.ENABLE_IMMEDIATE_TRANSFERS else 'DISABLED'}")
+    logger.info(f"💰 Payment Amounts - Regular: ₦{settings.REGULAR_APPLICATION_FEE:,}, VIP: ₦{settings.VIP_APPLICATION_FEE:,}")
     
     # Create necessary directories - UPDATED FOR NORMALIZED PATHS
     directories_to_create = [
@@ -790,6 +802,17 @@ async def startup_event():
         logger.warning("⚠ ReportLab is not installed. PDF generation will fail.")
         logger.info("  Install with: pip install reportlab pillow")
     
+    # Log immediate transfer service status
+    try:
+        from app.services.immediate_transfer import ImmediateTransferService
+        transfer_service = ImmediateTransferService()
+        logger.info("✓ Immediate transfer service initialized")
+        logger.info(f"  Test Mode: {'Yes' if transfer_service.test_mode else 'No'}")
+        logger.info(f"  DG Account: {settings.DG_ACCOUNT_NAME} - {settings.DG_ACCOUNT_NUMBER}")
+        logger.info(f"  eSTech Account: {settings.ESTECH_IMMEDIATE_ACCOUNT_NAME} - {settings.ESTECH_IMMEDIATE_ACCOUNT_NUMBER}")
+    except Exception as e:
+        logger.warning(f"⚠ Immediate transfer service initialization failed: {e}")
+    
     # Log normalized paths middleware status
     logger.info("✅ Normalized static paths middleware enabled")
     logger.info("   Officer IDs with slashes (MCN/001B/001) will be normalized to hyphens (MCN-001B-001)")
@@ -821,7 +844,8 @@ async def startup_event():
                 "keep_alive_enabled": settings.ENABLE_KEEP_ALIVE,
                 "keep_alive_interval_seconds": settings.KEEP_ALIVE_INTERVAL,
                 "running_on_render": settings.RENDER,
-                "render_external_url": settings.RENDER_EXTERNAL_URL
+                "render_external_url": settings.RENDER_EXTERNAL_URL,
+                "immediate_transfers_enabled": settings.ENABLE_IMMEDIATE_TRANSFERS
             },
             "message": "Service is awake and responsive. Keep-alive service prevents sleeping on Render free tier."
         }

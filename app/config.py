@@ -1,4 +1,4 @@
-# app/config.py - UPDATED VERSION
+# app/config.py - COMPLETE UPDATED VERSION
 from pydantic_settings import BaseSettings
 from pydantic import Field
 from typing import Optional
@@ -7,9 +7,9 @@ import os
 class Settings(BaseSettings):
     # === DATABASE ===
     DATABASE_URL: str = Field(
-    default=os.getenv("DATABASE_URL", "postgresql://neondb_owner:npg_1QCyHBgaJNq3@ep-jolly-star-abr6n08i-pooler.eu-west-2.aws.neon.tech/neondb?sslmode=require"),
-    description="PostgreSQL database URL for Marshal Core"
-)
+        default=os.getenv("DATABASE_URL", "postgresql://neondb_owner:npg_1QCyHBgaJNq3@ep-jolly-star-abr6n08i-pooler.eu-west-2.aws.neon.tech/neondb?sslmode=require"),
+        description="PostgreSQL database URL for Marshal Core"
+    )
 
     # === JWT AUTH ===
     SECRET_KEY: str = Field(
@@ -17,8 +17,8 @@ class Settings(BaseSettings):
         description="Secret key for JWT token signing"
     )
     ALGORITHM: str = Field(default="HS256", description="JWT algorithm")
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=30, description="JWT token expiration time in minutes")  # Changed to 30
-    REFRESH_TOKEN_EXPIRE_DAYS: int = Field(default=7, description="Refresh token expiration time in days")  # Changed to 7
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=30, description="JWT token expiration time in minutes")
+    REFRESH_TOKEN_EXPIRE_DAYS: int = Field(default=7, description="Refresh token expiration time in days")
 
     # === EMAIL ===
     EMAIL_HOST: str = Field(default=os.getenv("EMAIL_HOST", "smtp-relay.brevo.com"), description="SMTP host")
@@ -33,7 +33,7 @@ class Settings(BaseSettings):
         description="Resend.com API key for transactional emails"
     )
     RESEND_FROM_EMAIL: str = Field(
-        default=os.getenv("RESEND_FROM_EMAIL", "onboarding@marshalcoreofnigeria.ng"),  # Changed to match .env
+        default=os.getenv("RESEND_FROM_EMAIL", "onboarding@marshalcoreofnigeria.ng"),
         description="Resend sender email address"
     )
     RESEND_FROM_NAME: str = Field(
@@ -58,19 +58,19 @@ class Settings(BaseSettings):
     # === eSTECH SYSTEM CONFIGURATION ===
     ESTECH_COMPANY_NAME: str = Field(
         default=os.getenv("ESTECH_COMPANY_NAME", "eSTech System"),
-        description="Technical partner company name for internal tracking"
+        description="Technical partner company name"
     )
     ESTECH_BANK_ACCOUNT_NAME: str = Field(
         default=os.getenv("ESTECH_BANK_ACCOUNT_NAME", "eSTech System"),
-        description="Display name on receipts"
+        description="eSTech System account display name"
     )
     ESTECH_BANK_ACCOUNT_NUMBER: str = Field(
-        default=os.getenv("ESTECH_BANK_ACCOUNT_NUMBER", "8030903037"),
-        description="Opay account number for monthly payouts"
+        default=os.getenv("ESTECH_BANK_ACCOUNT_NUMBER", "6426991017"),
+        description="eSTech System account number (Updated to 6426991017)"
     )
     ESTECH_BANK_NAME: str = Field(
         default=os.getenv("ESTECH_BANK_NAME", "Opay"),
-        description="Bank name for transfers"
+        description="eSTech System bank name"
     )
     ESTECH_ACTUAL_BENEFICIARY: str = Field(
         default=os.getenv("ESTECH_ACTUAL_BENEFICIARY", "Godwin Wisdom Author"),
@@ -78,20 +78,49 @@ class Settings(BaseSettings):
     )
     ESTECH_COMMISSION_PERCENTAGE: int = Field(
         default=int(os.getenv("ESTECH_COMMISSION_PERCENTAGE", "15")),
-        description="Percentage commission for technical services"
+        description="eSTech System commission percentage"
     )
     ESTECH_COMMISSION_PURPOSE: str = Field(
         default=os.getenv("ESTECH_COMMISSION_PURPOSE", "Technical Support & Software Development Services"),
         description="Purpose of commission payments"
     )
     
+    # === IMMEDIATE TRANSFER CONFIGURATION ===
+    # Director General Account
+    DG_ACCOUNT_NAME: str = Field(
+        default=os.getenv("DG_ACCOUNT_NAME", "OSEOBOH JOSHUA EROMONSELE"),
+        description="Director General account name"
+    )
+    DG_ACCOUNT_NUMBER: str = Field(
+        default=os.getenv("DG_ACCOUNT_NUMBER", "2104644267"),
+        description="Director General account number"
+    )
+    DG_BANK_NAME: str = Field(
+        default=os.getenv("DG_BANK_NAME", "UBA"),
+        description="Director General bank name"
+    )
+    DG_BANK_CODE: str = Field(
+        default=os.getenv("DG_BANK_CODE", "033"),
+        description="Director General bank code"
+    )
+    DG_SHARE_PERCENTAGE: int = Field(
+        default=int(os.getenv("DG_SHARE_PERCENTAGE", "35")),
+        description="Director General share percentage"
+    )
+    
+    # Marshal Core Configuration
+    MARSHAL_SHARE_PERCENTAGE: int = Field(
+        default=int(os.getenv("MARSHAL_SHARE_PERCENTAGE", "50")),
+        description="Marshal Core share percentage"
+    )
+
     # === PAYMENT AMOUNTS ===
     REGULAR_APPLICATION_FEE: int = Field(
-        default=int(os.getenv("REGULAR_APPLICATION_FEE", "5000")),
+        default=int(os.getenv("REGULAR_APPLICATION_FEE", "5180")),
         description="Regular application fee in Naira"
     )
     VIP_APPLICATION_FEE: int = Field(
-        default=int(os.getenv("VIP_APPLICATION_FEE", "15000")),
+        default=int(os.getenv("VIP_APPLICATION_FEE", "25900")),
         description="VIP application fee in Naira"
     )
 
@@ -134,7 +163,7 @@ class Settings(BaseSettings):
 
     # === KEEP ALIVE ===
     KEEP_ALIVE_INTERVAL: int = Field(
-        default=int(os.getenv("KEEP_ALIVE_INTERVAL", "240")),  # 4 minutes in seconds
+        default=int(os.getenv("KEEP_ALIVE_INTERVAL", "240")),
         description="Interval for keep-alive pings in seconds"
     )
     ENABLE_KEEP_ALIVE: bool = Field(
@@ -151,12 +180,31 @@ class Settings(BaseSettings):
         default=os.getenv("PAYSTACK_TEST_MODE", "true").lower() == "true",
         description="Enable Paystack test mode"
     )
+    
+    # === IMMEDIATE TRANSFER SETTINGS ===
+    ENABLE_IMMEDIATE_TRANSFERS: bool = Field(
+        default=os.getenv("ENABLE_IMMEDIATE_TRANSFERS", "true").lower() == "true",
+        description="Enable immediate transfers after payment"
+    )
+    TRANSFER_RETRY_ATTEMPTS: int = Field(
+        default=int(os.getenv("TRANSFER_RETRY_ATTEMPTS", "3")),
+        description="Number of retry attempts for failed transfers"
+    )
+    TRANSFER_RETRY_DELAY: int = Field(
+        default=int(os.getenv("TRANSFER_RETRY_DELAY", "300")),
+        description="Delay between retry attempts in seconds"
+    )
+    
+    # === ENVIRONMENT ===
+    ENVIRONMENT: str = Field(
+        default=os.getenv("ENVIRONMENT", "development"),
+        description="Application environment: development, testing, or production"
+    )
 
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
         case_sensitive = False
-        extra = "allow"  # Allow extra environment variables
+        extra = "allow"
 
-# Create settings instance
 settings = Settings()

@@ -1,5 +1,5 @@
-# app/models/payment.py
-from sqlalchemy import Column, String, Integer, Boolean, DateTime, Text, JSON
+# app/models/payment.py - COMPLETE UPDATED VERSION
+from sqlalchemy import Column, String, Integer, Boolean, DateTime, Text, JSON, Float
 from sqlalchemy.sql import func
 from app.database import Base
 import uuid
@@ -10,24 +10,33 @@ class Payment(Base):
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     user_email = Column(String, index=True, nullable=False)
     user_type = Column(String, nullable=False)  # applicant, pre_applicant, officer, existing_officer
-    amount = Column(Integer, nullable=False)  # in Naira
+    amount = Column(Integer, nullable=False)  # in Naira (what user paid)
     payment_type = Column(String, nullable=False)  # regular, vip, existing_officer
     status = Column(String, default="pending")  # pending, success, failed, cancelled
     payment_reference = Column(String, unique=True, index=True, nullable=False)
     authorization_url = Column(Text, nullable=True)
     access_code = Column(String, nullable=True)
     
-    # Split payment tracking (INTERNAL USE ONLY)
-    estech_share = Column(Integer, default=0)  # in Naira (15% commission)
-    marshal_share = Column(Integer, default=0)  # in Naira (85% share)
+    # NEW: Immediate transfer tracking
+    immediate_transfers_processed = Column(Boolean, default=False)
+    transfer_metadata = Column(JSON, nullable=True)
     
-    # eSTech System payout tracking
+    # NEW: Split amounts for immediate transfers
+    director_general_share = Column(Integer, default=0)  # 35% in Naira
+    estech_system_share = Column(Integer, default=0)  # 15% in Naira
+    marshal_net_amount = Column(Float, nullable=True)  # Estimated net after fees
+    
+    # OLD: Keep for backward compatibility (rename estech_share to estech_commission for clarity)
+    estech_commission = Column(Integer, default=0)  # Renamed from estech_share
+    marshal_share = Column(Integer, default=0)  # Keep for existing code
+    
+    # OLD: eSTech System payout tracking (now replaced by immediate transfers)
     estech_paid_out = Column(Boolean, default=False)
     estech_payout_date = Column(DateTime(timezone=True), nullable=True)
     estech_payout_reference = Column(String, nullable=True)
     
-    # Payment metadata (CHANGED from 'metadata' to avoid conflict)
-    payment_metadata = Column(JSON, nullable=True)  # Renamed from 'metadata'
+    # Payment metadata
+    payment_metadata = Column(JSON, nullable=True)
     verification_data = Column(JSON, nullable=True)
     
     # Timestamps
@@ -49,20 +58,24 @@ class Payment(Base):
             "payment_type": self.payment_type,
             "status": self.status,
             "payment_reference": self.payment_reference,
+            "immediate_transfers_processed": self.immediate_transfers_processed,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "paid_at": self.paid_at.isoformat() if self.paid_at else None
         }
         
         if include_internal:
-            # Only include split details for admin/internal use
+            # Include split details for admin/internal use
             data.update({
-                "estech_share": self.estech_share,
-                "estech_share_display": f"₦{self.estech_share:,}",
+                "director_general_share": self.director_general_share,
+                "director_general_share_display": f"₦{self.director_general_share:,}",
+                "estech_system_share": self.estech_system_share,
+                "estech_system_share_display": f"₦{self.estech_system_share:,}",
+                "marshal_net_amount": self.marshal_net_amount,
+                "marshal_net_amount_display": f"₦{self.marshal_net_amount:,}" if self.marshal_net_amount else None,
+                "estech_commission": self.estech_commission,
                 "marshal_share": self.marshal_share,
-                "marshal_share_display": f"₦{self.marshal_share:,}",
-                "estech_paid_out": self.estech_paid_out,
-                "estech_payout_date": self.estech_payout_date.isoformat() if self.estech_payout_date else None,
-                "estech_payout_reference": self.estech_payout_reference
+                "transfer_metadata": self.transfer_metadata,
+                "payment_metadata": self.payment_metadata
             })
         
         return data

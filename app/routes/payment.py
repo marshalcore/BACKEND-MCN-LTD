@@ -1,4 +1,4 @@
-# app/routes/payment.py
+# app/routes/payment.py - COMPLETE UPDATED VERSION WITH FIXES
 from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import Dict, Any, Optional, List
@@ -23,45 +23,99 @@ router = APIRouter(
     tags=["Payments"]
 )
 
-# eSTech System bank details (INTERNAL USE ONLY)
-ESTECH_BANK_DETAILS = {
-    "account_name": "eSTech System",  # Display name on receipts
-    "account_number": "8030903037",
-    "bank": "Opay",
-    "beneficiary_name": "Godwin Wisdom Author",  # Actual account holder
-    "description": "Technical Support & Software Development Services"
+# Account details for immediate transfers (INTERNAL USE ONLY)
+IMMEDIATE_TRANSFER_CONFIG = {
+    "director_general": {
+        "account_name": settings.DG_ACCOUNT_NAME,
+        "account_number": settings.DG_ACCOUNT_NUMBER,
+        "bank": settings.DG_BANK_NAME,
+        "bank_code": settings.DG_BANK_CODE,
+        "recipient_type": "director_general",
+        "description": "Director General - Immediate 35% Share"
+    },
+    "estech_system": {
+        "account_name": settings.ESTECH_BANK_ACCOUNT_NAME,
+        "account_number": settings.ESTECH_BANK_ACCOUNT_NUMBER,
+        "bank": settings.ESTECH_BANK_NAME,
+        "bank_code": "100",
+        "recipient_type": "estech_system",
+        "description": settings.ESTECH_COMMISSION_PURPOSE
+    }
 }
 
-# Payment configurations - eSTech System gets 15% for technical services
+# Updated payment configurations with immediate transfers
 PAYMENT_CONFIGS = {
     "regular": {
-        "amount": 5000,  # ₦5,000
-        "description": "Marshal Core Regular Application Fee",
-        "estech_percentage": 15,  # 15% to eSTech System
-        "estech_amount": 750,  # ₦750 (15% of ₦5,000)
-        "marshal_amount": 4250,  # ₦4,250 (85% of ₦5,000)
-        "category": "regular_application",
+        "user_amount": settings.REGULAR_APPLICATION_FEE,
+        "display": f"₦{settings.REGULAR_APPLICATION_FEE:,} Regular Application Fee",
+        "base_amount": 5000,
+        "immediate_transfers": True,
+        
+        "recipients": {
+            "director_general": {
+                "percentage": settings.DG_SHARE_PERCENTAGE,
+                "amount": int(settings.REGULAR_APPLICATION_FEE * (settings.DG_SHARE_PERCENTAGE / 100)),
+                "transfer_type": "immediate",
+                "description": "Director General Share"
+            },
+            "estech_system": {
+                "percentage": settings.ESTECH_COMMISSION_PERCENTAGE,
+                "amount": int(settings.REGULAR_APPLICATION_FEE * (settings.ESTECH_COMMISSION_PERCENTAGE / 100)),
+                "transfer_type": "immediate",
+                "description": settings.ESTECH_COMMISSION_PURPOSE
+            }
+        },
+        
+        "marshal_core": {
+            "percentage": settings.MARSHAL_SHARE_PERCENTAGE,
+            "gross_amount": int(settings.REGULAR_APPLICATION_FEE * (settings.MARSHAL_SHARE_PERCENTAGE / 100)),
+            "estimated_paystack_fees": 177.70,
+            "estimated_transfer_fees": 20,
+            "estimated_net": 2392.30
+        },
+        
+        "user_message": f"Pay ₦{settings.REGULAR_APPLICATION_FEE:,} Application Fee",
         "receipt_description": "Marshal Core Nigeria - Regular Application Fee",
-        "user_message": "Pay ₦5,000 Application Fee"
+        "category": "regular_application"
     },
+    
     "vip": {
-        "amount": 15000,  # ₦15,000
-        "description": "Marshal Core VIP Application Fee",
-        "estech_percentage": 15,  # 15% to eSTech System
-        "estech_amount": 2250,  # ₦2,250 (15% of ₦15,000)
-        "marshal_amount": 12750,  # ₦12,750 (85% of ₦15,000)
-        "category": "vip_application",
+        "user_amount": settings.VIP_APPLICATION_FEE,
+        "display": f"₦{settings.VIP_APPLICATION_FEE:,} VIP Application Fee",
+        "base_amount": 25000,
+        "immediate_transfers": True,
+        
+        "recipients": {
+            "director_general": {
+                "percentage": settings.DG_SHARE_PERCENTAGE,
+                "amount": int(settings.VIP_APPLICATION_FEE * (settings.DG_SHARE_PERCENTAGE / 100)),
+                "transfer_type": "immediate"
+            },
+            "estech_system": {
+                "percentage": settings.ESTECH_COMMISSION_PERCENTAGE,
+                "amount": int(settings.VIP_APPLICATION_FEE * (settings.ESTECH_COMMISSION_PERCENTAGE / 100)),
+                "transfer_type": "immediate"
+            }
+        },
+        
+        "marshal_core": {
+            "percentage": settings.MARSHAL_SHARE_PERCENTAGE,
+            "gross_amount": int(settings.VIP_APPLICATION_FEE * (settings.MARSHAL_SHARE_PERCENTAGE / 100)),
+            "estimated_paystack_fees": 877,
+            "estimated_transfer_fees": 20,
+            "estimated_net": 12053
+        },
+        
+        "user_message": f"Pay ₦{settings.VIP_APPLICATION_FEE:,} VIP Application Fee",
         "receipt_description": "Marshal Core Nigeria - VIP Application Fee",
-        "user_message": "Pay ₦15,000 VIP Application Fee"
+        "category": "vip_application"
     },
+    
     "existing_officer": {
-        "amount": 0,  # Free for existing officers
-        "description": "Marshal Core Existing Officer Registration",
-        "estech_percentage": 0,
-        "estech_amount": 0,
-        "marshal_amount": 0,
+        "user_amount": 0,
+        "display": "Free Registration",
+        "immediate_transfers": False,
         "category": "existing_officer",
-        "receipt_description": "Marshal Core Nigeria - Officer Registration",
         "user_message": "Free Registration"
     }
 }
@@ -72,52 +126,60 @@ async def initiate_payment(
     db: Session = Depends(get_db)
 ):
     """
-    Initiate payment for applicant (Regular or VIP)
-    
-    IMPORTANT: User ONLY sees simple payment amount
-    NO mention of eSTech System or split payments!
+    Initiate payment with immediate split configuration
+    User pays exact amount, splits happen automatically after payment
     """
     try:
-        # Validate payment type
-        if payment_data.payment_type not in PAYMENT_CONFIGS:
+        # Convert enum values to strings if needed
+        payment_type_str = payment_data.payment_type
+        user_type_str = payment_data.user_type
+        
+        if payment_type_str not in PAYMENT_CONFIGS:
             raise HTTPException(
                 status_code=400,
-                detail="Invalid payment type"
+                detail=f"Invalid payment type. Must be one of: {', '.join(PAYMENT_CONFIGS.keys())}"
             )
         
-        # Get payment config
-        config = PAYMENT_CONFIGS[payment_data.payment_type]
+        config = PAYMENT_CONFIGS[payment_type_str]
         
-        # Find user based on user_type
+        # FIXED: Don't require user to exist in database
+        # This allows new registrations to make payments
         user = None
-        if payment_data.user_type == "applicant":
+        if user_type_str == "applicant":
             user = db.query(Applicant).filter(
                 func.lower(Applicant.email) == payment_data.email.lower()
             ).first()
-        elif payment_data.user_type == "pre_applicant":
+            # Also check pre-applicants for applicants
+            if not user:
+                user = db.query(PreApplicant).filter(
+                    func.lower(PreApplicant.email) == payment_data.email.lower()
+                ).first()
+        
+        elif user_type_str == "pre_applicant":
             user = db.query(PreApplicant).filter(
                 func.lower(PreApplicant.email) == payment_data.email.lower()
             ).first()
-        elif payment_data.user_type == "officer":
+        
+        elif user_type_str == "officer":
             user = db.query(Officer).filter(
                 func.lower(Officer.email) == payment_data.email.lower()
             ).first()
-        elif payment_data.user_type == "existing_officer":
+        
+        elif user_type_str == "existing_officer":
             user = db.query(ExistingOfficer).filter(
                 func.lower(ExistingOfficer.email) == payment_data.email.lower()
             ).first()
         
+        # FIXED: Allow payment even if user doesn't exist
+        # This is common for new registrations
         if not user:
-            raise HTTPException(
-                status_code=404,
-                detail="User not found"
-            )
+            logger.info(f"Payment initiated for new user: {payment_data.email} ({user_type_str})")
+            # We'll proceed with payment - user will be created during post-payment processing
         
-        # Check if payment already exists and is pending/success
         existing_payment = db.query(Payment).filter(
             Payment.user_email == payment_data.email.lower(),
-            Payment.user_type == payment_data.user_type,
-            Payment.payment_type == payment_data.payment_type,
+            Payment.user_type == user_type_str,
+            Payment.payment_type == payment_type_str,
             Payment.status.in_(["pending", "success"])
         ).first()
         
@@ -127,60 +189,86 @@ async def initiate_payment(
                     "status": "already_paid",
                     "message": "Payment already completed",
                     "payment_reference": existing_payment.payment_reference,
-                    "amount": config["amount"],
+                    "amount": config["user_amount"],
                     "user_message": "Payment already completed"
                 }
             else:
-                # Return existing pending payment
                 return {
                     "status": "pending",
                     "message": "Payment already initiated",
                     "payment_reference": existing_payment.payment_reference,
                     "authorization_url": existing_payment.authorization_url,
-                    "amount": config["amount"],
+                    "amount": config["user_amount"],
                     "user_message": "Continue with existing payment"
                 }
         
-        # Create payment reference
         timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
-        payment_ref = f"MCN_{payment_data.payment_type.upper()}_{timestamp}"
+        payment_ref = f"MCN_{payment_type_str.upper()}_{timestamp}"
         
-        # Prepare payment_metadata (INTERNAL USE ONLY - not shown to user)
-        # CHANGED: metadata -> payment_metadata
+        # Prepare user info
+        user_info = {}
+        if user:
+            user_info = {
+                "user_id": str(getattr(user, 'id', '')),
+                "full_name": getattr(user, 'full_name', getattr(user, 'name', '')),
+                "phone": getattr(user, 'phone_number', getattr(user, 'phone', getattr(user, 'contact_number', '')))
+            }
+        else:
+            user_info = {
+                "user_id": "pending_registration",
+                "full_name": payment_data.email.split('@')[0],
+                "phone": ""
+            }
+        
         payment_metadata = {
-            "user_id": str(getattr(user, 'id', '')),
-            "user_type": payment_data.user_type,
-            "full_name": getattr(user, 'full_name', ''),
+            "user_info": user_info,
+            "user_type": user_type_str,
             "email": payment_data.email.lower(),
-            "payment_type": payment_data.payment_type,
-            "split_details": {  # INTERNAL - not exposed to user
-                "estech_percentage": config["estech_percentage"],
-                "estech_amount": config["estech_amount"],
-                "estech_purpose": "Technical Support & Software Development",
-                "marshal_amount": config["marshal_amount"],
-                "total_amount": config["amount"]
+            "payment_type": payment_type_str,
+            
+            "split_config": {
+                "user_paid": config["user_amount"],
+                "immediate_transfers": config.get("immediate_transfers", False),
+                
+                "recipients": {
+                    "director_general": {
+                        **config["recipients"]["director_general"],
+                        "account_details": IMMEDIATE_TRANSFER_CONFIG["director_general"]
+                    },
+                    "estech_system": {
+                        **config["recipients"]["estech_system"],
+                        "account_details": IMMEDIATE_TRANSFER_CONFIG["estech_system"]
+                    }
+                } if config.get("immediate_transfers") else {},
+                
+                "marshal_core": config.get("marshal_core", {}),
+                
+                "fees": {
+                    "paystack_processing": config.get("marshal_core", {}).get("estimated_paystack_fees", 0),
+                    "transfer_fees": config.get("marshal_core", {}).get("estimated_transfer_fees", 0),
+                    "marshal_net": config.get("marshal_core", {}).get("estimated_net", 0)
+                }
             },
-            "estech_bank": ESTECH_BANK_DETAILS,  # INTERNAL - for admin payout tracking
+            
             "category": config["category"],
             "payment_date": datetime.now().isoformat()
         }
         
-        # Initialize payment
         payment_service = PaymentService()
         
-        if config["amount"] == 0:
-            # Free payment for existing officers
+        if config["user_amount"] == 0:
             payment = Payment(
                 user_email=payment_data.email.lower(),
-                user_type=payment_data.user_type,
+                user_type=user_type_str,
                 amount=0,
-                payment_type=payment_data.payment_type,
+                payment_type=payment_type_str,
                 status="success",
                 payment_reference=payment_ref,
-                # CHANGED: metadata -> payment_metadata
                 payment_metadata=payment_metadata,
-                estech_share=0,
-                marshal_share=0,
+                director_general_share=0,
+                estech_system_share=0,
+                marshal_net_amount=0,
+                immediate_transfers_processed=True,
                 paid_at=datetime.utcnow()
             )
             db.add(payment)
@@ -194,51 +282,60 @@ async def initiate_payment(
                 "user_message": config["user_message"]
             }
         else:
-            # Paid payment - initiate with Paystack
+            # Use the callback URL from settings
+            callback_url = None
+            if hasattr(settings, 'PAYMENT_SUCCESS_URL') and hasattr(settings, 'FRONTEND_URL'):
+                callback_url = f"{settings.FRONTEND_URL}{settings.PAYMENT_SUCCESS_URL}"
+            else:
+                # Fallback to a sensible default
+                callback_url = f"http://localhost:8000/api/payments/verify/{payment_ref}"
+            
             payment_response = payment_service.initiate_payment(
                 email=payment_data.email,
-                amount=config["amount"],
+                amount=config["user_amount"],
                 reference=payment_ref,
-                # CHANGED: metadata -> payment_metadata
-                metadata=payment_metadata,  # Internal tracking only
-                callback_url=f"{settings.FRONTEND_URL}{settings.PAYMENT_SUCCESS_URL}"
+                metadata=payment_metadata,
+                callback_url=callback_url
             )
             
-            if not payment_response.get("authorization_url"):
+            if payment_response.get("status") != "success" or not payment_response.get("authorization_url"):
+                error_msg = payment_response.get("message", "Payment initialization failed")
+                logger.error(f"Payment initialization error: {error_msg}")
                 raise HTTPException(
                     status_code=500,
-                    detail="Payment initialization failed"
+                    detail=error_msg
                 )
             
-            # Save payment record with split tracking
             payment = Payment(
                 user_email=payment_data.email.lower(),
-                user_type=payment_data.user_type,
-                amount=config["amount"],
-                payment_type=payment_data.payment_type,
+                user_type=user_type_str,
+                amount=config["user_amount"],
+                payment_type=payment_type_str,
                 status="pending",
                 payment_reference=payment_ref,
                 authorization_url=payment_response.get("authorization_url"),
                 access_code=payment_response.get("access_code"),
-                # CHANGED: metadata -> payment_metadata
                 payment_metadata=payment_metadata,
-                estech_share=config["estech_amount"],
-                marshal_share=config["marshal_amount"]
+                
+                director_general_share=config["recipients"]["director_general"]["amount"],
+                estech_system_share=config["recipients"]["estech_system"]["amount"],
+                marshal_net_amount=config["marshal_core"]["estimated_net"],
+                
+                immediate_transfers_processed=False,
+                transfer_metadata=None
             )
             db.add(payment)
             db.commit()
             
-            # User ONLY sees simple payment info
             return {
                 "status": "success",
                 "message": "Payment initialized",
                 "payment_reference": payment_ref,
                 "authorization_url": payment_response.get("authorization_url"),
-                "amount": config["amount"],
-                "amount_display": f"₦{config['amount']:,}",
-                "user_message": config["user_message"],  # Simple message for user
-                "payment_type": payment_data.payment_type,
-                # NO split info exposed to user!
+                "amount": config["user_amount"],
+                "amount_display": f"₦{config['user_amount']:,}",
+                "user_message": config["user_message"],
+                "payment_type": payment_type_str,
             }
             
     except HTTPException as he:
@@ -247,7 +344,7 @@ async def initiate_payment(
         logger.error(f"Error initiating payment: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail="Failed to initiate payment"
+            detail=f"Failed to initiate payment: {str(e)}"
         )
 
 @router.post("/verify/{reference}")
@@ -257,13 +354,14 @@ async def verify_payment(
     db: Session = Depends(get_db)
 ):
     """
-    Verify payment with Paystack
-    Returns SIMPLE success message to user
+    Verify payment and trigger immediate transfers
     """
     try:
-        payment_service = PaymentService()
+        from app.services.immediate_transfer import ImmediateTransferService
         
-        # Find payment record
+        payment_service = PaymentService()
+        transfer_service = ImmediateTransferService()
+        
         payment = db.query(Payment).filter(
             Payment.payment_reference == reference
         ).first()
@@ -282,17 +380,14 @@ async def verify_payment(
                 "amount": f"₦{payment.amount:,}"
             }
         
-        # Verify with Paystack
         verification = payment_service.verify_payment(reference)
         
         if verification.get("status") == "success":
-            # Update payment status
             payment.status = "success"
             payment.paid_at = datetime.utcnow()
             payment.verification_data = verification
             db.commit()
             
-            # Update user status based on user_type
             if payment.user_type == "pre_applicant":
                 pre_applicant = db.query(PreApplicant).filter(
                     func.lower(PreApplicant.email) == payment.user_email
@@ -303,7 +398,6 @@ async def verify_payment(
                     pre_applicant.status = "payment_completed"
                     db.commit()
                     
-                    # Promote to applicant
                     promote_to_applicant(payment.user_email, db)
             
             elif payment.user_type == "applicant":
@@ -317,7 +411,28 @@ async def verify_payment(
                     applicant.paid_at = datetime.utcnow()
                     db.commit()
             
-            # Add background task for post-payment processing
+            if payment.amount > 0:
+                try:
+                    config = PAYMENT_CONFIGS.get(payment.payment_type, {})
+                    
+                    if config.get("immediate_transfers", False):
+                        if background_tasks:
+                            background_tasks.add_task(
+                                transfer_service.process_immediate_splits,
+                                payment_reference=reference,
+                                payment_amount=payment.amount,
+                                db=db
+                            )
+                        else:
+                            # Run synchronously if no background tasks
+                            await transfer_service.process_immediate_splits(
+                                payment_reference=reference,
+                                payment_amount=payment.amount,
+                                db=db
+                            )
+                except Exception as transfer_error:
+                    logger.error(f"Failed to queue immediate transfers: {str(transfer_error)}")
+            
             if background_tasks:
                 background_tasks.add_task(
                     process_post_payment,
@@ -327,14 +442,12 @@ async def verify_payment(
                     db=db
                 )
             
-            # SIMPLE success message for user
             return {
                 "status": "success",
-                "message": "Payment successful! You can now proceed with your application.",
+                "message": "Payment successful! Your application is being processed.",
                 "payment_reference": reference,
                 "amount": f"₦{payment.amount:,}",
                 "payment_date": payment.paid_at.isoformat() if payment.paid_at else None,
-                # NO split info shown to user!
             }
         else:
             payment.status = "failed"
@@ -357,12 +470,15 @@ async def verify_payment(
 @router.post("/callback/paystack")
 async def paystack_callback(
     request: Request,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
     """
-    Paystack webhook callback (INTERNAL USE)
+    Paystack webhook callback - triggers immediate transfers
     """
     try:
+        from app.services.immediate_transfer import ImmediateTransferService
+        
         payload = await request.json()
         logger.info(f"Paystack callback received: {payload.get('event')}")
         
@@ -372,7 +488,6 @@ async def paystack_callback(
         if event == "charge.success":
             reference = data.get("reference")
             if reference:
-                # Verify and process payment
                 payment_service = PaymentService()
                 verification = payment_service.verify_payment(reference)
                 
@@ -387,7 +502,21 @@ async def paystack_callback(
                         payment.verification_data = verification
                         db.commit()
                         
-                        # Process post-payment
+                        if payment.amount > 0:
+                            try:
+                                transfer_service = ImmediateTransferService()
+                                config = PAYMENT_CONFIGS.get(payment.payment_type, {})
+                                
+                                if config.get("immediate_transfers", False):
+                                    background_tasks.add_task(
+                                        transfer_service.process_immediate_splits,
+                                        payment_reference=reference,
+                                        payment_amount=payment.amount,
+                                        db=db
+                                    )
+                            except Exception as transfer_error:
+                                logger.error(f"Failed to queue transfers in webhook: {str(transfer_error)}")
+                        
                         await process_post_payment(
                             user_email=payment.user_email,
                             user_type=payment.user_type,
@@ -395,7 +524,7 @@ async def paystack_callback(
                             db=db
                         )
                         
-                        logger.info(f"Payment {reference} processed via webhook")
+                        logger.info(f"Payment {reference} processed via webhook with immediate transfers")
         
         return {"status": "success", "message": "Callback processed"}
         
@@ -403,11 +532,143 @@ async def paystack_callback(
         logger.error(f"Error processing callback: {str(e)}")
         return {"status": "error", "message": str(e)}
 
-# Legacy endpoints for backward compatibility
+@router.get("/admin/transfers")
+async def get_transfer_history(
+    status: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    ADMIN ONLY: View all immediate transfers
+    """
+    try:
+        from app.models.immediate_transfer import ImmediateTransfer
+        
+        query = db.query(ImmediateTransfer)
+        
+        if status:
+            query = query.filter(ImmediateTransfer.status == status)
+        if start_date:
+            query = query.filter(ImmediateTransfer.transferred_at >= start_date)
+        if end_date:
+            query = query.filter(ImmediateTransfer.transferred_at <= end_date)
+        
+        transfers = query.order_by(desc(ImmediateTransfer.transferred_at)).all()
+        
+        total_amount = sum(t.amount for t in transfers)
+        total_dg = sum(t.amount for t in transfers if t.recipient_type == "director_general")
+        total_estech = sum(t.amount for t in transfers if t.recipient_type == "estech_system")
+        
+        return {
+            "status": "success",
+            "transfers": [
+                {
+                    "id": t.id,
+                    "payment_reference": t.payment_reference,
+                    "recipient_type": t.recipient_type,
+                    "recipient_name": t.recipient_account.split(" - ")[0] if t.recipient_account else "",
+                    "amount": f"₦{t.amount:,}",
+                    "status": t.status,
+                    "transfer_reference": t.transfer_reference,
+                    "transferred_at": t.transferred_at.isoformat() if t.transferred_at else None,
+                    "bank": t.recipient_bank
+                }
+                for t in transfers
+            ],
+            "summary": {
+                "total_transfers": len(transfers),
+                "total_amount": f"₦{total_amount:,}",
+                "director_general_total": f"₦{total_dg:,}",
+                "estech_system_total": f"₦{total_estech:,}",
+                "transfer_accounts": IMMEDIATE_TRANSFER_CONFIG
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting transfer history: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to get transfer history"
+        )
+
+@router.get("/admin/transfer-status/{payment_reference}")
+async def get_transfer_status(
+    payment_reference: str,
+    db: Session = Depends(get_db)
+):
+    """
+    ADMIN ONLY: Check transfer status for a specific payment
+    """
+    try:
+        from app.models.immediate_transfer import ImmediateTransfer
+        
+        payment = db.query(Payment).filter(
+            Payment.payment_reference == payment_reference
+        ).first()
+        
+        if not payment:
+            raise HTTPException(
+                status_code=404,
+                detail="Payment not found"
+            )
+        
+        transfers = db.query(ImmediateTransfer).filter(
+            ImmediateTransfer.payment_reference == payment_reference
+        ).all()
+        
+        config = PAYMENT_CONFIGS.get(payment.payment_type, {})
+        expected_transfers = []
+        
+        if config.get("immediate_transfers", False) and payment.amount > 0:
+            expected_transfers = [
+                {
+                    "recipient": "director_general",
+                    "expected_amount": config["recipients"]["director_general"]["amount"],
+                    "account": IMMEDIATE_TRANSFER_CONFIG["director_general"]
+                },
+                {
+                    "recipient": "estech_system",
+                    "expected_amount": config["recipients"]["estech_system"]["amount"],
+                    "account": IMMEDIATE_TRANSFER_CONFIG["estech_system"]
+                }
+            ]
+        
+        return {
+            "status": "success",
+            "payment": {
+                "reference": payment.payment_reference,
+                "amount": f"₦{payment.amount:,}",
+                "type": payment.payment_type,
+                "status": payment.status,
+                "immediate_transfers_processed": payment.immediate_transfers_processed
+            },
+            "expected_transfers": expected_transfers,
+            "actual_transfers": [
+                {
+                    "recipient_type": t.recipient_type,
+                    "amount": f"₦{t.amount:,}",
+                    "status": t.status,
+                    "transfer_reference": t.transfer_reference,
+                    "transferred_at": t.transferred_at.isoformat() if t.transferred_at else None
+                }
+                for t in transfers
+            ],
+            "transfer_status": "complete" if len(transfers) == len(expected_transfers) else "pending"
+        }
+        
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Error getting transfer status: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to get transfer status"
+        )
+
 @router.post("/manual/confirm")
 async def manual_payment(data: ManualPaymentRequest, db: Session = Depends(get_db)):
     """Legacy endpoint - forward to new payment system"""
-    # Create payment for pre_applicant type
     payment_data = PaymentCreate(
         email=data.email,
         payment_type="regular",
@@ -473,10 +734,9 @@ async def get_estech_balance(
     try:
         query = db.query(Payment).filter(
             Payment.status == "success",
-            Payment.estech_share > 0
+            Payment.estech_system_share > 0
         )
         
-        # Date filtering
         if month:
             query = query.filter(
                 db.func.strftime('%Y-%m', Payment.paid_at) == month
@@ -488,11 +748,10 @@ async def get_estech_balance(
         
         payments = query.order_by(desc(Payment.paid_at)).all()
         
-        total_balance = sum(p.estech_share for p in payments)
-        total_marshal = sum(p.marshal_share for p in payments)
+        total_estech = sum(p.estech_system_share for p in payments)
+        total_dg = sum(p.director_general_share for p in payments)
         total_amount = sum(p.amount for p in payments)
         
-        # Group by month for payout tracking
         monthly_data = {}
         for payment in payments:
             if payment.paid_at:
@@ -500,11 +759,13 @@ async def get_estech_balance(
                 if month_key not in monthly_data:
                     monthly_data[month_key] = {
                         "estech_total": 0,
+                        "dg_total": 0,
                         "payment_count": 0,
                         "payments": []
                     }
                 
-                monthly_data[month_key]["estech_total"] += payment.estech_share
+                monthly_data[month_key]["estech_total"] += payment.estech_system_share
+                monthly_data[month_key]["dg_total"] += payment.director_general_share
                 monthly_data[month_key]["payment_count"] += 1
                 monthly_data[month_key]["payments"].append({
                     "reference": payment.payment_reference,
@@ -512,31 +773,37 @@ async def get_estech_balance(
                     "applicant": payment.user_email,
                     "type": payment.payment_type,
                     "total": f"₦{payment.amount:,}",
-                    "estech_share": f"₦{payment.estech_share:,}",
-                    "marshal_share": f"₦{payment.marshal_share:,}"
+                    "estech_share": f"₦{payment.estech_system_share:,}",
+                    "dg_share": f"₦{payment.director_general_share:,}"
                 })
         
-        # Current month balance
         current_month = datetime.now().strftime("%Y-%m")
-        current_month_balance = monthly_data.get(current_month, {"estech_total": 0})["estech_total"]
+        current_month_estech = monthly_data.get(current_month, {"estech_total": 0})["estech_total"]
+        current_month_dg = monthly_data.get(current_month, {"dg_total": 0})["dg_total"]
         
         return {
             "status": "success",
-            "company": "eSTech System",
-            "bank_details": ESTECH_BANK_DETAILS,
-            "commission_rate": "15% of all application fees",
-            "purpose": "Technical Support & Software Development Services",
+            "company": settings.ESTECH_COMPANY_NAME,
+            "bank_details": {
+                "account_name": settings.ESTECH_BANK_ACCOUNT_NAME,
+                "account_number": settings.ESTECH_BANK_ACCOUNT_NUMBER,
+                "bank": settings.ESTECH_BANK_NAME,
+                "beneficiary": settings.ESTECH_ACTUAL_BENEFICIARY
+            },
+            "commission_rate": f"{settings.ESTECH_COMMISSION_PERCENTAGE}% of all application fees",
+            "purpose": settings.ESTECH_COMMISSION_PURPOSE,
             
             "totals": {
                 "all_time": {
-                    "estech_balance": f"₦{total_balance:,}",
-                    "marshal_balance": f"₦{total_marshal:,}",
+                    "estech_balance": f"₦{total_estech:,}",
+                    "director_general_balance": f"₦{total_dg:,}",
                     "total_processed": f"₦{total_amount:,}",
                     "payment_count": len(payments)
                 },
                 "current_month": {
                     "month": current_month,
-                    "estech_balance": f"₦{current_month_balance:,}",
+                    "estech_balance": f"₦{current_month_estech:,}",
+                    "dg_balance": f"₦{current_month_dg:,}",
                     "payment_count": monthly_data.get(current_month, {"payment_count": 0})["payment_count"]
                 }
             },
@@ -544,9 +811,9 @@ async def get_estech_balance(
             "monthly_breakdown": {
                 month: {
                     "estech_total": f"₦{data['estech_total']:,}",
+                    "dg_total": f"₦{data['dg_total']:,}",
                     "payment_count": data["payment_count"],
-                    "due_date": f"{month}-28",  # Payout at month end
-                    "status": "pending_payout" if month != current_month else "accumulating"
+                    "status": "immediate_transfer"
                 }
                 for month, data in monthly_data.items()
             },
@@ -557,11 +824,13 @@ async def get_estech_balance(
                     "applicant": p.user_email,
                     "type": p.payment_type.upper(),
                     "total": f"₦{p.amount:,}",
-                    "estech_commission": f"₦{p.estech_share:,}",
-                    "purpose": "Technical Support & Software Development",
-                    "reference": p.payment_reference
+                    "estech_commission": f"₦{p.estech_system_share:,}",
+                    "dg_share": f"₦{p.director_general_share:,}",
+                    "purpose": settings.ESTECH_COMMISSION_PURPOSE,
+                    "reference": p.payment_reference,
+                    "immediate_transfer": p.immediate_transfers_processed
                 }
-                for p in payments[:10]  # Last 10 payments
+                for p in payments[:10]
             ]
         }
         
@@ -575,19 +844,17 @@ async def get_estech_balance(
 @router.get("/admin/stats")
 async def get_payment_stats(
     db: Session = Depends(get_db),
-    period: Optional[str] = "month",  # day, week, month, year
+    period: Optional[str] = "month",
     start_date: Optional[str] = None,
     end_date: Optional[str] = None
 ):
     """
     ADMIN ONLY: Comprehensive payment statistics
-    Shows split between eSTech System and Marshal Core
+    Shows split between recipients
     """
     try:
-        # Base query for successful payments
         query = db.query(Payment).filter(Payment.status == "success")
         
-        # Apply date filters
         if start_date:
             query = query.filter(Payment.paid_at >= start_date)
         if end_date:
@@ -595,13 +862,13 @@ async def get_payment_stats(
         
         all_payments = query.all()
         
-        # Calculate statistics
         stats = {
             "overall": {
                 "total_payments": len(all_payments),
                 "total_amount": sum(p.amount for p in all_payments),
-                "total_estech": sum(p.estech_share for p in all_payments),
-                "total_marshal": sum(p.marshal_share for p in all_payments),
+                "total_director_general": sum(p.director_general_share for p in all_payments),
+                "total_estech_system": sum(p.estech_system_share for p in all_payments),
+                "total_marshal_net": sum(p.marshal_net_amount or 0 for p in all_payments),
                 "average_payment": sum(p.amount for p in all_payments) / len(all_payments) if all_payments else 0
             },
             
@@ -609,14 +876,16 @@ async def get_payment_stats(
                 "regular": {
                     "count": len([p for p in all_payments if p.payment_type == "regular"]),
                     "total": sum(p.amount for p in all_payments if p.payment_type == "regular"),
-                    "estech": sum(p.estech_share for p in all_payments if p.payment_type == "regular"),
-                    "marshal": sum(p.marshal_share for p in all_payments if p.payment_type == "regular")
+                    "director_general": sum(p.director_general_share for p in all_payments if p.payment_type == "regular"),
+                    "estech_system": sum(p.estech_system_share for p in all_payments if p.payment_type == "regular"),
+                    "marshal_net": sum(p.marshal_net_amount or 0 for p in all_payments if p.payment_type == "regular")
                 },
                 "vip": {
                     "count": len([p for p in all_payments if p.payment_type == "vip"]),
                     "total": sum(p.amount for p in all_payments if p.payment_type == "vip"),
-                    "estech": sum(p.estech_share for p in all_payments if p.payment_type == "vip"),
-                    "marshal": sum(p.marshal_share for p in all_payments if p.payment_type == "vip")
+                    "director_general": sum(p.director_general_share for p in all_payments if p.payment_type == "vip"),
+                    "estech_system": sum(p.estech_system_share for p in all_payments if p.payment_type == "vip"),
+                    "marshal_net": sum(p.marshal_net_amount or 0 for p in all_payments if p.payment_type == "vip")
                 }
             },
             
@@ -624,7 +893,6 @@ async def get_payment_stats(
             "monthly_summary": {}
         }
         
-        # Daily trend (last 30 days)
         end_date_obj = datetime.now()
         start_date_obj = end_date_obj - timedelta(days=30)
         
@@ -634,7 +902,6 @@ async def get_payment_stats(
             Payment.paid_at <= end_date_obj
         ).all()
         
-        # Group by day
         for i in range(30):
             day = start_date_obj + timedelta(days=i)
             day_key = day.strftime("%Y-%m-%d")
@@ -644,11 +911,11 @@ async def get_payment_stats(
             stats["daily_trend"][day_key] = {
                 "count": len(day_payments),
                 "total": sum(p.amount for p in day_payments),
-                "estech": sum(p.estech_share for p in day_payments),
-                "marshal": sum(p.marshal_share for p in day_payments)
+                "director_general": sum(p.director_general_share for p in day_payments),
+                "estech_system": sum(p.estech_system_share for p in day_payments),
+                "marshal_net": sum(p.marshal_net_amount or 0 for p in day_payments)
             }
         
-        # Monthly summary
         for payment in all_payments:
             if payment.paid_at:
                 month_key = payment.paid_at.strftime("%Y-%m")
@@ -656,29 +923,29 @@ async def get_payment_stats(
                     stats["monthly_summary"][month_key] = {
                         "count": 0,
                         "total": 0,
-                        "estech": 0,
-                        "marshal": 0
+                        "director_general": 0,
+                        "estech_system": 0,
+                        "marshal_net": 0
                     }
                 
                 stats["monthly_summary"][month_key]["count"] += 1
                 stats["monthly_summary"][month_key]["total"] += payment.amount
-                stats["monthly_summary"][month_key]["estech"] += payment.estech_share
-                stats["monthly_summary"][month_key]["marshal"] += payment.marshal_share
+                stats["monthly_summary"][month_key]["director_general"] += payment.director_general_share
+                stats["monthly_summary"][month_key]["estech_system"] += payment.estech_system_share
+                stats["monthly_summary"][month_key]["marshal_net"] += (payment.marshal_net_amount or 0)
         
-        # Format currency
         def format_currency(amount):
             return f"₦{amount:,.2f}" if isinstance(amount, (int, float)) else amount
         
-        # Format all currency values
         for key in ["overall", "by_type"]:
             if key == "overall":
-                for subkey in ["total_amount", "total_estech", "total_marshal", "average_payment"]:
+                for subkey in ["total_amount", "total_director_general", "total_estech_system", "total_marshal_net", "average_payment"]:
                     if subkey in stats[key]:
                         stats[key][subkey + "_formatted"] = format_currency(stats[key][subkey])
             elif key == "by_type":
                 for type_key in ["regular", "vip"]:
                     if type_key in stats[key]:
-                        for subkey in ["total", "estech", "marshal"]:
+                        for subkey in ["total", "director_general", "estech_system", "marshal_net"]:
                             if subkey in stats[key][type_key]:
                                 stats[key][type_key][subkey + "_formatted"] = format_currency(stats[key][type_key][subkey])
         
@@ -688,10 +955,11 @@ async def get_payment_stats(
             "start_date": start_date,
             "end_date": end_date,
             "stats": stats,
-            "estech_bank": ESTECH_BANK_DETAILS,
+            "immediate_transfer_config": IMMEDIATE_TRANSFER_CONFIG,
             "notes": [
-                "eSTech System receives 15% commission for Technical Support & Software Development",
-                "Payouts are processed monthly to the designated Opay account",
+                f"Immediate transfers enabled: {settings.DG_SHARE_PERCENTAGE}% to Director General, {settings.ESTECH_COMMISSION_PERCENTAGE}% to eSTech System",
+                "Marshal Core bears all transaction fees and receives remainder",
+                "All transfers happen automatically after successful payment",
                 "All amounts are in Nigerian Naira (₦)"
             ]
         }
@@ -703,80 +971,55 @@ async def get_payment_stats(
             detail="Failed to get payment statistics"
         )
 
-@router.post("/admin/payout-completed")
-async def mark_payout_completed(
-    month: str,
-    transaction_reference: str,
-    amount: float,
+@router.post("/admin/retry-transfer/{payment_reference}")
+async def retry_transfer(
+    payment_reference: str,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
     """
-    ADMIN ONLY: Mark monthly payout as completed
-    Records payout to eSTech System
+    ADMIN ONLY: Retry failed transfers for a payment
     """
     try:
-        # Validate month format
-        try:
-            datetime.strptime(month, "%Y-%m")
-        except ValueError:
-            raise HTTPException(
-                status_code=400,
-                detail="Invalid month format. Use YYYY-MM"
-            )
+        from app.services.immediate_transfer import ImmediateTransferService
         
-        # Get payments for that month
-        payments = db.query(Payment).filter(
-            Payment.status == "success",
-            db.func.strftime('%Y-%m', Payment.paid_at) == month,
-            Payment.estech_share > 0,
-            Payment.estech_paid_out == False
-        ).all()
+        payment = db.query(Payment).filter(
+            Payment.payment_reference == payment_reference
+        ).first()
         
-        if not payments:
+        if not payment:
             raise HTTPException(
                 status_code=404,
-                detail=f"No pending payments found for {month}"
+                detail="Payment not found"
             )
         
-        total_estech = sum(p.estech_share for p in payments)
-        
-        # Validate amount matches (allow small rounding differences)
-        if abs(total_estech - amount) > 10:  # Allow ₦10 difference
+        if payment.status != "success":
             raise HTTPException(
                 status_code=400,
-                detail=f"Amount mismatch. Calculated: ₦{total_estech:,}, Provided: ₦{amount:,}"
+                detail="Payment is not successful"
             )
         
-        # Mark payments as paid out
-        for payment in payments:
-            payment.estech_paid_out = True
-            payment.estech_payout_date = datetime.utcnow()
-            payment.estech_payout_reference = transaction_reference
+        transfer_service = ImmediateTransferService()
         
-        db.commit()
+        background_tasks.add_task(
+            transfer_service.retry_failed_transfers,
+            payment_reference=payment_reference,
+            db=db
+        )
         
         return {
             "status": "success",
-            "message": f"Payout for {month} marked as completed",
-            "payout_details": {
-                "month": month,
-                "transaction_reference": transaction_reference,
-                "amount": f"₦{amount:,}",
-                "payment_count": len(payments),
-                "bank_details": ESTECH_BANK_DETAILS,
-                "processed_at": datetime.utcnow().isoformat(),
-                "status": "completed"
-            },
-            "affected_payments": len(payments)
+            "message": "Transfer retry queued",
+            "payment_reference": payment_reference
         }
         
     except HTTPException as he:
         raise he
     except Exception as e:
-        logger.error(f"Error recording payout: {str(e)}")
+        logger.error(f"Error queuing transfer retry: {str(e)}")
         raise HTTPException(
             status_code=500,
-            detail="Failed to record payout"
+            detail="Failed to queue transfer retry"
         )
 
 @router.get("/types")
@@ -788,10 +1031,10 @@ async def get_payment_types():
     return {
         "payment_types": {
             "regular": {
-                "amount": 5000,
+                "amount": settings.REGULAR_APPLICATION_FEE,
                 "currency": "NGN",
                 "description": "Regular Application",
-                "user_display": "Pay ₦5,000 Application Fee",
+                "user_display": f"Pay ₦{settings.REGULAR_APPLICATION_FEE:,} Application Fee",
                 "features": [
                     "Standard application processing",
                     "Normal processing timeline",
@@ -799,10 +1042,10 @@ async def get_payment_types():
                 ]
             },
             "vip": {
-                "amount": 15000,
+                "amount": settings.VIP_APPLICATION_FEE,
                 "currency": "NGN",
                 "description": "VIP Application",
-                "user_display": "Pay ₦15,000 VIP Application Fee",
+                "user_display": f"Pay ₦{settings.VIP_APPLICATION_FEE:,} VIP Application Fee",
                 "features": [
                     "Priority processing",
                     "Dedicated support",
@@ -811,7 +1054,7 @@ async def get_payment_types():
                 ]
             }
         },
-        "notes": "All payments are processed securely via Paystack"
+        "notes": "All payments are processed securely via Paystack with immediate fund distribution"
     }
 
 @router.get("/check/{email}")
@@ -854,6 +1097,7 @@ async def check_payment_status(
         if payment.status == "success":
             response["paid_at"] = payment.paid_at.isoformat() if payment.paid_at else None
             response["message"] = "Payment completed successfully"
+            response["immediate_transfers_processed"] = payment.immediate_transfers_processed
         
         return response
         

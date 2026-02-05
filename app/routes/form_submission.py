@@ -1,6 +1,7 @@
-# app/routes/form_submission.py
 from fastapi import APIRouter, Depends, HTTPException, Form, BackgroundTasks
 from sqlalchemy.orm import Session
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from app.database import get_db
 from app.models.applicant import Applicant
 from app.models.officer import Officer
@@ -26,58 +27,83 @@ async def generate_and_send_pdfs(
     Background task to generate PDFs and send email
     """
     try:
-        logger.info(f"Generating PDFs for {user_type}: {email}")
+        logger.info(f"📄 Generating PDFs for {user_type}: {email}")
         
         # Get user based on type
+        user = None
+        user_id = None
+        name = ""
+        
         if user_type == "applicant":
             user = db.query(Applicant).filter(Applicant.email == email).first()
-            if not user:
-                logger.error(f"Applicant not found: {email}")
-                return
-            user_id = str(user.id)
-            name = user.full_name
-            
+            if user:
+                user_id = str(user.id)
+                name = user.full_name
+                
         elif user_type == "officer":
             user = db.query(Officer).filter(Officer.email == email).first()
-            if not user:
-                logger.error(f"Officer not found: {email}")
-                return
-            user_id = str(user.id)
-            name = user.full_name or f"Officer {user.unique_id}"
-            
+            if user:
+                user_id = str(user.id)
+                name = user.full_name or f"Officer {user.unique_id}"
+                
         elif user_type == "existing_officer":
             user = db.query(ExistingOfficer).filter(ExistingOfficer.email == email).first()
-            if not user:
-                logger.error(f"Existing officer not found: {email}")
-                return
-            user_id = str(user.id)
-            name = user.full_name
-            
+            if user:
+                user_id = str(user.id)
+                name = user.full_name
+                
         else:
             logger.error(f"Invalid user type: {user_type}")
             return
         
-        # Generate PDFs
+        if not user or not user_id:
+            logger.error(f"User not found: {email}")
+            return
+        
+        # Generate PDFs with PDFService
         pdf_service = PDFService(db)
         pdf_paths = pdf_service.generate_both_pdfs(user_id, user_type)
         
+        # Update database with PDF paths
+        current_time = datetime.now(ZoneInfo("UTC"))
+        
+        if user_type == "applicant":
+            user.terms_pdf_path = pdf_paths.get("terms_pdf_path")
+            user.application_pdf_path = pdf_paths.get("application_pdf_path")
+            user.terms_generated_at = current_time
+            user.application_generated_at = current_time
+        elif user_type == "officer":
+            user.terms_pdf_path = pdf_paths.get("terms_pdf_path")
+            user.application_pdf_path = pdf_paths.get("application_pdf_path")
+            user.terms_generated_at = current_time
+            user.application_generated_at = current_time
+        elif user_type == "existing_officer":
+            user.terms_pdf_path = pdf_paths.get("terms_pdf_path")
+            user.registration_pdf_path = pdf_paths.get("application_pdf_path")
+            user.terms_generated_at = current_time
+            user.registration_generated_at = current_time
+        
+        db.commit()
+        
         # Send email with PDF attachments
-        admin_email = "admin@marshalcoreng.com"  # Could be from settings
+        admin_email = "admin@marshalcoreng.com"
         success = await send_pdfs_email(
             to_email=email,
             name=name,
-            terms_pdf_path=pdf_paths["terms_pdf_path"],
-            application_pdf_path=pdf_paths["application_pdf_path"],
+            terms_pdf_path=pdf_paths.get("terms_pdf_path"),
+            application_pdf_path=pdf_paths.get("application_pdf_path"),
             cc_email=admin_email
         )
         
         if success:
-            logger.info(f"PDFs generated and emailed successfully to {email}")
+            logger.info(f"✅ PDFs generated and emailed to {email}")
         else:
-            logger.error(f"Failed to send PDFs email to {email}")
+            logger.error(f"❌ Failed to send PDFs email to {email}")
             
     except Exception as e:
-        logger.error(f"Error in generate_and_send_pdfs for {email}: {str(e)}")
+        logger.error(f"❌ Error in generate_and_send_pdfs for {email}: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
 
 @router.post("/submit")
 async def submit_application(
@@ -86,6 +112,7 @@ async def submit_application(
     background_tasks: BackgroundTasks = None,
     db: Session = Depends(get_db)
 ):
+    """Submit applicant application and generate PDFs"""
     # Find applicant
     applicant = db.query(Applicant).filter(Applicant.email == email).first()
     if not applicant:
@@ -129,9 +156,7 @@ async def submit_officer_application(
     background_tasks: BackgroundTasks = None,
     db: Session = Depends(get_db)
 ):
-    """
-    Endpoint for officer form submission (after payment/verification)
-    """
+    """Submit officer application and generate PDFs"""
     officer = db.query(Officer).filter(Officer.email == email).first()
     if not officer:
         raise HTTPException(status_code=404, detail="Officer not found")
@@ -165,9 +190,7 @@ async def submit_existing_officer_application(
     background_tasks: BackgroundTasks = None,
     db: Session = Depends(get_db)
 ):
-    """
-    Endpoint for existing officer form submission (after verification)
-    """
+    """Submit existing officer application and generate PDFs"""
     officer = db.query(ExistingOfficer).filter(ExistingOfficer.email == email).first()
     if not officer:
         raise HTTPException(status_code=404, detail="Existing officer not found")

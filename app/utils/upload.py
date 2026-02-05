@@ -76,7 +76,7 @@ def save_upload(file: UploadFile, subfolder: str) -> str:
         
         # Return relative path for database storage
         relative_path = os.path.join(subfolder, filename).replace("\\", "/")
-        logger.info(f"File uploaded successfully: {relative_path}")
+        logger.info(f"✅ File uploaded successfully: {relative_path}")
         return relative_path
         
     except Exception as e:

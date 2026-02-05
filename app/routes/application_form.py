@@ -1,4 +1,3 @@
-# app/routes/application_form.py
 from fastapi import APIRouter, UploadFile, Form, Depends, File, HTTPException, status
 from sqlalchemy.orm import Session
 from app.database import SessionLocal
@@ -10,6 +9,8 @@ from datetime import datetime
 from typing import Optional
 import uuid
 from sqlalchemy import func
+import json
+from zoneinfo import ZoneInfo
 
 router = APIRouter()
 
@@ -22,54 +23,62 @@ def get_db():
 
 @router.post("/apply", response_model=ApplicantResponse)
 async def apply(
-    # SECTION A: Personal Information
-    category: str = Form(...),
-    marital_status: str = Form(...),
-    nin_number: str = Form(...),
-    full_name: str = Form(...),
-    first_name: str = Form(...),
-    surname: str = Form(...),
-    other_name: Optional[str] = Form(None),
-    email: str = Form(...),
-    mobile_number: str = Form(...),
+    # SECTION A: Basic Information (8 fields)
     phone_number: str = Form(...),
-    gender: str = Form(...),
-    nationality: str = Form(...),
-    country_of_residence: str = Form(...),
-    state_of_origin: str = Form(...),
-    state_of_residence: str = Form(...),
-    residential_address: str = Form(...),
-    local_government_residence: str = Form(...),
-    local_government_origin: str = Form(...),
+    nin_number: str = Form(...),
     date_of_birth: str = Form(...),
-    religion: str = Form(...),
-    place_of_birth: str = Form(...),
+    state_of_residence: str = Form(...),
+    lga: str = Form(...),
+    address: str = Form(...),
     
-    # SECTION B: Documents
+    # SECTION B: Document Uploads (2 uploads only) - INCLUDES PASSPORT
     passport_photo: UploadFile = File(...),
     nin_slip: UploadFile = File(...),
-    ssce_certificate: UploadFile = File(...),
-    higher_education_degree: Optional[UploadFile] = File(None),
     
-    # SECTION C: Additional Information
-    do_you_smoke: bool = Form(False),
-    agree_to_join: bool = Form(...),
-    agree_to_abide_rules: bool = Form(...),
-    agree_to_return_properties: bool = Form(...),
-    additional_skills: Optional[str] = Form(None),
-    design_rating: Optional[int] = Form(None),
+    # SECTION C: Application Details
+    selected_reasons: str = Form(...),  # JSON string of selected reasons
+    additional_details: Optional[str] = Form(None),
+    application_tier: str = Form(...),  # 'regular' or 'vip'
     
-    # SECTION D: Financial Information
-    bank_name: str = Form(...),
-    account_number: str = Form(...),
-    
-    # Application password for verification
+    # SECTION D: Verification
     application_password: str = Form(...),
     
     db: Session = Depends(get_db)
 ):
     try:
-        normalized_email = email.strip().lower()
+        normalized_email = None
+        
+        # Validate application tier
+        if application_tier not in ["regular", "vip"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid application tier. Must be 'regular' or 'vip'."
+            )
+        
+        # Parse and validate reasons
+        try:
+            reasons_list = json.loads(selected_reasons)
+            if not isinstance(reasons_list, list):
+                raise ValueError("Reasons must be a list")
+        except (json.JSONDecodeError, ValueError) as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid reasons format: {str(e)}"
+            )
+        
+        # Validate reasons based on tier
+        if application_tier == "regular":
+            if len(reasons_list) < 1 or len(reasons_list) > 3:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Regular applicants must select 1-3 reasons"
+                )
+        elif application_tier == "vip":
+            if len(reasons_list) < 1:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="VIP applicants must select at least 1 reason"
+                )
         
         # Validate date format
         try:
@@ -80,31 +89,43 @@ async def apply(
                 detail="Invalid date format. Use YYYY-MM-DD."
             )
 
-        # Verify pre-applicant status and password
+        # Verify pre-applicant exists via application password
         pre_applicant = db.query(PreApplicant).filter(
-            func.lower(PreApplicant.email) == normalized_email
+            PreApplicant.application_password == application_password
         ).first()
         
         if not pre_applicant:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Pre-applicant not found"
+                detail="Invalid application password"
             )
             
+        # Set normalized email from pre_applicant
+        normalized_email = pre_applicant.email.strip().lower()
+        
+        # Verify payment completion
         if not pre_applicant.has_paid:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Payment not completed"
             )
             
-        # Verify application password
+        # Verify application password validity
+        current_time = datetime.now(ZoneInfo("UTC"))
         if (pre_applicant.application_password != application_password or
             pre_applicant.password_used or
             not pre_applicant.password_expires_at or
-            pre_applicant.password_expires_at <= datetime.utcnow()):
+            pre_applicant.password_expires_at <= current_time):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid or expired application password"
+            )
+
+        # Check if privacy was accepted
+        if not pre_applicant.privacy_accepted:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Privacy notice must be accepted before submitting application"
             )
 
         # Check if application already submitted
@@ -114,54 +135,32 @@ async def apply(
                 detail="Application already submitted with this email"
             )
 
-        # Save uploaded files
+        # ✅ Save uploaded files - PASSPORT IS SAVED HERE
         passport_path = save_upload(passport_photo, "passports")
         nin_path = save_upload(nin_slip, "nin_slips")
-        ssce_path = save_upload(ssce_certificate, "ssce")
-        degree_path = save_upload(higher_education_degree, "degrees") if higher_education_degree else None
 
-        # Create new applicant
+        # Create new applicant with simplified fields
         applicant = Applicant(
-            # SECTION A: Personal Information
-            category=category,
-            marital_status=marital_status,
-            nin_number=nin_number,
-            full_name=full_name,
-            first_name=first_name,
-            surname=surname,
-            other_name=other_name,
-            email=email,
-            mobile_number=mobile_number,
+            # SECTION A: Basic Information
             phone_number=phone_number,
-            gender=gender,
-            nationality=nationality,
-            country_of_residence=country_of_residence,
-            state_of_origin=state_of_origin,
-            state_of_residence=state_of_residence,
-            residential_address=residential_address,
-            local_government_residence=local_government_residence,
-            local_government_origin=local_government_origin,
+            nin_number=nin_number,
             date_of_birth=dob,
-            religion=religion,
-            place_of_birth=place_of_birth,
+            state_of_residence=state_of_residence,
+            lga=lga,
+            address=address,
             
-            # SECTION B: Documents
+            # SECTION B: Documents - INCLUDES PASSPORT PATH
             passport_photo=passport_path,
             nin_slip=nin_path,
-            ssce_certificate=ssce_path,
-            higher_education_degree=degree_path,
             
-            # SECTION C: Additional Information
-            do_you_smoke=do_you_smoke,
-            agree_to_join=agree_to_join,
-            agree_to_abide_rules=agree_to_abide_rules,
-            agree_to_return_properties=agree_to_return_properties,
-            additional_skills=additional_skills,
-            design_rating=design_rating,
+            # SECTION C: Application Details
+            application_tier=application_tier,
+            selected_reasons=reasons_list,
+            additional_details=additional_details,
             
-            # SECTION D: Financial Information
-            bank_name=bank_name,
-            account_number=account_number,
+            # SECTION D: Pre-filled from pre-applicant
+            full_name=pre_applicant.full_name,
+            email=pre_applicant.email,
             
             # SECTION E: Meta Information
             is_verified=True,
@@ -171,7 +170,7 @@ async def apply(
         # Mark password as used and application as submitted
         pre_applicant.password_used = True
         pre_applicant.application_submitted = True
-        pre_applicant.submitted_at = datetime.utcnow()
+        pre_applicant.submitted_at = current_time
         pre_applicant.status = "submitted"
 
         db.add(applicant)

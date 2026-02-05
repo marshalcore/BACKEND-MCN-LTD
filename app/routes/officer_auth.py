@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request, BackgroundTasks
 from sqlalchemy.orm import Session, Load, undefer
 from datetime import timedelta, datetime
+from zoneinfo import ZoneInfo
 from jose import jwt, JWTError
 from pydantic import BaseModel, EmailStr
 import secrets
@@ -97,11 +98,12 @@ async def send_officer_signup_otp(email: str, name: str, otp_code: str):
 
 def verify_otp_code(db: Session, email: str, code: str, purpose: str) -> bool:
     """Verify OTP code"""
+    current_time = datetime.now(ZoneInfo("UTC"))
     verification = db.query(VerificationCode).filter(
         VerificationCode.email == email,
         VerificationCode.code == code,
         VerificationCode.purpose == purpose,
-        VerificationCode.expires_at > datetime.utcnow()
+        VerificationCode.expires_at > current_time
     ).first()
     
     return verification is not None
@@ -125,7 +127,8 @@ async def officer_signup(data: OfficerSignup, background_tasks: BackgroundTasks,
 
     # Generate OTP
     otp_code = generate_otp()
-    expires_at = datetime.utcnow() + timedelta(minutes=10)  # OTP expires in 10 minutes
+    current_time = datetime.now(ZoneInfo("UTC"))
+    expires_at = current_time + timedelta(minutes=10)  # OTP expires in 10 minutes
 
     # Store OTP in verification codes table
     verification_code = VerificationCode(
@@ -348,7 +351,8 @@ async def forgot_password(
         # Don't reveal whether email exists for security
         # Generate a secure reset code
         reset_code = generate_reset_code()
-        expires_at = datetime.utcnow() + timedelta(
+        current_time = datetime.now(ZoneInfo("UTC"))
+        expires_at = current_time + timedelta(
             minutes=EMAIL_CONFIG["RESET_CODE_EXPIRE_MINUTES"]
         )
         
@@ -385,6 +389,8 @@ async def forgot_password(
 @router.post("/reset-password")
 async def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db)):
     try:
+        current_time = datetime.now(ZoneInfo("UTC"))
+        
         # Validate the reset code
         verification_code = db.query(VerificationCode).filter_by(
             email=request.email,
@@ -398,7 +404,7 @@ async def reset_password(request: ResetPasswordRequest, db: Session = Depends(ge
                 detail="Invalid or expired reset code"
             )
         
-        if verification_code.expires_at < datetime.utcnow():
+        if verification_code.expires_at < current_time:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Reset code has expired"
