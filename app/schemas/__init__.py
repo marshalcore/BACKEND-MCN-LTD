@@ -1,4 +1,4 @@
-# app/schemas/__init__.py - UPDATED
+# app/schemas/__init__.py
 from .officer import (
     OfficerSignup,
     OfficerLogin,
@@ -8,21 +8,21 @@ from .officer import (
     OfficerProfile,
     OfficerUpdate,
     ForgotPasswordRequest,
-    ResetPasswordRequest
+    ResetPasswordRequest,
 )
 from .payment import (
-    ManualPaymentRequest, 
+    ManualPaymentRequest,
     GatewayCallback,
     PaymentCreate,
     PaymentVerify,
     PaymentCallback,
     PaymentType,
-    UserType
+    UserType,
 )
 from .pre_applicant import (
     PreApplicantCreate,
     PreApplicantStatusResponse,
-    PasswordValidationRequest
+    PasswordValidationRequest,
 )
 from .immediate_transfer import (
     TransferRecipientType,
@@ -38,7 +38,15 @@ from .immediate_transfer import (
     RetryTransferRequest,
     TransferHistoryFilters,
     TransferSummary,
-    TransferHistoryResponse
+    TransferHistoryResponse,
+)
+from .email_verification import (
+    EmailCheckRequest,
+    EmailCheckResponse,
+    SendVerificationRequest,
+    SendVerificationResponse,
+    ConfirmVerificationRequest,
+    ConfirmVerificationResponse,
 )
 
 __all__ = [
@@ -75,5 +83,12 @@ __all__ = [
     "RetryTransferRequest",
     "TransferHistoryFilters",
     "TransferSummary",
-    "TransferHistoryResponse"
+    "TransferHistoryResponse",
+    # Email verification
+    "EmailCheckRequest",
+    "EmailCheckResponse",
+    "SendVerificationRequest",
+    "SendVerificationResponse",
+    "ConfirmVerificationRequest",
+    "ConfirmVerificationResponse",
 ]

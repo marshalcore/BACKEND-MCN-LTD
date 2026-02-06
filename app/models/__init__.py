@@ -9,12 +9,12 @@ from .payment import Payment
 from .immediate_transfer import ImmediateTransfer  # NEW
 
 __all__ = [
-    "Admin", 
-    "Applicant", 
-    "PreApplicant", 
-    "Officer", 
+    "Admin",
+    "Applicant",
+    "PreApplicant",
+    "Officer",
     "VerificationCode",
     "ExistingOfficer",
     "Payment",
-    "ImmediateTransfer"  # NEW
+    "ImmediateTransfer",
 ]

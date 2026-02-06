@@ -17,7 +17,8 @@ class PreApplicant(Base):
     is_verified = Column(Boolean, default=False)
     application_password = Column(String, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(ZoneInfo("UTC")))
-    
+    email_verified = Column(Boolean, default=False, nullable=False)
+    email_verified_at = Column(DateTime, nullable=True)
     # Payment Fields
     payment_reference = Column(String, nullable=True)
     

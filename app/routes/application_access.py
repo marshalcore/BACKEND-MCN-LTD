@@ -8,6 +8,8 @@ from app.utils.password import generate_password
 from pydantic import EmailStr, BaseModel
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
+from fastapi import Request, Body
+from typing import Optional
 
 router = APIRouter(
     prefix="/access",
@@ -18,13 +20,44 @@ class VerifyRequest(BaseModel):
     email: EmailStr
     password: str
 
+class EmailRequest(BaseModel):
+    email: EmailStr
+    
 @router.post("/generate-password")
-async def generate_application_password(email: EmailStr, db: Session = Depends(get_db)):
-    normalized_email = email.strip().lower()
+async def generate_application_password(
+    request: Request,
+    payload: Optional[EmailRequest] = Body(None),
+    db: Session = Depends(get_db),
+):
+    """
+    Backwards-compatible generator:
+    - Accepts JSON object: { "email": "..." } (preferred)
+    - Falls back to legacy raw-body (e.g., "user@example.com" or plain text)
+    """
+    # Determine email from JSON payload or raw body
+    if payload and payload.email:
+        normalized_email = payload.email.strip().lower()
+    else:
+        body_bytes = await request.body()
+        if not body_bytes:
+            raise HTTPException(status_code=400, detail="Request body missing")
+        try:
+            import json
+            parsed = json.loads(body_bytes)
+            if isinstance(parsed, dict) and parsed.get("email"):
+                normalized_email = str(parsed["email"]).strip().lower()
+            elif isinstance(parsed, str):
+                normalized_email = parsed.strip().lower()
+            else:
+                raise ValueError("Unsupported body shape")
+        except json.JSONDecodeError:
+            # Not JSON — treat as raw text
+            normalized_email = body_bytes.decode("utf-8").strip().strip('"').lower()
+
     pre_applicant = db.query(PreApplicant).filter(
         func.lower(PreApplicant.email) == normalized_email
     ).first()
-    
+
     if not pre_applicant:
         raise HTTPException(status_code=404, detail="Pre-applicant not found")
 
@@ -33,9 +66,11 @@ async def generate_application_password(email: EmailStr, db: Session = Depends(g
 
     # Check if password was already generated and is still valid
     current_time = datetime.now(ZoneInfo("UTC"))
-    if (pre_applicant.application_password and 
-        pre_applicant.password_expires_at and 
-        pre_applicant.password_expires_at > current_time):
+    if (
+        pre_applicant.application_password
+        and pre_applicant.password_expires_at
+        and pre_applicant.password_expires_at > current_time
+    ):
         return {"message": "Password already generated and still valid."}
 
     # Generate new password with 7-day validity
@@ -45,12 +80,12 @@ async def generate_application_password(email: EmailStr, db: Session = Depends(g
     pre_applicant.password_generated_at = current_time
     pre_applicant.password_expires_at = current_time + timedelta(days=7)  # 7-day validity
     pre_applicant.status = "password_sent"
-    
+
     db.commit()
 
-    await send_application_password_email(email, pre_applicant.full_name, password)
+    # Use normalized_email when sending
+    await send_application_password_email(normalized_email, pre_applicant.full_name, password)
     return {"message": "Password sent to email"}
-
 @router.post("/verify")
 def verify_password(payload: VerifyRequest, db: Session = Depends(get_db)):
     normalized_email = payload.email.strip().lower()

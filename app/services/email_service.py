@@ -818,6 +818,27 @@ async def send_application_password_email(to_email: str, name: str, password: st
     await email_queue.add_email(message, "Application Password", to_email)
     return True
 
+async def send_verification_code_email(to_email: str, code: str):
+    """
+    Send verification code email (queued). Keeps content minimal.
+    """
+    try:
+        html = f"""
+        <p>Your Marshal Core verification code is <strong>{code}</strong>.</p>
+        <p>This code expires in 20 minutes.</p>
+        """
+        message = MessageSchema(
+            subject="Marshal Core verification code",
+            recipients=[to_email],
+            body=html,
+            subtype="html"
+        )
+        await email_queue.add_email(message, "Verification Code", to_email)
+        return True
+    except Exception as e:
+        logger.error(f"Failed to queue verification email to {to_email}: {e}")
+        return False
+    
 async def send_guarantor_confirmation_email(to_email: str, name: str):
     html = env.get_template("confirm_submission.html").render(name=name, link="/static/guarantor-form.pdf")
     message = MessageSchema(

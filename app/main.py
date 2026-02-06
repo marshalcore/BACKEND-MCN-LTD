@@ -133,6 +133,7 @@ from app.routes.existing_officer_dashboard import router as existing_officer_das
 from app.routes.pdf_download import router as pdf_download_router
 from app.routes.health import router as health_router
 from app.routes.privacy import router as privacy_router
+from app.routes.email_verification import router as email_verification_router
 
 # Include all routers
 routers = [
@@ -151,6 +152,7 @@ routers = [
     pdf_download_router,
     health_router,
     privacy_router, 
+    email_verification_router,
 ]
 
 for router in routers:
