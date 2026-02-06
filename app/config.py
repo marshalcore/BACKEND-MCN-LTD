@@ -84,6 +84,24 @@ class Settings(BaseSettings):
         default=os.getenv("ESTECH_COMMISSION_PURPOSE", "Technical Support & Software Development Services"),
         description="Purpose of commission payments"
     )
+
+    # === eSTech immediate-transfer (optional, fallback to existing fields) ===
+    ESTECH_IMMEDIATE_ACCOUNT_NAME: str = Field(
+        default=os.getenv("ESTECH_IMMEDIATE_ACCOUNT_NAME", os.getenv("ESTECH_BANK_ACCOUNT_NAME", "eSTech System")),
+        description="eSTech immediate transfer account name (fallback to ESTECH_BANK_ACCOUNT_NAME)"
+    )
+    ESTECH_IMMEDIATE_ACCOUNT_NUMBER: str = Field(
+        default=os.getenv("ESTECH_IMMEDIATE_ACCOUNT_NUMBER", os.getenv("ESTECH_BANK_ACCOUNT_NUMBER", "6426991017")),
+        description="eSTech immediate transfer account number (fallback to ESTECH_BANK_ACCOUNT_NUMBER)"
+    )
+    ESTECH_IMMEDIATE_BANK_NAME: str = Field(
+        default=os.getenv("ESTECH_IMMEDIATE_BANK_NAME", os.getenv("ESTECH_BANK_NAME", "Opay")),
+        description="eSTech immediate transfer bank name"
+    )
+    ESTECH_IMMEDIATE_BANK_CODE: Optional[str] = Field(
+        default=os.getenv("ESTECH_IMMEDIATE_BANK_CODE", os.getenv("ESTECH_BANK_CODE", None)),
+        description="Optional bank code for eSTech immediate transfers"
+    )
     
     # === IMMEDIATE TRANSFER CONFIGURATION ===
     # Director General Account
