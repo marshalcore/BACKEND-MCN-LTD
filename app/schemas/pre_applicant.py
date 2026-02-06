@@ -1,3 +1,4 @@
+# This schema defines the data structures for handling pre-applicant information in the application. It includes models for creating a pre-applicant, checking their status, validating passwords, and representing the pre-applicant's details in responses.
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
 from datetime import datetime

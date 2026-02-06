@@ -1,4 +1,5 @@
-from fastapi import APIRouter, HTTPException, Depends, status
+# app/routes/application_access.py - FIXED COMPLETE VERSION
+from fastapi import APIRouter, HTTPException, Depends, status, Request, Body
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.database import get_db
@@ -8,13 +9,15 @@ from app.utils.password import generate_password
 from pydantic import EmailStr, BaseModel
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
-from fastapi import Request, Body
 from typing import Optional
+import logging
 
 router = APIRouter(
     prefix="/access",
     tags=["Application Access"]
 )
+
+logger = logging.getLogger(__name__)
 
 class VerifyRequest(BaseModel):
     email: EmailStr
@@ -66,26 +69,41 @@ async def generate_application_password(
 
     # Check if password was already generated and is still valid
     current_time = datetime.now(ZoneInfo("UTC"))
-    if (
-        pre_applicant.application_password
-        and pre_applicant.password_expires_at
-        and pre_applicant.password_expires_at > current_time
-    ):
-        return {"message": "Password already generated and still valid."}
+    
+    # FIX: Handle None values and ensure timezone-aware comparison
+    if (pre_applicant.application_password and 
+        pre_applicant.password_expires_at):
+        
+        # Ensure both datetimes are timezone-aware before comparing
+        if pre_applicant.password_expires_at.tzinfo is None:
+            # If stored datetime is naive, make it aware with UTC
+            expires_at = pre_applicant.password_expires_at.replace(tzinfo=ZoneInfo("UTC"))
+        else:
+            expires_at = pre_applicant.password_expires_at
+        
+        # Now compare timezone-aware datetimes
+        if expires_at > current_time:
+            return {"message": "Password already generated and still valid."}
 
     # Generate new password with 7-day validity
     password = generate_password()
     pre_applicant.application_password = password
     pre_applicant.password_generated = True
     pre_applicant.password_generated_at = current_time
+    # Store as timezone-aware datetime
     pre_applicant.password_expires_at = current_time + timedelta(days=7)  # 7-day validity
     pre_applicant.status = "password_sent"
 
     db.commit()
 
     # Use normalized_email when sending
-    await send_application_password_email(normalized_email, pre_applicant.full_name, password)
-    return {"message": "Password sent to email"}
+    try:
+        await send_application_password_email(normalized_email, pre_applicant.full_name, password)
+        return {"message": "Password sent to email"}
+    except Exception as e:
+        logger.error(f"Failed to send email: {e}")
+        return {"message": "Password generated but email sending failed", "password": password}
+
 @router.post("/verify")
 def verify_password(payload: VerifyRequest, db: Session = Depends(get_db)):
     normalized_email = payload.email.strip().lower()
@@ -114,7 +132,15 @@ def verify_password(payload: VerifyRequest, db: Session = Depends(get_db)):
     if not pre_applicant.password_expires_at:
         raise HTTPException(status_code=401, detail="Password not properly generated")
     
-    if pre_applicant.password_expires_at <= current_time:
+    # FIX: Ensure both datetimes are timezone-aware before comparing
+    if pre_applicant.password_expires_at.tzinfo is None:
+        # If stored datetime is naive, make it aware with UTC
+        expires_at = pre_applicant.password_expires_at.replace(tzinfo=ZoneInfo("UTC"))
+    else:
+        expires_at = pre_applicant.password_expires_at
+    
+    # Now compare timezone-aware datetimes
+    if expires_at <= current_time:
         raise HTTPException(status_code=401, detail="Password expired (7-day validity)")
 
     # Check if password was already used
@@ -142,8 +168,15 @@ def check_application_status(email: EmailStr, db: Session = Depends(get_db)):
     # Calculate password expiry info
     current_time = datetime.now(ZoneInfo("UTC"))
     password_expires_in = None
+    
     if pre_applicant.password_expires_at:
-        remaining = pre_applicant.password_expires_at - current_time
+        # FIX: Ensure both datetimes are timezone-aware before comparing
+        if pre_applicant.password_expires_at.tzinfo is None:
+            expires_at = pre_applicant.password_expires_at.replace(tzinfo=ZoneInfo("UTC"))
+        else:
+            expires_at = pre_applicant.password_expires_at
+        
+        remaining = expires_at - current_time
         if remaining.total_seconds() > 0:
             password_expires_in = {
                 "days": remaining.days,
@@ -167,3 +200,99 @@ def check_application_status(email: EmailStr, db: Session = Depends(get_db)):
             not pre_applicant.application_submitted
         )
     }
+
+# Additional helper endpoint for debugging
+@router.get("/debug/timezone/{email}")
+def debug_timezone_info(email: str, db: Session = Depends(get_db)):
+    """Debug endpoint to check datetime timezone info"""
+    normalized_email = email.strip().lower()
+    pre_applicant = db.query(PreApplicant).filter(
+        func.lower(PreApplicant.email) == normalized_email
+    ).first()
+    
+    if not pre_applicant:
+        raise HTTPException(status_code=404, detail="Not found")
+    
+    current_time = datetime.now(ZoneInfo("UTC"))
+    
+    expires_info = {}
+    if pre_applicant.password_expires_at:
+        expires_info = {
+            "value": pre_applicant.password_expires_at.isoformat() if pre_applicant.password_expires_at else None,
+            "tzinfo": str(pre_applicant.password_expires_at.tzinfo) if pre_applicant.password_expires_at else None,
+            "is_aware": pre_applicant.password_expires_at.tzinfo is not None if pre_applicant.password_expires_at else None
+        }
+    
+    generated_info = {}
+    if pre_applicant.password_generated_at:
+        generated_info = {
+            "value": pre_applicant.password_generated_at.isoformat() if pre_applicant.password_generated_at else None,
+            "tzinfo": str(pre_applicant.password_generated_at.tzinfo) if pre_applicant.password_generated_at else None,
+            "is_aware": pre_applicant.password_generated_at.tzinfo is not None if pre_applicant.password_generated_at else None
+        }
+    
+    return {
+        "email": normalized_email,
+        "current_time": {
+            "iso": current_time.isoformat(),
+            "tzinfo": str(current_time.tzinfo)
+        },
+        "password_expires_at": expires_info,
+        "password_generated_at": generated_info,
+        "has_password": bool(pre_applicant.application_password),
+        "is_verified": pre_applicant.is_verified
+    }
+
+# Resend password endpoint
+@router.post("/resend-password")
+def resend_password(email: EmailStr, db: Session = Depends(get_db)):
+    """Resend the application password to the user's email"""
+    normalized_email = email.strip().lower()
+    
+    pre_applicant = db.query(PreApplicant).filter(
+        func.lower(PreApplicant.email) == normalized_email
+    ).first()
+    
+    if not pre_applicant:
+        raise HTTPException(status_code=404, detail="Pre-applicant not found")
+    
+    if not pre_applicant.application_password:
+        raise HTTPException(status_code=400, detail="No password generated yet")
+    
+    if pre_applicant.password_used:
+        raise HTTPException(status_code=400, detail="Password already used")
+    
+    # Check if password is expired
+    current_time = datetime.now(ZoneInfo("UTC"))
+    if pre_applicant.password_expires_at:
+        # FIX: Ensure both datetimes are timezone-aware
+        if pre_applicant.password_expires_at.tzinfo is None:
+            expires_at = pre_applicant.password_expires_at.replace(tzinfo=ZoneInfo("UTC"))
+        else:
+            expires_at = pre_applicant.password_expires_at
+        
+        if expires_at <= current_time:
+            raise HTTPException(status_code=400, detail="Password expired. Please generate a new one.")
+    
+    # Resend the email
+    try:
+        # Import inside function to avoid circular imports if any
+        from app.services.email_service import send_application_password_email
+        import asyncio
+        
+        # Run async function in sync context
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(
+            send_application_password_email(
+                normalized_email, 
+                pre_applicant.full_name, 
+                pre_applicant.application_password
+            )
+        )
+        loop.close()
+        
+        return {"message": "Password resent to your email"}
+    except Exception as e:
+        logger.error(f"Failed to resend password email: {e}")
+        raise HTTPException(status_code=500, detail="Failed to resend password email")

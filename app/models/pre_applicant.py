@@ -1,3 +1,4 @@
+# This model represents a pre-applicant for the event. It captures essential information about the applicant, their payment status, tier selection, and other relevant details before they become a full applicant.
 from sqlalchemy import Column, String, Boolean, DateTime
 from sqlalchemy.dialects.postgresql import UUID
 from datetime import datetime
