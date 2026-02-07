@@ -140,7 +140,7 @@ routers = [
     pre_register_router,
     payment_router,  # Includes immediate transfer endpoints
     application_access_router,
-    application_form_router,
+    #application_form_router,
     form_submission_router,
     officer_auth_router,
     password_reset_router,

@@ -1,26 +1,17 @@
-# This route handles the application form submission for the event. It processes the applicant's information, validates their application password, checks their payment status, and saves their application details along with uploaded documents. The route ensures that only valid and complete applications are accepted, and it provides appropriate error responses for various failure scenarios.
+# app/routes/application_form.py - COMPLETE FIXED VERSION
 from fastapi import APIRouter, UploadFile, Form, Depends, File, HTTPException, status
 from sqlalchemy.orm import Session
-from app.database import SessionLocal
-from app.models.applicant import Applicant
+from app.database import get_db
 from app.models.pre_applicant import PreApplicant
+from app.models.applicant import Applicant
 from app.utils.upload import save_upload
 from app.schemas.applicant import ApplicantResponse
 from datetime import datetime
 from typing import Optional
-import uuid
-from sqlalchemy import func
 import json
 from zoneinfo import ZoneInfo
 
 router = APIRouter()
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 @router.post("/apply", response_model=ApplicantResponse)
 async def apply(
@@ -113,13 +104,38 @@ async def apply(
             
         # Verify application password validity
         current_time = datetime.now(ZoneInfo("UTC"))
-        if (pre_applicant.application_password != application_password or
-            pre_applicant.password_used or
-            not pre_applicant.password_expires_at or
-            pre_applicant.password_expires_at <= current_time):
+        
+        if pre_applicant.application_password != application_password:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid or expired application password"
+                detail="Invalid application password"
+            )
+        
+        if pre_applicant.password_used:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Application password has already been used"
+            )
+            
+        if not pre_applicant.password_expires_at:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Application password not properly generated"
+            )
+        
+        # FIXED: Handle timezone-aware vs naive datetime comparison
+        expires_at = pre_applicant.password_expires_at
+        if expires_at.tzinfo is None:
+            # If datetime is naive, make it aware with UTC
+            expires_at_aware = expires_at.replace(tzinfo=ZoneInfo("UTC"))
+        else:
+            expires_at_aware = expires_at
+        
+        # Now compare safely with timezone-aware datetime
+        if expires_at_aware <= current_time:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Application password has expired. Please request a new one."
             )
 
         # Check if privacy was accepted
@@ -136,7 +152,7 @@ async def apply(
                 detail="Application already submitted with this email"
             )
 
-        # ✅ Save uploaded files - PASSPORT IS SAVED HERE
+        # ✅ Save uploaded files
         passport_path = save_upload(passport_photo, "passports")
         nin_path = save_upload(nin_slip, "nin_slips")
 
@@ -150,7 +166,7 @@ async def apply(
             lga=lga,
             address=address,
             
-            # SECTION B: Documents - INCLUDES PASSPORT PATH
+            # SECTION B: Documents
             passport_photo=passport_path,
             nin_slip=nin_path,
             
@@ -165,7 +181,8 @@ async def apply(
             
             # SECTION E: Meta Information
             is_verified=True,
-            has_paid=True
+            has_paid=True,
+            payment_type=application_tier
         )
 
         # Mark password as used and application as submitted
@@ -188,3 +205,43 @@ async def apply(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error creating application: {str(e)}"
         )
+
+@router.get("/status/{email}")
+async def get_application_status(email: str, db: Session = Depends(get_db)):
+    """Check application status"""
+    normalized_email = email.strip().lower()
+    
+    # Check applicant
+    applicant = db.query(Applicant).filter(
+        Applicant.email == normalized_email
+    ).first()
+    
+    if applicant:
+        return {
+            "status": "submitted",
+            "applicant_id": str(applicant.id),
+            "full_name": applicant.full_name,
+            "email": applicant.email,
+            "application_tier": applicant.application_tier,
+            "submitted_at": applicant.created_at.isoformat() if applicant.created_at else None
+        }
+    
+    # Check pre-applicant
+    pre_applicant = db.query(PreApplicant).filter(
+        PreApplicant.email == normalized_email
+    ).first()
+    
+    if pre_applicant:
+        return {
+            "status": pre_applicant.status,
+            "has_paid": pre_applicant.has_paid,
+            "privacy_accepted": pre_applicant.privacy_accepted,
+            "application_submitted": pre_applicant.application_submitted,
+            "password_generated": pre_applicant.password_generated,
+            "password_used": pre_applicant.password_used
+        }
+    
+    raise HTTPException(
+        status_code=404,
+        detail="No application found for this email"
+    )
