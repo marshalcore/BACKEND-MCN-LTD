@@ -315,25 +315,56 @@ async def apply(
                 db=db
             )
             
-            return {
-                "message": "Application submitted successfully. Guarantor form sent to email. PDF documents will be generated and sent shortly.",
-                "guarantor_form_url": "/static/guarantor-form.pdf",
-                "pdfs_generation": "in_progress",
-                **applicant.__dict__
-            }
+            # Return proper response matching ApplicantResponse schema
+            return ApplicantResponse(
+                id=applicant.id,
+                full_name=applicant.full_name,
+                email=applicant.email,
+                phone_number=applicant.phone_number,
+                nin_number=applicant.nin_number,
+                date_of_birth=applicant.date_of_birth,
+                state_of_residence=applicant.state_of_residence,
+                lga=applicant.lga,
+                address=applicant.address,
+                passport_photo=applicant.passport_photo,
+                nin_slip=applicant.nin_slip,
+                application_tier=applicant.application_tier,
+                selected_reasons=applicant.selected_reasons,
+                additional_details=applicant.additional_details,
+                is_verified=applicant.is_verified,
+                has_paid=applicant.has_paid,
+                payment_type=applicant.payment_type,
+                created_at=applicant.created_at
+            )
         else:
             # Synchronous fallback
             await generate_and_send_pdfs(applicant.email, "applicant", db)
             
-            return {
-                "message": "Application submitted successfully. Guarantor form and application documents sent to email.",
-                "guarantor_form_url": "/static/guarantor-form.pdf",
-                "pdfs_generation": "completed",
-                **applicant.__dict__
-            }
+            # Return proper response matching ApplicantResponse schema
+            return ApplicantResponse(
+                id=applicant.id,
+                full_name=applicant.full_name,
+                email=applicant.email,
+                phone_number=applicant.phone_number,
+                nin_number=applicant.nin_number,
+                date_of_birth=applicant.date_of_birth,
+                state_of_residence=applicant.state_of_residence,
+                lga=applicant.lga,
+                address=applicant.address,
+                passport_photo=applicant.passport_photo,
+                nin_slip=applicant.nin_slip,
+                application_tier=applicant.application_tier,
+                selected_reasons=applicant.selected_reasons,
+                additional_details=applicant.additional_details,
+                is_verified=applicant.is_verified,
+                has_paid=applicant.has_paid,
+                payment_type=applicant.payment_type,
+                created_at=applicant.created_at
+            )
 
-    except HTTPException:
-        raise
+    except HTTPException as he:
+        logger.error(f"HTTP Exception in apply: {he.detail}")
+        raise he
     except Exception as e:
         db.rollback()
         logger.error(f"Error creating application: {str(e)}", exc_info=True)
