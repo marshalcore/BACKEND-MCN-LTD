@@ -1,5 +1,5 @@
-# app/routes/pre_register.py - FIXED VERSION
-from fastapi import APIRouter, Depends, HTTPException
+# app/routes/pre_register.py - COMPLETE FIXED VERSION
+from fastapi import APIRouter, Depends, HTTPException, Form
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from sqlalchemy.exc import ProgrammingError, IntegrityError, OperationalError
@@ -13,16 +13,18 @@ import logging
 router = APIRouter(prefix="/pre-applicant", tags=["Pre Applicant"])
 logger = logging.getLogger(__name__)
 
-# app/routes/pre_register.py - ADD THIS ENDPOINT
+# FIXED: Added Form(...) to all parameters
 @router.post("/check-status")
 async def check_application_status(
-    email: str,
-    full_name: str,
-    category: str,
+    email: str = Form(...),
+    full_name: str = Form(...),
+    category: str = Form(...),
     db: Session = Depends(get_db)
 ):
     """Check pre-applicant status for continue application feature"""
     normalized_email = email.strip().lower()
+    
+    logger.info(f"📞 Check status called for: {normalized_email}, {full_name}, {category}")
     
     # Check if pre-applicant exists
     pre_applicant = db.query(PreApplicant).filter(
@@ -30,10 +32,13 @@ async def check_application_status(
     ).first()
     
     if not pre_applicant:
+        logger.info(f"❌ No pre-applicant found for: {normalized_email}")
         raise HTTPException(
             status_code=404,
             detail="No application found. Please start a new application."
         )
+    
+    logger.info(f"✅ Pre-applicant found: {pre_applicant.email}")
     
     # Build response based on current status
     status_info = {
@@ -51,19 +56,19 @@ async def check_application_status(
     }
     
     # Determine current stage for routing
-    if pre_applicant.application_submitted:
+    if getattr(pre_applicant, "application_submitted", False):
         status_info["current_stage"] = "application_submitted"
         status_info["redirect_to"] = "success"
-    elif pre_applicant.password_used:
+    elif getattr(pre_applicant, "password_used", False):
         status_info["current_stage"] = "password_used"
         status_info["redirect_to"] = "contact_support"
-    elif pre_applicant.has_paid and pre_applicant.application_password:
+    elif getattr(pre_applicant, "has_paid", False) and getattr(pre_applicant, "application_password", None):
         status_info["current_stage"] = "password_sent"
         status_info["redirect_to"] = "password_input"
-    elif pre_applicant.has_paid:
+    elif getattr(pre_applicant, "has_paid", False):
         status_info["current_stage"] = "payment_completed"
         status_info["redirect_to"] = "password_generation"
-    elif pre_applicant.selected_tier:
+    elif getattr(pre_applicant, "selected_tier", None):
         status_info["current_stage"] = "tier_selected"
         status_info["redirect_to"] = "payment"
     else:
@@ -80,38 +85,25 @@ async def check_application_status(
     if pre_applicant.id:
         status_info["pre_applicant_id"] = str(pre_applicant.id)
     
+    logger.info(f"📊 Returning status: {status_info}")
     return status_info
+
 @router.post("/register", response_model=PreApplicantStatusResponse)
-def register_pre_applicant(data: PreApplicantCreate, db: Session = Depends(get_db)):
-    normalized_email = data.email.strip().lower()
+async def register_pre_applicant(
+    full_name: str = Form(...),
+    email: str = Form(...),
+    tier: str = Form(...),
+    db: Session = Depends(get_db)
+):
+    """Register new pre-applicant - FIXED to use Form parameters"""
+    normalized_email = email.strip().lower()
     
-    # Check if email already exists with safe query
-    existing = None
-    try:
-        existing = db.query(PreApplicant).filter(
-            func.lower(PreApplicant.email) == normalized_email
-        ).first()
-    except Exception as e:
-        logger.warning(f"Error querying PreApplicant: {e}")
-        # Try with direct SQL as fallback
-        try:
-            result = db.execute(
-                "SELECT email, has_paid FROM pre_applicants WHERE lower(email) = :email",
-                {"email": normalized_email}
-            ).fetchone()
-            if result:
-                existing = type('obj', (object,), {
-                    'email': result.email,
-                    'has_paid': result.has_paid,
-                    'application_submitted': False,  # Default
-                    'password_used': False,  # Default
-                    'application_password': None,  # Default
-                    'payment_reference': None,  # Default
-                    'id': None  # Default
-                })()
-        except Exception as e2:
-            logger.error(f"Fallback query also failed: {e2}")
-            existing = None
+    logger.info(f"📝 Registering pre-applicant: {normalized_email}, {full_name}, {tier}")
+    
+    # Check if email already exists
+    existing = db.query(PreApplicant).filter(
+        func.lower(PreApplicant.email) == normalized_email
+    ).first()
     
     if existing:
         # Use safe attribute access with defaults
@@ -154,14 +146,13 @@ def register_pre_applicant(data: PreApplicantCreate, db: Session = Depends(get_d
                 message="Pre-applicant exists but payment not completed",
                 redirect_to="payment",
                 email=normalized_email,
-                pre_applicant_id=str(getattr(existing, "id", "")) if getattr(existing, "id", None) else None
+                pre_applicant_id=str(existing.id) if existing.id else None
             )
     
-    # Create new pre-applicant with minimal fields to avoid schema mismatch
+    # Create new pre-applicant
     try:
-        # First try with simplified insertion
         new_entry = PreApplicant(
-            full_name=data.full_name,
+            full_name=full_name,
             email=normalized_email,
             status="created",
             created_at=datetime.now(ZoneInfo("UTC"))
@@ -171,7 +162,7 @@ def register_pre_applicant(data: PreApplicantCreate, db: Session = Depends(get_d
         db.commit()
         db.refresh(new_entry)
         
-        logger.info(f"Created new pre-applicant: {normalized_email} with ID: {new_entry.id}")
+        logger.info(f"✅ Created new pre-applicant: {normalized_email} with ID: {new_entry.id}")
         
         return PreApplicantStatusResponse(
             status="created",
@@ -181,61 +172,24 @@ def register_pre_applicant(data: PreApplicantCreate, db: Session = Depends(get_d
             pre_applicant_id=str(new_entry.id)
         )
         
-    except IntegrityError as e:
-        db.rollback()
-        logger.error(f"Integrity error creating pre-applicant: {e}")
-        raise HTTPException(
-            status_code=400,
-            detail=f"Could not create pre-applicant: {str(e)}"
-        )
     except Exception as e:
         db.rollback()
-        logger.error(f"Error creating pre-applicant: {e}")
-        
-        # Try direct SQL insertion as last resort
-        try:
-            from uuid import uuid4
-            pre_applicant_id = uuid4()
-            
-            db.execute(
-                """
-                INSERT INTO pre_applicants (id, full_name, email, status, created_at)
-                VALUES (:id, :full_name, :email, 'created', :created_at)
-                """,
-                {
-                    "id": pre_applicant_id,
-                    "full_name": data.full_name,
-                    "email": normalized_email,
-                    "created_at": datetime.now(ZoneInfo("UTC"))
-                }
-            )
-            db.commit()
-            
-            logger.info(f"Created pre-applicant via direct SQL: {normalized_email}")
-            
-            return PreApplicantStatusResponse(
-                status="created",
-                message="Pre-registration complete. Proceed to payment.",
-                redirect_to="payment",
-                email=normalized_email,
-                pre_applicant_id=str(pre_applicant_id)
-            )
-            
-        except Exception as sql_error:
-            logger.error(f"Direct SQL insertion also failed: {sql_error}")
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to create pre-applicant. Please try again or contact support."
-            )
+        logger.error(f"❌ Error creating pre-applicant: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to create pre-applicant. Please try again."
+        )
 
 @router.post("/select-tier")
 async def select_application_tier(
-    email: str,
-    tier: str,  # 'regular' or 'vip'
+    email: str = Form(...),
+    tier: str = Form(...),
     db: Session = Depends(get_db)
 ):
     """Select application tier (Regular ₦5,180 or VIP ₦25,900)"""
     normalized_email = email.strip().lower()
+    
+    logger.info(f"🎯 Selecting tier: {normalized_email} -> {tier}")
     
     if tier not in ["regular", "vip"]:
         raise HTTPException(status_code=400, detail="Invalid tier. Must be 'regular' or 'vip'")
@@ -248,21 +202,18 @@ async def select_application_tier(
         raise HTTPException(status_code=404, detail="Applicant not found")
     
     try:
-        # Update tier selection - handle case where column might not exist
-        if hasattr(pre_applicant, 'selected_tier'):
-            pre_applicant.selected_tier = tier
-        if hasattr(pre_applicant, 'tier_selected_at'):
-            pre_applicant.tier_selected_at = datetime.now(ZoneInfo("UTC"))
-        if hasattr(pre_applicant, 'status'):
-            pre_applicant.status = "tier_selected"
+        # Update tier selection
+        pre_applicant.selected_tier = tier
+        pre_applicant.tier_selected_at = datetime.now(ZoneInfo("UTC"))
+        pre_applicant.status = "tier_selected"
         
         db.commit()
+        logger.info(f"✅ Tier selected: {normalized_email} -> {tier}")
         
     except Exception as e:
         db.rollback()
-        logger.error(f"Error updating tier: {e}")
-        # Still return success but log the error
-        logger.warning(f"Tier selection for {normalized_email}: {tier}")
+        logger.error(f"❌ Error updating tier: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update tier")
     
     # Return payment info
     amount = 5180 if tier == "regular" else 25900
