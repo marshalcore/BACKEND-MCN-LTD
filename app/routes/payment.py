@@ -1,9 +1,11 @@
-# app/routes/payment.py - COMPLETE UPDATED VERSION WITH FIXES
+# app/routes/payment.py - COMPLETE UPDATED VERSION WITH ALL FIXES
 from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
 from sqlalchemy.orm import Session
+from sqlalchemy import func, desc
 from typing import Dict, Any, Optional, List
 import logging
 from datetime import datetime, timedelta
+import uuid
 
 from app.database import get_db
 from app.services.payment_service import PaymentService, process_post_payment
@@ -15,7 +17,6 @@ from app.models.existing_officer import ExistingOfficer
 from app.schemas.payment import PaymentCreate, PaymentVerify, GatewayCallback, ManualPaymentRequest
 from app.config import settings
 from app.utils.promote_applicant import promote_to_applicant
-from sqlalchemy import func, desc
 
 logger = logging.getLogger(__name__)
 router = APIRouter(
@@ -142,7 +143,7 @@ async def initiate_payment(
         
         config = PAYMENT_CONFIGS[payment_type_str]
         
-        # FIXED: Don't require user to exist in database
+        # Don't require user to exist in database
         # This allows new registrations to make payments
         user = None
         if user_type_str == "applicant":
@@ -170,11 +171,9 @@ async def initiate_payment(
                 func.lower(ExistingOfficer.email) == payment_data.email.lower()
             ).first()
         
-        # FIXED: Allow payment even if user doesn't exist
-        # This is common for new registrations
+        # Allow payment even if user doesn't exist
         if not user:
             logger.info(f"Payment initiated for new user: {payment_data.email} ({user_type_str})")
-            # We'll proceed with payment - user will be created during post-payment processing
         
         existing_payment = db.query(Payment).filter(
             Payment.user_email == payment_data.email.lower(),
@@ -258,6 +257,7 @@ async def initiate_payment(
         
         if config["user_amount"] == 0:
             payment = Payment(
+                id=str(uuid.uuid4()),
                 user_email=payment_data.email.lower(),
                 user_type=user_type_str,
                 amount=0,
@@ -307,6 +307,7 @@ async def initiate_payment(
                 )
             
             payment = Payment(
+                id=str(uuid.uuid4()),
                 user_email=payment_data.email.lower(),
                 user_type=user_type_str,
                 amount=config["user_amount"],
@@ -362,6 +363,7 @@ async def verify_payment(
         payment_service = PaymentService()
         transfer_service = ImmediateTransferService()
         
+        # Query by payment_reference (string) not id
         payment = db.query(Payment).filter(
             Payment.payment_reference == reference
         ).first()
@@ -383,11 +385,18 @@ async def verify_payment(
         verification = payment_service.verify_payment(reference)
         
         if verification.get("status") == "success":
+            # Update the payment object directly
             payment.status = "success"
             payment.paid_at = datetime.utcnow()
             payment.verification_data = verification
-            db.commit()
             
+            # Just commit the changes to the object we already have
+            db.commit()
+            db.refresh(payment)
+            
+            logger.info(f"Payment {reference} verified successfully, ID: {payment.id}")
+            
+            # Update user status based on user_type
             if payment.user_type == "pre_applicant":
                 pre_applicant = db.query(PreApplicant).filter(
                     func.lower(PreApplicant.email) == payment.user_email
@@ -396,9 +405,14 @@ async def verify_payment(
                 if pre_applicant:
                     pre_applicant.has_paid = True
                     pre_applicant.status = "payment_completed"
+                    pre_applicant.payment_reference = reference
                     db.commit()
                     
-                    promote_to_applicant(payment.user_email, db)
+                    # Promote to applicant
+                    try:
+                        await promote_to_applicant(payment.user_email, db)
+                    except Exception as e:
+                        logger.error(f"Error promoting pre-applicant: {e}")
             
             elif payment.user_type == "applicant":
                 applicant = db.query(Applicant).filter(
@@ -408,9 +422,12 @@ async def verify_payment(
                 if applicant:
                     applicant.payment_status = "paid"
                     applicant.payment_type = payment.payment_type
+                    applicant.payment_reference = reference
+                    applicant.amount_paid = payment.amount
                     applicant.paid_at = datetime.utcnow()
                     db.commit()
             
+            # Process immediate transfers if applicable
             if payment.amount > 0:
                 try:
                     config = PAYMENT_CONFIGS.get(payment.payment_type, {})
@@ -423,6 +440,7 @@ async def verify_payment(
                                 payment_amount=payment.amount,
                                 db=db
                             )
+                            logger.info(f"Immediate transfers queued for {reference}")
                         else:
                             # Run synchronously if no background tasks
                             await transfer_service.process_immediate_splits(
@@ -433,6 +451,7 @@ async def verify_payment(
                 except Exception as transfer_error:
                     logger.error(f"Failed to queue immediate transfers: {str(transfer_error)}")
             
+            # Process post-payment tasks
             if background_tasks:
                 background_tasks.add_task(
                     process_post_payment,
@@ -461,10 +480,10 @@ async def verify_payment(
     except HTTPException as he:
         raise he
     except Exception as e:
-        logger.error(f"Error verifying payment: {str(e)}")
+        logger.error(f"Error verifying payment: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail="Payment verification failed"
+            detail=f"Payment verification failed: {str(e)}"
         )
 
 @router.post("/callback/paystack")
