@@ -13,6 +13,74 @@ import logging
 router = APIRouter(prefix="/pre-applicant", tags=["Pre Applicant"])
 logger = logging.getLogger(__name__)
 
+# app/routes/pre_register.py - ADD THIS ENDPOINT
+@router.post("/check-status")
+async def check_application_status(
+    email: str,
+    full_name: str,
+    category: str,
+    db: Session = Depends(get_db)
+):
+    """Check pre-applicant status for continue application feature"""
+    normalized_email = email.strip().lower()
+    
+    # Check if pre-applicant exists
+    pre_applicant = db.query(PreApplicant).filter(
+        func.lower(PreApplicant.email) == normalized_email
+    ).first()
+    
+    if not pre_applicant:
+        raise HTTPException(
+            status_code=404,
+            detail="No application found. Please start a new application."
+        )
+    
+    # Build response based on current status
+    status_info = {
+        "email": normalized_email,
+        "full_name": pre_applicant.full_name,
+        "status": getattr(pre_applicant, "status", "created"),
+        "has_paid": getattr(pre_applicant, "has_paid", False),
+        "selected_tier": getattr(pre_applicant, "selected_tier", None),
+        "privacy_accepted": getattr(pre_applicant, "privacy_accepted", False),
+        "application_submitted": getattr(pre_applicant, "application_submitted", False),
+        "password_generated": getattr(pre_applicant, "password_generated", False),
+        "password_used": getattr(pre_applicant, "password_used", False),
+        "password_sent": bool(getattr(pre_applicant, "application_password", None)),
+        "created_at": pre_applicant.created_at.isoformat() if pre_applicant.created_at else None,
+    }
+    
+    # Determine current stage for routing
+    if pre_applicant.application_submitted:
+        status_info["current_stage"] = "application_submitted"
+        status_info["redirect_to"] = "success"
+    elif pre_applicant.password_used:
+        status_info["current_stage"] = "password_used"
+        status_info["redirect_to"] = "contact_support"
+    elif pre_applicant.has_paid and pre_applicant.application_password:
+        status_info["current_stage"] = "password_sent"
+        status_info["redirect_to"] = "password_input"
+    elif pre_applicant.has_paid:
+        status_info["current_stage"] = "payment_completed"
+        status_info["redirect_to"] = "password_generation"
+    elif pre_applicant.selected_tier:
+        status_info["current_stage"] = "tier_selected"
+        status_info["redirect_to"] = "payment"
+    else:
+        status_info["current_stage"] = "new_applicant"
+        status_info["redirect_to"] = "tier_selection"
+    
+    # Add timestamp info
+    if hasattr(pre_applicant, 'updated_at') and pre_applicant.updated_at:
+        status_info["last_updated"] = pre_applicant.updated_at.isoformat()
+    else:
+        status_info["last_updated"] = status_info["created_at"]
+    
+    # Add pre_applicant_id if available
+    if pre_applicant.id:
+        status_info["pre_applicant_id"] = str(pre_applicant.id)
+    
+    return status_info
 @router.post("/register", response_model=PreApplicantStatusResponse)
 def register_pre_applicant(data: PreApplicantCreate, db: Session = Depends(get_db)):
     normalized_email = data.email.strip().lower()

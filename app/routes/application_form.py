@@ -13,11 +13,12 @@ from zoneinfo import ZoneInfo
 
 router = APIRouter()
 
+# app/routes/application_form.py - UPDATE THE /apply ENDPOINT
 @router.post("/apply", response_model=ApplicantResponse)
 async def apply(
     # SECTION A: Basic Information (8 fields)
     phone_number: str = Form(...),
-    nin_number: str = Form(...),
+    nin_number: Optional[str] = Form(None),  # CHANGED: Now optional
     date_of_birth: str = Form(...),
     state_of_residence: str = Form(...),
     lga: str = Form(...),
@@ -25,7 +26,7 @@ async def apply(
     
     # SECTION B: Document Uploads (2 uploads only) - INCLUDES PASSPORT
     passport_photo: UploadFile = File(...),
-    nin_slip: UploadFile = File(...),
+    nin_slip: Optional[UploadFile] = File(None),  # CHANGED: Now optional
     
     # SECTION C: Application Details
     selected_reasons: str = Form(...),  # JSON string of selected reasons
@@ -123,15 +124,13 @@ async def apply(
                 detail="Application password not properly generated"
             )
         
-        # FIXED: Handle timezone-aware vs naive datetime comparison
+        # Handle timezone-aware vs naive datetime comparison
         expires_at = pre_applicant.password_expires_at
         if expires_at.tzinfo is None:
-            # If datetime is naive, make it aware with UTC
             expires_at_aware = expires_at.replace(tzinfo=ZoneInfo("UTC"))
         else:
             expires_at_aware = expires_at
         
-        # Now compare safely with timezone-aware datetime
         if expires_at_aware <= current_time:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -152,15 +151,19 @@ async def apply(
                 detail="Application already submitted with this email"
             )
 
-        # ✅ Save uploaded files
+        # ✅ Save uploaded files - PASSPORT is required, NIN is optional
         passport_path = save_upload(passport_photo, "passports")
-        nin_path = save_upload(nin_slip, "nin_slips")
+        
+        # Handle optional NIN slip
+        nin_path = None
+        if nin_slip and nin_slip.filename:
+            nin_path = save_upload(nin_slip, "nin_slips")
 
         # Create new applicant with simplified fields
         applicant = Applicant(
             # SECTION A: Basic Information
             phone_number=phone_number,
-            nin_number=nin_number,
+            nin_number=nin_number,  # Can be None/Null
             date_of_birth=dob,
             state_of_residence=state_of_residence,
             lga=lga,
@@ -168,7 +171,7 @@ async def apply(
             
             # SECTION B: Documents
             passport_photo=passport_path,
-            nin_slip=nin_path,
+            nin_slip=nin_path,  # Can be None/Null
             
             # SECTION C: Application Details
             application_tier=application_tier,

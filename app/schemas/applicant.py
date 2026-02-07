@@ -1,4 +1,4 @@
-# app/schemas/applicant.py - COMPLETE FIXED VERSION
+# app/schemas/applicant.py - UPDATE TO MAKE NIN FIELDS OPTIONAL
 from pydantic import BaseModel, EmailStr, ConfigDict
 from uuid import UUID
 from datetime import date, datetime
@@ -10,7 +10,7 @@ class ApplicantBase(BaseModel):
     full_name: str
     email: EmailStr
     phone_number: str
-    nin_number: str
+    nin_number: Optional[str] = None  # CHANGED: Now optional
     date_of_birth: date
     state_of_residence: str
     lga: str
@@ -18,7 +18,7 @@ class ApplicantBase(BaseModel):
 
     # SECTION B: Documents
     passport_photo: str
-    nin_slip: str
+    nin_slip: Optional[str] = None  # CHANGED: Now optional
 
     # SECTION C: Application Details
     application_tier: str  # 'regular' or 'vip'
@@ -58,20 +58,10 @@ class ApplicantResponse(ApplicantBase):
     model_config = ConfigDict(title="ApplicantResponse")
 
 
-class ApplicantUpdate(BaseModel):
-    full_name: Optional[str] = None
-    email: Optional[EmailStr] = None
-    phone_number: Optional[str] = None
-    unique_id: Optional[str] = None   # editable official ID
-    is_verified: Optional[bool] = None
-
-    model_config = ConfigDict(title="ApplicantUpdate")
-
-
 class ApplicantCreate(BaseModel):
     # SECTION A: Basic Information (from form)
     phone_number: str
-    nin_number: str
+    nin_number: Optional[str] = None  # CHANGED: Now optional
     date_of_birth: date
     state_of_residence: str
     lga: str
@@ -85,9 +75,9 @@ class ApplicantCreate(BaseModel):
     # SECTION C: Verification
     application_password: str
     
-    # SECTION D: Documents (handled separately in form)
+    # SECTION D: Documents
     passport_photo: str
-    nin_slip: str
+    nin_slip: Optional[str] = None  # CHANGED: Now optional
     
     # SECTION E: Auto-filled from pre-applicant
     full_name: str

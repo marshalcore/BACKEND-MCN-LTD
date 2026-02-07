@@ -1,4 +1,4 @@
-# app/models/applicant.py - COMPLETE FIXED VERSION
+# app/models/applicant.py - UPDATE TO MAKE NIN FIELDS OPTIONAL
 from sqlalchemy import Column, String, Boolean, Date, DateTime, Text, Float
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.sql import func
@@ -16,7 +16,7 @@ class Applicant(Base):
     full_name = Column(String(100), nullable=False)
     email = Column(String(255), nullable=False, unique=True, index=True)
     phone_number = Column(String(20), nullable=False)
-    nin_number = Column(String(20), nullable=False, unique=True, index=True)
+    nin_number = Column(String(20), nullable=True, unique=True, index=True)  # CHANGED: nullable=True
     date_of_birth = Column(Date, nullable=False)
     state_of_residence = Column(String(50), nullable=False)
     lga = Column(String(50), nullable=False)  # Local Government Area
@@ -24,7 +24,7 @@ class Applicant(Base):
 
     # SECTION B: Documents
     passport_photo = Column(String(255), nullable=False)
-    nin_slip = Column(String(255), nullable=False)
+    nin_slip = Column(String(255), nullable=True)  # CHANGED: nullable=True
 
     # SECTION C: Application Details
     application_tier = Column(String(20), nullable=False, default="regular")  # 'regular' or 'vip'
@@ -55,5 +55,5 @@ class Applicant(Base):
     terms_generated_at = Column(DateTime(timezone=True), nullable=True, comment='When Terms PDF was generated')
     application_generated_at = Column(DateTime(timezone=True), nullable=True, comment='When Application PDF was generated')
 
-    # Relationship - FIXED: Added back_populates
+    # Relationship
     officer = relationship("Officer", back_populates="applicant", cascade="all, delete", uselist=False)

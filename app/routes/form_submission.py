@@ -116,31 +116,121 @@ async def generate_and_send_pdfs(
         import traceback
         logger.error(traceback.format_exc())
 
-@router.post("/apply", response_model=ApplicantResponse)
-async def apply(
-    # SECTION A: Basic Information (8 fields)
-    phone_number: str = Form(...),
-    nin_number: str = Form(...),
-    date_of_birth: str = Form(...),
-    state_of_residence: str = Form(...),
-    lga: str = Form(...),
-    address: str = Form(...),
-    
-    # SECTION B: Document Uploads (2 uploads only) - INCLUDES PASSPORT
-    passport_photo: UploadFile = File(...),
-    nin_slip: UploadFile = File(...),
-    
-    # SECTION C: Application Details
-    selected_reasons: str = Form(...),  # JSON string of selected reasons
-    additional_details: Optional[str] = Form(None),
-    application_tier: str = Form(...),  # 'regular' or 'vip'
-    
-    # SECTION D: Verification
-    application_password: str = Form(...),
-    
-    background_tasks: BackgroundTasks = None,
-    db: Session = Depends(get_db)
+@router.post("/submit")
+async def submit_application(
+    email: EmailStr = Form(...),
+    full_name: str = Form(None),
+    db: Session = Depends(get_db),  # ✅ FIXED: Non-default comes first
+    background_tasks: BackgroundTasks = None  # ✅ Default comes last
 ):
+    """Submit applicant application and generate PDFs"""
+    # Find applicant
+    applicant = db.query(Applicant).filter(Applicant.email == email).first()
+    if not applicant:
+        raise HTTPException(status_code=404, detail="Applicant not found")
+
+    if not applicant.is_verified:
+        raise HTTPException(status_code=403, detail="Application not verified")
+
+    name = full_name or applicant.full_name
+
+    # Send guarantor confirmation email
+    await send_guarantor_confirmation_email(applicant.email, name)
+    
+    # Add background task to generate and send PDFs
+    if background_tasks:
+        background_tasks.add_task(
+            generate_and_send_pdfs,
+            email=email,
+            user_type="applicant",
+            db=db
+        )
+        
+        return {
+            "message": "Application submitted successfully. Guarantor form sent to email. PDF documents will be generated and sent shortly.",
+            "guarantor_form_url": "/static/guarantor-form.pdf",
+            "pdfs_generation": "in_progress"
+        }
+    else:
+        # Synchronous fallback
+        await generate_and_send_pdfs(email, "applicant", db)
+        
+        return {
+            "message": "Application submitted successfully. Guarantor form and application documents sent to email.",
+            "guarantor_form_url": "/static/guarantor-form.pdf",
+            "pdfs_generation": "completed"
+        }
+
+@router.post("/officer/submit")
+async def submit_officer_application(
+    email: EmailStr = Form(...),
+    db: Session = Depends(get_db),  # ✅ FIXED: Non-default comes first
+    background_tasks: BackgroundTasks = None  # ✅ Default comes last
+):
+    """Submit officer application and generate PDFs"""
+    officer = db.query(Officer).filter(Officer.email == email).first()
+    if not officer:
+        raise HTTPException(status_code=404, detail="Officer not found")
+
+    name = officer.full_name or f"Officer {officer.unique_id}"
+    
+    # Add background task to generate and send PDFs
+    if background_tasks:
+        background_tasks.add_task(
+            generate_and_send_pdfs,
+            email=email,
+            user_type="officer",
+            db=db
+        )
+        
+        return {
+            "message": "Officer application submitted successfully. PDF documents will be generated and sent shortly.",
+            "pdfs_generation": "in_progress"
+        }
+    else:
+        await generate_and_send_pdfs(email, "officer", db)
+        
+        return {
+            "message": "Officer application submitted successfully. PDF documents sent to email.",
+            "pdfs_generation": "completed"
+        }
+
+@router.post("/existing-officer/submit")
+async def submit_existing_officer_application(
+    email: EmailStr = Form(...),
+    db: Session = Depends(get_db),  # ✅ FIXED: Non-default comes first
+    background_tasks: BackgroundTasks = None  # ✅ Default comes last
+):
+    """Submit existing officer application and generate PDFs"""
+    officer = db.query(ExistingOfficer).filter(ExistingOfficer.email == email).first()
+    if not officer:
+        raise HTTPException(status_code=404, detail="Existing officer not found")
+
+    if not officer.is_verified:
+        raise HTTPException(status_code=403, detail="Officer not verified")
+
+    name = officer.full_name
+    
+    # Add background task to generate and send PDFs
+    if background_tasks:
+        background_tasks.add_task(
+            generate_and_send_pdfs,
+            email=email,
+            user_type="existing_officer",
+            db=db
+        )
+        
+        return {
+            "message": "Existing officer application submitted successfully. PDF documents will be generated and sent shortly.",
+            "pdfs_generation": "in_progress"
+        }
+    else:
+        await generate_and_send_pdfs(email, "existing_officer", db)
+        
+        return {
+            "message": "Existing officer application submitted successfully. PDF documents sent to email.",
+            "pdfs_generation": "completed"
+        }
     try:
         normalized_email = None
         
@@ -209,7 +299,6 @@ async def apply(
         # Verify application password validity
         current_time = datetime.now(ZoneInfo("UTC"))
         
-        # FIX: Handle datetime comparison with timezone awareness
         if pre_applicant.application_password != application_password:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -228,15 +317,13 @@ async def apply(
                 detail="Application password not properly generated"
             )
         
-        # FIXED DATETIME COMPARISON: Handle timezone-aware vs naive datetimes
+        # Handle timezone-aware vs naive datetime comparison
         expires_at = pre_applicant.password_expires_at
         if expires_at.tzinfo is None:
-            # If datetime is naive, make it aware with UTC
             expires_at_aware = expires_at.replace(tzinfo=ZoneInfo("UTC"))
         else:
             expires_at_aware = expires_at
         
-        # Now compare safely with timezone-aware datetime
         if expires_at_aware <= current_time:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -259,13 +346,17 @@ async def apply(
 
         # ✅ Save uploaded files - PASSPORT IS SAVED HERE
         passport_path = save_upload(passport_photo, "passports")
-        nin_path = save_upload(nin_slip, "nin_slips")
+        
+        # Handle optional NIN slip
+        nin_path = None
+        if nin_slip and nin_slip.filename:
+            nin_path = save_upload(nin_slip, "nin_slips")
 
         # Create new applicant with simplified fields
         applicant = Applicant(
             # SECTION A: Basic Information
             phone_number=phone_number,
-            nin_number=nin_number,
+            nin_number=nin_number,  # Can be None
             date_of_birth=dob,
             state_of_residence=state_of_residence,
             lga=lga,
@@ -273,7 +364,7 @@ async def apply(
             
             # SECTION B: Documents - INCLUDES PASSPORT PATH
             passport_photo=passport_path,
-            nin_slip=nin_path,
+            nin_slip=nin_path,  # Can be None
             
             # SECTION C: Application Details
             application_tier=application_tier,
@@ -307,60 +398,34 @@ async def apply(
             logger.error(f"Failed to send guarantor email: {email_error}")
         
         # Add background task to generate and send PDFs
-        if background_tasks:
-            background_tasks.add_task(
-                generate_and_send_pdfs,
-                email=applicant.email,
-                user_type="applicant",
-                db=db
-            )
+        background_tasks.add_task(
+            generate_and_send_pdfs,
+            email=applicant.email,
+            user_type="applicant",
+            db=SessionLocal()  # Create new session for background task
+        )
             
-            # Return proper response matching ApplicantResponse schema
-            return ApplicantResponse(
-                id=applicant.id,
-                full_name=applicant.full_name,
-                email=applicant.email,
-                phone_number=applicant.phone_number,
-                nin_number=applicant.nin_number,
-                date_of_birth=applicant.date_of_birth,
-                state_of_residence=applicant.state_of_residence,
-                lga=applicant.lga,
-                address=applicant.address,
-                passport_photo=applicant.passport_photo,
-                nin_slip=applicant.nin_slip,
-                application_tier=applicant.application_tier,
-                selected_reasons=applicant.selected_reasons,
-                additional_details=applicant.additional_details,
-                is_verified=applicant.is_verified,
-                has_paid=applicant.has_paid,
-                payment_type=applicant.payment_type,
-                created_at=applicant.created_at
-            )
-        else:
-            # Synchronous fallback
-            await generate_and_send_pdfs(applicant.email, "applicant", db)
-            
-            # Return proper response matching ApplicantResponse schema
-            return ApplicantResponse(
-                id=applicant.id,
-                full_name=applicant.full_name,
-                email=applicant.email,
-                phone_number=applicant.phone_number,
-                nin_number=applicant.nin_number,
-                date_of_birth=applicant.date_of_birth,
-                state_of_residence=applicant.state_of_residence,
-                lga=applicant.lga,
-                address=applicant.address,
-                passport_photo=applicant.passport_photo,
-                nin_slip=applicant.nin_slip,
-                application_tier=applicant.application_tier,
-                selected_reasons=applicant.selected_reasons,
-                additional_details=applicant.additional_details,
-                is_verified=applicant.is_verified,
-                has_paid=applicant.has_paid,
-                payment_type=applicant.payment_type,
-                created_at=applicant.created_at
-            )
+        # Return proper response matching ApplicantResponse schema
+        return ApplicantResponse(
+            id=applicant.id,
+            full_name=applicant.full_name,
+            email=applicant.email,
+            phone_number=applicant.phone_number,
+            nin_number=applicant.nin_number,
+            date_of_birth=applicant.date_of_birth,
+            state_of_residence=applicant.state_of_residence,
+            lga=applicant.lga,
+            address=applicant.address,
+            passport_photo=applicant.passport_photo,
+            nin_slip=applicant.nin_slip,
+            application_tier=applicant.application_tier,
+            selected_reasons=applicant.selected_reasons,
+            additional_details=applicant.additional_details,
+            is_verified=applicant.is_verified,
+            has_paid=applicant.has_paid,
+            payment_type=applicant.payment_type,
+            created_at=applicant.created_at
+        )
 
     except HTTPException as he:
         logger.error(f"HTTP Exception in apply: {he.detail}")
@@ -377,8 +442,8 @@ async def apply(
 async def submit_application(
     email: EmailStr = Form(...),
     full_name: str = Form(None),
-    background_tasks: BackgroundTasks = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),  # ✅ FIXED: Non-default comes first
+    background_tasks: BackgroundTasks = None  # ✅ Default comes last
 ):
     """Submit applicant application and generate PDFs"""
     # Find applicant
@@ -421,8 +486,8 @@ async def submit_application(
 @router.post("/officer/submit")
 async def submit_officer_application(
     email: EmailStr = Form(...),
-    background_tasks: BackgroundTasks = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),  # ✅ FIXED: Non-default comes first
+    background_tasks: BackgroundTasks = None  # ✅ Default comes last
 ):
     """Submit officer application and generate PDFs"""
     officer = db.query(Officer).filter(Officer.email == email).first()
@@ -455,8 +520,8 @@ async def submit_officer_application(
 @router.post("/existing-officer/submit")
 async def submit_existing_officer_application(
     email: EmailStr = Form(...),
-    background_tasks: BackgroundTasks = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),  # ✅ FIXED: Non-default comes first
+    background_tasks: BackgroundTasks = None  # ✅ Default comes last
 ):
     """Submit existing officer application and generate PDFs"""
     officer = db.query(ExistingOfficer).filter(ExistingOfficer.email == email).first()
