@@ -1,3 +1,4 @@
+# PDF generation service for Marshal Core of Nigeria application
 import os
 import logging
 from datetime import datetime
@@ -197,17 +198,19 @@ class PDFGenerator:
         return str(file_path), relative_path
     
     def _create_header_footer(self, canvas_obj, doc, title="", is_terms=False):
-        """Create header and footer for PDF pages"""
+        """Create header and footer for PDF pages - MODIFIED: Adjusted line position and increased logo size"""
         canvas_obj.saveState()
         
-        # Add logo at top right
+        # Add logo at top right - MODIFIED: Increased logo size
         if self.logo_image and self.logo_bytes:
             try:
                 self.logo_image.seek(0)
-                logo_width = 1.2 * inch
-                logo_height = 0.6 * inch
+                # INCREASED LOGO SIZE: Changed from 1.2*inch to 1.5*inch width
+                logo_width = 1.5 * inch
+                logo_height = 0.75 * inch
                 logo_x = doc.width + doc.leftMargin - logo_width - 0.2*inch
-                logo_y = doc.height + doc.topMargin - 0.1*inch
+                # ADJUSTED LOGO POSITION: Raised logo by 0.1*inch to give more space
+                logo_y = doc.height + doc.topMargin - 0.0*inch
                 
                 canvas_obj.drawImage(ImageReader(self.logo_image), logo_x, logo_y,
                                    width=logo_width, height=logo_height,
@@ -215,26 +218,30 @@ class PDFGenerator:
             except Exception as e:
                 logger.warning(f"Could not draw logo: {e}")
         
-        # Header text
-        canvas_obj.setFont('Helvetica-Bold', 12)
+        # Header text - MODIFIED: Made organization name bolder
+        canvas_obj.setFont('Helvetica-Bold', 14)  # Increased from 12 to 14
         canvas_obj.setFillColor(colors.HexColor('#1a237e'))
-        canvas_obj.drawString(doc.leftMargin, doc.height + doc.topMargin + 0.6*inch,
+        # ADJUSTED POSITION: Moved organization name down to align with larger logo
+        canvas_obj.drawString(doc.leftMargin, doc.height + doc.topMargin + 0.8*inch,
                             COMPANY_INFO['name'])
         
-        # Address
-        canvas_obj.setFont('Helvetica', 8)
-        canvas_obj.setFillColor(colors.gray)
+        # Address - MODIFIED: Made address bold and adjusted spacing
+        canvas_obj.setFont('Helvetica-Bold', 9)  # Made address bold and slightly larger
+        canvas_obj.setFillColor(colors.HexColor('#1a237e'))  # Changed from gray to blue
         
-        address_y = doc.height + doc.topMargin + 0.4*inch
+        # ADJUSTED ADDRESS POSITION: Moved down to accommodate larger logo
+        address_y = doc.height + doc.topMargin + 0.55*inch  # Moved down from 0.4*inch
         canvas_obj.drawString(doc.leftMargin, address_y, COMPANY_INFO['address_line1'])
-        canvas_obj.drawString(doc.leftMargin, address_y - 0.15*inch, COMPANY_INFO['address_line2'])
-        canvas_obj.drawString(doc.leftMargin, address_y - 0.3*inch, COMPANY_INFO['address_line3'])
+        canvas_obj.drawString(doc.leftMargin, address_y - 0.18*inch, COMPANY_INFO['address_line2'])  # Increased spacing
+        canvas_obj.drawString(doc.leftMargin, address_y - 0.36*inch, COMPANY_INFO['address_line3'])  # Increased spacing
         
-        # Line under header
+        # Line under header - MODIFIED: Moved line down further to avoid crossing logo
         canvas_obj.setStrokeColor(colors.HexColor('#1a237e'))
         canvas_obj.setLineWidth(1)
-        canvas_obj.line(doc.leftMargin, doc.height + doc.topMargin + 0.1*inch,
-                       doc.width + doc.leftMargin, doc.height + doc.topMargin + 0.1*inch)
+        # ADJUSTED LINE POSITION: Moved down significantly (from +0.1*inch to -0.05*inch)
+        line_y = doc.height + doc.topMargin - 0.05*inch  # Moved line below logo area
+        canvas_obj.line(doc.leftMargin, line_y,
+                       doc.width + doc.leftMargin, line_y)
         
         # Footer
         canvas_obj.setFont('Helvetica', 8)
@@ -473,6 +480,7 @@ class PDFGenerator:
             passport_embedded = False
             passport_table = None
             
+            # MODIFIED: Check both passport_photo and passport_path for existing officers
             passport_path = user_data.get('passport_photo') or user_data.get('passport_path')
             if passport_path:
                 passport_img = self._prepare_passport_image(passport_path)
@@ -836,7 +844,7 @@ class PDFService:
                     'residential_address': user.residential_address,
                     'state_of_residence': user.state_of_residence,
                     'local_government_residence': user.local_government_residence,
-                    'passport_photo': user.passport_path,
+                    'passport_path': user.passport_path,  # ✅ FIXED: Use passport_path for existing officers
                     'rank': user.rank,
                     'position': user.position,
                     'additional_skills': user.additional_skills,

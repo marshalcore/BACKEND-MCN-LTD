@@ -274,20 +274,21 @@ class PDFGenerator:
         return str(file_path), relative_path
     
     def _create_header_footer(self, canvas, doc, title="", is_terms=False):
-        """Create header and footer for all pages with logo"""
+        """Create header and footer for all pages with logo - MODIFIED: Fixed line position and increased logo size"""
         canvas.saveState()
         
-        # Add logo at top right corner if available
+        # Add logo at top right corner if available - MODIFIED: Increased logo size
         if self.logo_image and self.logo_bytes:
             try:
                 # Reset logo stream position
                 self.logo_image.seek(0)
                 
-                # Draw logo at top right
-                logo_width = 1.2 * inch
-                logo_height = 0.6 * inch
+                # Draw logo at top right - INCREASED LOGO SIZE
+                logo_width = 1.5 * inch  # Increased from 1.2*inch
+                logo_height = 0.75 * inch  # Increased from 0.6*inch
                 logo_x = doc.width + doc.leftMargin - logo_width - 0.2*inch
-                logo_y = doc.height + doc.topMargin - 0.1*inch
+                # ADJUSTED LOGO POSITION: Raised logo to give more space
+                logo_y = doc.height + doc.topMargin - 0.0*inch  # Raised from -0.1*inch
                 
                 # Draw the logo image
                 canvas.drawImage(ImageReader(self.logo_image), logo_x, logo_y, 
@@ -302,25 +303,29 @@ class PDFGenerator:
             # Draw text placeholder for logo
             self._draw_logo_placeholder(canvas, doc)
         
-        # Header text
-        canvas.setFont('Helvetica-Bold', 12)
+        # Header text - MODIFIED: Made organization name bolder
+        canvas.setFont('Helvetica-Bold', 14)  # Increased from 12 to 14
         canvas.setFillColor(colors.HexColor('#1a237e'))
-        canvas.drawString(doc.leftMargin, doc.height + doc.topMargin + 0.6*inch, COMPANY_INFO['name'])
+        # ADJUSTED POSITION: Moved organization name down to align with larger logo
+        canvas.drawString(doc.leftMargin, doc.height + doc.topMargin + 0.8*inch, COMPANY_INFO['name'])
         
-        # Address in 3 lines
-        canvas.setFont('Helvetica', 8)
-        canvas.setFillColor(colors.gray)
+        # Address in 3 lines - MODIFIED: Made address bold and adjusted spacing
+        canvas.setFont('Helvetica-Bold', 9)  # Made address bold and slightly larger
+        canvas.setFillColor(colors.HexColor('#1a237e'))  # Changed from gray to blue
         
-        address_y = doc.height + doc.topMargin + 0.4*inch
+        # ADJUSTED ADDRESS POSITION: Moved down to accommodate larger logo
+        address_y = doc.height + doc.topMargin + 0.55*inch  # Moved down from 0.4*inch
         canvas.drawString(doc.leftMargin, address_y, COMPANY_INFO['address_line1'])
-        canvas.drawString(doc.leftMargin, address_y - 0.15*inch, COMPANY_INFO['address_line2'])
-        canvas.drawString(doc.leftMargin, address_y - 0.3*inch, COMPANY_INFO['address_line3'])
+        canvas.drawString(doc.leftMargin, address_y - 0.18*inch, COMPANY_INFO['address_line2'])  # Increased spacing
+        canvas.drawString(doc.leftMargin, address_y - 0.36*inch, COMPANY_INFO['address_line3'])  # Increased spacing
         
-        # Draw line under header
+        # Draw line under header - MODIFIED: Moved line down further to avoid crossing logo
         canvas.setStrokeColor(colors.HexColor('#1a237e'))
         canvas.setLineWidth(1)
-        canvas.line(doc.leftMargin, doc.height + doc.topMargin + 0.1*inch, 
-                   doc.width + doc.leftMargin, doc.height + doc.topMargin + 0.1*inch)
+        # ADJUSTED LINE POSITION: Moved down significantly (from +0.1*inch to -0.05*inch)
+        line_y = doc.height + doc.topMargin - 0.05*inch  # Moved line below logo area
+        canvas.line(doc.leftMargin, line_y, 
+                   doc.width + doc.leftMargin, line_y)
         
         # Footer
         canvas.setFont('Helvetica', 8)
@@ -345,17 +350,17 @@ class PDFGenerator:
         canvas.restoreState()
     
     def _draw_logo_placeholder(self, canvas, doc):
-        """Draw logo placeholder text"""
+        """Draw logo placeholder text - MODIFIED: Made placeholder bolder"""
         canvas.setFillColor(colors.HexColor('#1a237e'))
-        canvas.setFont('Helvetica-Bold', 12)
+        canvas.setFont('Helvetica-Bold', 14)  # Increased from 12
         canvas.drawRightString(doc.width + doc.leftMargin - 0.2*inch, 
-                              doc.height + doc.topMargin + 0.4*inch, "MCN")
-        canvas.setFont('Helvetica', 8)
+                              doc.height + doc.topMargin + 0.5*inch, "MCN")  # Adjusted position
+        canvas.setFont('Helvetica-Bold', 9)  # Made bolder
         canvas.drawRightString(doc.width + doc.leftMargin - 0.2*inch, 
-                              doc.height + doc.topMargin + 0.2*inch, "LOGO")
+                              doc.height + doc.topMargin + 0.3*inch, "LOGO")  # Adjusted position
     
     def _add_background_watermark(self, canvas, doc):
-        """Add logo as background watermark"""
+        """Add logo as background watermark - MODIFIED: Increased watermark size"""
         canvas.saveState()
         
         # Only add watermark if logo is available
@@ -371,9 +376,9 @@ class PDFGenerator:
                 center_x = doc.width/2 + doc.leftMargin
                 center_y = doc.height/2 + doc.topMargin
                 
-                # Draw logo watermark
-                logo_width = 3 * inch
-                logo_height = 1.5 * inch
+                # Draw logo watermark - INCREASED SIZE
+                logo_width = 3.5 * inch  # Increased from 3*inch
+                logo_height = 1.75 * inch  # Increased from 1.5*inch
                 logo_x = center_x - logo_width/2
                 logo_y = center_y - logo_height/2
                 
@@ -392,7 +397,7 @@ class PDFGenerator:
         canvas.restoreState()
     
     def _draw_text_watermark(self, canvas, doc):
-        """Draw text watermark"""
+        """Draw text watermark - MODIFIED: Made watermark bolder"""
         canvas.setFillAlpha(0.1)  # 10% opacity
         
         # Calculate position for centered watermark
@@ -403,12 +408,12 @@ class PDFGenerator:
         canvas.translate(center_x, center_y)
         canvas.rotate(45)
         
-        # Draw MCN text as watermark
-        canvas.setFont('Helvetica-Bold', 48)
+        # Draw MCN text as watermark - INCREASED SIZE
+        canvas.setFont('Helvetica-Bold', 52)  # Increased from 48
         canvas.setFillColor(colors.lightgrey)
         canvas.drawCentredString(0, 0, "MCN")
         
-        canvas.setFont('Helvetica', 24)
+        canvas.setFont('Helvetica-Bold', 26)  # Made bold and slightly larger
         canvas.drawCentredString(0, -40, "Marshal Core of Nigeria")
     
     def generate_terms_conditions(self, officer_data: Dict[str, Any], user_id: str) -> str:
@@ -829,8 +834,9 @@ class PDFGenerator:
                 textColor=colors.black
             )
             
-            # ✅ ADD PASSPORT PHOTO SECTION - FIXED
-            passport_path = applicant_data.get('passport_path')  # ✅ FIXED: Use passport_path
+            # ✅ ADD PASSPORT PHOTO SECTION - FIXED FOR EXISTING OFFICERS
+            # MODIFIED: Check both passport_path and passport_photo for compatibility
+            passport_path = applicant_data.get('passport_path') or applicant_data.get('passport_photo')
             passport_available = False
             passport_image = None
             
