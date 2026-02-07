@@ -1,3 +1,4 @@
+# This route handles the application form submission for the event. It processes the applicant's information, validates their application password, checks their payment status, and saves their application details along with uploaded documents. The route ensures that only valid and complete applications are accepted, and it provides appropriate error responses for various failure scenarios.
 from fastapi import APIRouter, UploadFile, Form, Depends, File, HTTPException, status
 from sqlalchemy.orm import Session
 from app.database import SessionLocal

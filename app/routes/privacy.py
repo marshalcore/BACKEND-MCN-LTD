@@ -1,20 +1,39 @@
-from fastapi import APIRouter, HTTPException, Depends
+# app/routes/privacy.py - UPDATED VERSION (makes accepted optional)
+from fastapi import APIRouter, HTTPException, Depends, Body
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from app.database import get_db
+import logging
+from pydantic import BaseModel
+from typing import Optional  # ADD THIS
+
+# Import models and dependencies
 from app.models.pre_applicant import PreApplicant
-from sqlalchemy import func
+from app.database import get_db
 
 router = APIRouter(prefix="/privacy", tags=["Privacy Notice"])
+logger = logging.getLogger(__name__)
+
+# Define Pydantic model for request body
+class PrivacyAcceptRequest(BaseModel):
+    email: str
+    accepted: Optional[bool] = True  # Make optional, default True
 
 @router.post("/accept")
 async def accept_privacy_notice(
-    email: str,
+    request: PrivacyAcceptRequest = Body(...),
     db: Session = Depends(get_db)
 ):
     """Accept privacy notice (required before form access)"""
-    normalized_email = email.strip().lower()
+    normalized_email = request.email.strip().lower()
+    
+    # Check if accepted is false (optional validation)
+    if request.accepted is False:
+        raise HTTPException(
+            status_code=400,
+            detail="You must accept the privacy notice to continue"
+        )
     
     pre_applicant = db.query(PreApplicant).filter(
         func.lower(PreApplicant.email) == normalized_email
@@ -30,6 +49,15 @@ async def accept_privacy_notice(
             detail="Verify password first before accepting privacy notice"
         )
     
+    # Check if privacy already accepted
+    if pre_applicant.privacy_accepted:
+        return {
+            "status": "already_accepted",
+            "message": "Privacy notice already accepted",
+            "accepted_at": pre_applicant.privacy_accepted_at.isoformat() if pre_applicant.privacy_accepted_at else None,
+            "email": normalized_email
+        }
+    
     # Record acceptance
     current_time = datetime.now(ZoneInfo("UTC"))
     pre_applicant.privacy_accepted = True
@@ -41,7 +69,8 @@ async def accept_privacy_notice(
         "status": "accepted",
         "message": "Privacy notice accepted",
         "accepted_at": pre_applicant.privacy_accepted_at.isoformat(),
-        "next_step": "application_form"
+        "next_step": "application_form",
+        "email": normalized_email
     }
 
 @router.get("/notice")
@@ -85,5 +114,6 @@ async def check_privacy_status(email: str, db: Session = Depends(get_db)):
     
     return {
         "privacy_accepted": pre_applicant.privacy_accepted,
-        "accepted_at": pre_applicant.privacy_accepted_at.isoformat() if pre_applicant.privacy_accepted else None
+        "accepted_at": pre_applicant.privacy_accepted_at.isoformat() if pre_applicant.privacy_accepted_at else None,
+        "email": normalized_email
     }
