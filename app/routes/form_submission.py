@@ -1,4 +1,4 @@
-# app/routes/form_submission.py - COMPLETE UPDATED VERSION
+# app/routes/form_submission.py - COMPLETE UPDATED VERSION WITH AUTHENTICATION FIX
 from fastapi import APIRouter, UploadFile, Form, Depends, File, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 from app.database import SessionLocal
@@ -32,7 +32,7 @@ def get_db():
     finally:
         db.close()
 
-# FIXED: Main application submission endpoint - ONLY /apply ENDPOINT
+# FIXED: Main application submission endpoint - WITH AUTHENTICATION FIX
 @router.post("/apply")
 async def submit_full_application(
     background_tasks: BackgroundTasks,
@@ -106,21 +106,57 @@ async def submit_full_application(
                 detail="Invalid date format. Use YYYY-MM-DD."
             )
 
-        # Verify pre-applicant exists
+        # FIXED AUTHENTICATION: Convert pre_applicant_id to UUID and verify credentials
+        try:
+            # Convert string to UUID
+            pre_applicant_uuid = uuid.UUID(pre_applicant_id)
+        except ValueError:
+            logger.error(f"❌ Invalid UUID format for pre_applicant_id: {pre_applicant_id}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid pre-applicant ID format"
+            )
+        
+        # FIXED: Find pre-applicant by ID and email only (password verified separately)
         pre_applicant = db.query(PreApplicant).filter(
-            PreApplicant.id == pre_applicant_id,
-            PreApplicant.email == email,
-            PreApplicant.application_password == application_password
+            PreApplicant.id == pre_applicant_uuid,
+            func.lower(PreApplicant.email) == email.lower()
         ).first()
         
         if not pre_applicant:
+            logger.error(f"❌ No pre-applicant found for ID: {pre_applicant_id}, email: {email}")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Invalid application credentials"
+                detail="Invalid application credentials - pre-applicant not found"
             )
+        
+        logger.info(f"🔍 Found pre-applicant: ID={pre_applicant.id}, Email={pre_applicant.email}, HasPassword={bool(pre_applicant.application_password)}")
+        
+        # FIXED: Verify application password against stored password
+        if not pre_applicant.application_password:
+            logger.error(f"❌ No application password set for: {email}")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Application password not generated. Please generate password first."
+            )
+        
+        # Debug password comparison
+        logger.info(f"🔐 Password comparison - Provided: '{application_password}' (len={len(application_password)}), Stored: '{pre_applicant.application_password}' (len={len(pre_applicant.application_password)})")
+        
+        if pre_applicant.application_password != application_password:
+            logger.error(f"❌ Password mismatch for: {email}")
+            logger.error(f"   Provided: '{application_password}'")
+            logger.error(f"   Stored: '{pre_applicant.application_password}'")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Invalid application password"
+            )
+        
+        logger.info(f"✅ Password verified successfully for: {email}")
         
         # Verify payment completion
         if not pre_applicant.has_paid:
+            logger.error(f"❌ Payment not completed for: {email}")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Payment not completed"
@@ -130,6 +166,7 @@ async def submit_full_application(
         current_time = datetime.now(ZoneInfo("UTC"))
         
         if pre_applicant.password_used:
+            logger.error(f"❌ Password already used for: {email}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Application password has already been used"
@@ -137,6 +174,7 @@ async def submit_full_application(
         
         # Check if privacy was accepted
         if not pre_applicant.privacy_accepted:
+            logger.error(f"❌ Privacy not accepted for: {email}")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Privacy notice must be accepted before submitting application"
@@ -144,11 +182,22 @@ async def submit_full_application(
 
         # Check if application already submitted
         if pre_applicant.application_submitted:
+            logger.error(f"❌ Application already submitted for: {email}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Application already submitted with this email"
             )
+        
+        # Check if pre-applicant is verified
+        if not pre_applicant.is_verified:
+            logger.error(f"❌ Pre-applicant not verified: {email}")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Please verify your password before submitting application"
+            )
 
+        logger.info(f"✅ All validations passed for: {email}")
+        
         # ✅ Save uploaded files
         passport_path = save_upload(passport_photo, "passports")
         
