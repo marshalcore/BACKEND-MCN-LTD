@@ -1,4 +1,4 @@
-# app/services/email_service.py - UPDATED WITH DOWNLOAD LINKS
+# app/services/email_service.py - COMPLETE UPDATED VERSION WITH CORRECT GUARANTOR LINK
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
 from app.config import settings
 from jinja2 import Environment, FileSystemLoader
@@ -797,7 +797,7 @@ async def send_password_reset_email(to_email: str, name: str, token: str):
     return True
 
 async def send_confirmation_email(to_email: str, name: str):
-    html = env.get_template("confirm_submission.html").render(name=name, link="/static/guarantor-form.pdf")
+    html = env.get_template("confirm_submission.html").render(name=name, link="/static/pdfs/guarantor_form.pdf")
     message = MessageSchema(
         subject="Marshal Core Application Received",
         recipients=[to_email],
@@ -840,7 +840,7 @@ async def send_verification_code_email(to_email: str, code: str):
         return False
     
 async def send_guarantor_confirmation_email(to_email: str, name: str):
-    html = env.get_template("confirm_submission.html").render(name=name, link="/static/guarantor-form.pdf")
+    html = env.get_template("confirm_submission.html").render(name=name, link="/static/pdfs/guarantor_form.pdf")
     message = MessageSchema(
         subject="Marshal Core Application Submitted Successfully",
         recipients=[to_email],
@@ -1366,7 +1366,7 @@ async def send_applicant_documents_email(
 ) -> bool:
     """
     Send application documents email to NEW APPLICANTS (Regular or VIP)
-    WITH DIRECT DOWNLOAD LINKS
+    WITH DIRECT DOWNLOAD LINKS - ALL 3 PDFs INCLUDED
     """
     try:
         logger.info(f"📨 Queueing applicant documents email to: {to_email} (Tier: {tier})")
@@ -1376,11 +1376,11 @@ async def send_applicant_documents_email(
         
         terms_filename = os.path.basename(terms_pdf_path) if terms_pdf_path else ""
         app_filename = os.path.basename(application_pdf_path) if application_pdf_path else ""
-        guarantor_filename = "guarantor-form.pdf"
         
         terms_download_url = f"{base_url}/pdf/public/applicant/terms/{terms_filename}"
         application_download_url = f"{base_url}/pdf/public/applicant/application/{app_filename}"
-        guarantor_download_url = f"{base_url}/static/guarantor-form.pdf"
+        # ✅ CORRECT GUARANTOR LINK
+        guarantor_download_url = f"{base_url}/static/pdfs/guarantor_form.pdf"
         
         logger.info(f"✅ Generated download URLs for applicant {applicant_id}:")
         logger.info(f"   Terms: {terms_download_url}")
@@ -1417,7 +1417,7 @@ async def send_applicant_documents_email(
             guarantor_download_url=guarantor_download_url
         )
         
-        # Prepare attachments
+        # Prepare attachments - ALL 3 PDFs
         attachments = []
         
         # Add Terms PDF
@@ -1438,8 +1438,8 @@ async def send_applicant_documents_email(
                 }
             })
         
-        # Add Guarantor Form (static file)
-        guarantor_path = guarantor_pdf_path or "static/pdfs/guarantor_form.pdf"
+        # Add Guarantor Form (static file) - CORRECT PATH
+        guarantor_path = "static/pdfs/guarantor_form.pdf"
         if os.path.exists(guarantor_path):
             attachments.append({
                 "file": guarantor_path,
@@ -1447,8 +1447,26 @@ async def send_applicant_documents_email(
                     "Content-Disposition": f'attachment; filename="Marshal_Core_Guarantor_Form.pdf"'
                 }
             })
+            logger.info(f"✅ Guarantor form attached from: {guarantor_path}")
         else:
-            logger.warning(f"Guarantor form not found: {guarantor_path}")
+            logger.warning(f"Guarantor form not found at: {guarantor_path}")
+            # Try alternative paths
+            alternative_paths = [
+                "static/pdfs/guarantor_form.pdf",
+                "static/guarantor_form.pdf",
+                "static/pdfs/guarantor-form.pdf",
+                "static/guarantor-form.pdf"
+            ]
+            for alt_path in alternative_paths:
+                if os.path.exists(alt_path):
+                    attachments.append({
+                        "file": alt_path,
+                        "headers": {
+                            "Content-Disposition": f'attachment; filename="Marshal_Core_Guarantor_Form.pdf"'
+                        }
+                    })
+                    logger.info(f"✅ Guarantor form attached from alternative path: {alt_path}")
+                    break
         
         # Create message
         subject = f"Marshal Core Nigeria - {config['subject_suffix']}"
@@ -1462,7 +1480,7 @@ async def send_applicant_documents_email(
         
         # Queue email
         await email_queue.add_email(message, f"Applicant Documents - {tier.upper()}", to_email)
-        logger.info(f"✅ Applicant documents email queued for {to_email} ({tier.upper()})")
+        logger.info(f"✅ Applicant documents email queued for {to_email} ({tier.upper()}) with {len(attachments)} PDF attachments")
         return True
         
     except Exception as e:
@@ -1613,6 +1631,17 @@ def create_vip_email_html_with_links(name: str, applicant_id: str, config: dict,
         margin: 10px 0;
         letter-spacing: 2px;
     }}
+    .payment-receipt {{
+        background-color: #e8f5e9;
+        border: 2px solid #4CAF50;
+        padding: 20px;
+        border-radius: 8px;
+        margin: 20px 0;
+    }}
+    .payment-receipt h4 {{
+        color: #1a237e;
+        margin-top: 0;
+    }}
   </style>
 </head>
 <body>
@@ -1636,6 +1665,8 @@ def create_vip_email_html_with_links(name: str, applicant_id: str, config: dict,
                 <p><strong>Application Date:</strong> {date_str}</p>
                 <p><strong>Status:</strong> <span style="color: #4CAF50; font-weight: bold;">✓ VIP APPLICATION ACCEPTED</span></p>
             </div>
+            
+            {f'<div class="payment-receipt"><h4>💰 PAYMENT RECEIPT</h4><p><strong>Payment Reference:</strong> {payment_reference}</p><p><strong>Amount Paid:</strong> {application_fee}</p><p><strong>Status:</strong> <span style="color: #4CAF50; font-weight: bold;">✓ COMPLETED</span></p></div>' if payment_reference else ''}
             
             <div class="download-section">
                 <h4>📥 DOWNLOAD YOUR DOCUMENTS:</h4>
@@ -1830,6 +1861,17 @@ def create_regular_email_html_with_links(name: str, applicant_id: str, config: d
         margin: 10px 0;
         letter-spacing: 2px;
     }}
+    .payment-receipt {{
+        background-color: #e8f5e9;
+        border: 2px solid #4CAF50;
+        padding: 20px;
+        border-radius: 8px;
+        margin: 20px 0;
+    }}
+    .payment-receipt h4 {{
+        color: #1a237e;
+        margin-top: 0;
+    }}
   </style>
 </head>
 <body>
@@ -1851,6 +1893,8 @@ def create_regular_email_html_with_links(name: str, applicant_id: str, config: d
                 <p><strong>Application Fee Paid:</strong> {application_fee}</p>
                 <p><strong>Application Date:</strong> {date_str}</p>
             </div>
+            
+            {f'<div class="payment-receipt"><h4>💰 PAYMENT RECEIPT</h4><p><strong>Payment Reference:</strong> {payment_reference}</p><p><strong>Amount Paid:</strong> {application_fee}</p><p><strong>Status:</strong> <span style="color: #4CAF50; font-weight: bold;">✓ COMPLETED</span></p></div>' if payment_reference else ''}
             
             <div class="download-section">
                 <h4>📥 DOWNLOAD YOUR DOCUMENTS:</h4>
