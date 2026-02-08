@@ -409,8 +409,8 @@ async def get_applicant_pdf_status(
                 }
             },
             "guarantor_form": {
-                "path": "static/guarantor-form.pdf",
-                "download_url": "/static/guarantor-form.pdf"
+                "path": "static/pdfs/guarantor_form.pdf",
+                "download_url": "static/pdfs/guarantor_form.pdf"
             }
         }
         
@@ -432,10 +432,10 @@ async def download_guarantor_form(filename: str):
     """
     try:
         # Look for guarantor form in static folder
-        guarantor_path = "static/guarantor-form.pdf"
+        guarantor_path = "static/pdfs/guarantor_form.pdf"
         
         # Also check for the filename directly
-        if filename != "guarantor-form.pdf":
+        if filename != "guarantor_form.pdf":
             logger.warning(f"Requested guarantor form with filename: {filename}, but serving default")
         
         if not Path(guarantor_path).exists():
@@ -481,7 +481,7 @@ async def download_static_file(filename: str):
             static_path,
             f"static/pdfs/{safe_filename}",
             f"static/images/{safe_filename}",
-            f"static/guarantor-form.pdf"  # Specifically for guarantor form
+            f"static/pdfs/guarantor_form.pdf"  # Specifically for guarantor form
         ]
         
         pdf_path = None
@@ -537,7 +537,7 @@ async def direct_download(
             "pdf": "static/pdfs",
             "terms": "static/pdfs/applicants",
             "application": "static/pdfs/applicants",
-            "guarantor": "static",
+            "guarantor": "static/pdfs/guarantor_form.pdf",
             "image": "static/images"
         }
         
@@ -548,7 +548,7 @@ async def direct_download(
         # Check if file exists
         if not Path(file_path).exists():
             # Try with .pdf extension for PDFs
-            if file_type in ["pdf", "terms", "application", "guarantor"] and not filename.endswith('.pdf'):
+            if file_type in ["pdf", "terms", "application", "guarantor_form"] and not filename.endswith('.pdf'):
                 file_path = f"{base_dir}/{filename}.pdf"
             
             if not Path(file_path).exists():

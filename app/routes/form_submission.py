@@ -425,7 +425,7 @@ async def submit_application(
             pdf_results = {
                 "terms_pdf_path": None,
                 "application_pdf_path": None,
-                "guarantor_pdf_path": "static/guarantor-form.pdf"
+                "guarantor_pdf_path": "static/pdfs/guarantor_form.pdf"
             }
         
         # Send emails
