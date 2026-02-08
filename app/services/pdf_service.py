@@ -1,4 +1,4 @@
-# PDF generation service for Marshal Core of Nigeria application
+# app/services/pdf_service.py
 import os
 import logging
 from datetime import datetime
@@ -264,6 +264,63 @@ class PDFGenerator:
         
         canvas_obj.restoreState()
     
+    def _add_background_watermark(self, canvas_obj, doc):
+        """Add logo as background watermark"""
+        canvas_obj.saveState()
+        
+        # Only add watermark if logo is available
+        if self.logo_image and self.logo_bytes:
+            try:
+                # Set transparency
+                canvas_obj.setFillAlpha(0.08)
+                
+                # Reset logo stream position
+                self.logo_image.seek(0)
+                
+                # Calculate position for centered watermark
+                center_x = doc.width/2 + doc.leftMargin
+                center_y = doc.height/2 + doc.topMargin
+                
+                # Draw logo watermark
+                logo_width = 4 * inch
+                logo_height = 2 * inch
+                logo_x = center_x - logo_width/2
+                logo_y = center_y - logo_height/2
+                
+                canvas_obj.drawImage(ImageReader(self.logo_image), logo_x, logo_y,
+                                   width=logo_width, height=logo_height,
+                                   mask='auto', preserveAspectRatio=True)
+                logger.info("✅ Logo watermark added to PDF")
+            except Exception as e:
+                logger.warning(f"Could not draw watermark: {e}")
+                # Fallback to text watermark
+                self._draw_text_watermark(canvas_obj, doc)
+        else:
+            # Draw text watermark
+            self._draw_text_watermark(canvas_obj, doc)
+        
+        canvas_obj.restoreState()
+    
+    def _draw_text_watermark(self, canvas_obj, doc):
+        """Draw text watermark"""
+        canvas_obj.setFillAlpha(0.1)
+        
+        # Calculate position for centered watermark
+        center_x = doc.width/2 + doc.leftMargin
+        center_y = doc.height/2 + doc.topMargin
+        
+        # Rotate the watermark
+        canvas_obj.translate(center_x, center_y)
+        canvas_obj.rotate(45)
+        
+        # Draw MCN text as watermark
+        canvas_obj.setFont('Helvetica-Bold', 72)
+        canvas_obj.setFillColor(colors.lightgrey)
+        canvas_obj.drawCentredString(0, 0, "MCN")
+        
+        canvas_obj.setFont('Helvetica-Bold', 32)
+        canvas_obj.drawCentredString(0, -60, "Marshal Core")
+    
     def _format_date(self, date_value) -> str:
         """Format date for display"""
         if not date_value:
@@ -421,12 +478,14 @@ class PDFGenerator:
             ))
             story.append(Spacer(1, 12))
             
-            # Build PDF
+            # Build PDF with watermark
             def on_first_page(canvas_obj, doc_obj):
                 self._create_header_footer(canvas_obj, doc_obj, "Terms & Conditions", is_terms=True)
+                self._add_background_watermark(canvas_obj, doc_obj)
             
             def on_later_pages(canvas_obj, doc_obj):
                 self._create_header_footer(canvas_obj, doc_obj, "Terms & Conditions", is_terms=True)
+                self._add_background_watermark(canvas_obj, doc_obj)
             
             doc.build(story, onFirstPage=on_first_page, onLaterPages=on_later_pages)
             
@@ -736,12 +795,14 @@ class PDFGenerator:
                 )
             ))
             
-            # Build PDF
+            # Build PDF with watermark
             def on_first_page(canvas_obj, doc_obj):
                 self._create_header_footer(canvas_obj, doc_obj, "Application Form")
+                self._add_background_watermark(canvas_obj, doc_obj)
             
             def on_later_pages(canvas_obj, doc_obj):
                 self._create_header_footer(canvas_obj, doc_obj, "Application Form")
+                self._add_background_watermark(canvas_obj, doc_obj)
             
             doc.build(story, onFirstPage=on_first_page, onLaterPages=on_later_pages)
             
@@ -932,7 +993,7 @@ class PDFGenerator:
             
             story.append(Spacer(1, 12))
             
-            # 5. FEES AND PAYMENTS
+            # 5. FEES AND PAYMENTS - ✅ NAIRA SIGN ADDED
             story.append(Paragraph("5. FEES AND PAYMENTS", heading1_style))
             
             if tier.lower() == "vip":
@@ -1022,12 +1083,14 @@ class PDFGenerator:
             story.append(Paragraph("<b>Official Stamp:</b>", bold_style))
             story.append(Paragraph("[ORGANIZATION SEAL]", normal_style))
             
-            # Build PDF
+            # Build PDF with watermark
             def on_first_page(canvas_obj, doc_obj):
                 self._create_header_footer(canvas_obj, doc_obj, "Terms & Conditions", is_terms=True)
+                self._add_background_watermark(canvas_obj, doc_obj)
             
             def on_later_pages(canvas_obj, doc_obj):
                 self._create_header_footer(canvas_obj, doc_obj, "Terms & Conditions", is_terms=True)
+                self._add_background_watermark(canvas_obj, doc_obj)
             
             doc.build(story, onFirstPage=on_first_page, onLaterPages=on_later_pages)
             
@@ -1236,13 +1299,14 @@ class PDFGenerator:
                 story.append(Paragraph(additional_details, normal_style))
                 story.append(Spacer(1, 12))
             
-            # ✅ PAYMENT RECEIPT SECTION
+            # ✅ PAYMENT RECEIPT SECTION WITH NAIRA SIGN
             story.append(Paragraph("PAYMENT CONFIRMATION", heading1_style))
             
             if payment_data:
+                payment_amount = payment_data.get('amount', 0)
                 payment_info = [
                     ["Payment Status:", "✅ COMPLETED"],
-                    ["Application Fee Paid:", f"₦{payment_data.get('amount', 0):,}"],
+                    ["Application Fee Paid:", f"₦{payment_amount:,}"],
                     ["Payment Reference:", payment_data.get('reference', 'N/A')],
                     ["Payment Date:", self._format_date(payment_data.get('date')) or datetime.now().strftime("%d %B, %Y")],
                     ["Payment Method:", "Online Payment (Paystack)"]
@@ -1336,12 +1400,14 @@ class PDFGenerator:
                 )
             ))
             
-            # Build PDF
+            # Build PDF with watermark
             def on_first_page(canvas_obj, doc_obj):
                 self._create_header_footer(canvas_obj, doc_obj, "Application Form")
+                self._add_background_watermark(canvas_obj, doc_obj)
             
             def on_later_pages(canvas_obj, doc_obj):
                 self._create_header_footer(canvas_obj, doc_obj, "Application Form")
+                self._add_background_watermark(canvas_obj, doc_obj)
             
             doc.build(story, onFirstPage=on_first_page, onLaterPages=on_later_pages)
             

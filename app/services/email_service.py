@@ -1,4 +1,4 @@
-# app/services/email_service.py
+# app/services/email_service.py - UPDATED WITH DOWNLOAD LINKS
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
 from app.config import settings
 from jinja2 import Environment, FileSystemLoader
@@ -864,7 +864,16 @@ async def send_pdfs_email(
     try:
         logger.info(f"📨 Queueing PDFs email to: {to_email}")
         
-        # Prepare HTML content
+        # ✅ CREATE PUBLIC DOWNLOAD URLs
+        base_url = "https://backend-mcn-ltd.onrender.com"
+        
+        terms_filename = os.path.basename(terms_pdf_path) if terms_pdf_path else ""
+        app_filename = os.path.basename(application_pdf_path) if application_pdf_path else ""
+        
+        terms_download_url = f"{base_url}/pdf/public/applicant/terms/{terms_filename}"
+        application_download_url = f"{base_url}/pdf/public/applicant/application/{app_filename}"
+        
+        # Prepare HTML content with download links
         html = f"""
         <!DOCTYPE html>
         <html>
@@ -877,6 +886,7 @@ async def send_pdfs_email(
                 .footer {{ text-align: center; padding: 20px; color: #666; font-size: 12px; }}
                 .button {{ display: inline-block; background-color: #1a237e; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; margin: 10px 5px; }}
                 .document-list {{ background: white; padding: 15px; border-left: 4px solid #1a237e; margin: 15px 0; }}
+                .download-section {{ background: #e8f5e9; padding: 20px; border-radius: 5px; margin: 20px 0; }}
             </style>
         </head>
         <body>
@@ -889,7 +899,25 @@ async def send_pdfs_email(
                 <div class="content">
                     <h3>Dear {name},</h3>
                     
-                    <p>Thank you for completing your application with Marshal Core Nigeria. Your application documents have been generated and are attached to this email.</p>
+                    <p>Thank you for completing your application with Marshal Core Nigeria. Your application documents have been generated.</p>
+                    
+                    <div class="download-section">
+                        <h4>📥 Download Your Documents:</h4>
+                        
+                        <p><strong>1. Terms & Conditions PDF:</strong></p>
+                        <a href="{terms_download_url}" class="button">
+                            📄 Download Terms & Conditions
+                        </a>
+                        
+                        <p style="margin-top: 15px;"><strong>2. Application Form PDF:</strong></p>
+                        <a href="{application_download_url}" class="button">
+                            📄 Download Application Form
+                        </a>
+                        
+                        <p style="margin-top: 20px; font-size: 14px; color: #666;">
+                            <em>Click the buttons above to download your documents directly. They will also be attached to this email.</em>
+                        </p>
+                    </div>
                     
                     <div class="document-list">
                         <h4>📎 Attached Documents:</h4>
@@ -964,8 +992,6 @@ async def send_pdfs_email(
         # Return True to not block PDF generation
         return True
 
-# In app/services/email_service.py, update this function:
-
 async def send_existing_officer_pdfs_email(
     to_email: str,
     name: str,
@@ -1000,7 +1026,7 @@ async def send_existing_officer_pdfs_email(
                 name=name,
                 officer_id=officer_id,
                 date=datetime.now().strftime('%d %B, %Y'),
-                category="Marshal Core Officer",  # You can get this from officer data
+                category="Marshal Core Officer",
                 terms_pdf_url=terms_pdf_url,
                 registration_pdf_url=registration_pdf_url
             )
@@ -1070,7 +1096,7 @@ async def send_existing_officer_pdfs_email(
         # Create message with BOTH download links AND attachments
         message_attachments = []
         
-        # Add Terms PDF as attachment (optional - can remove if only want links)
+        # Add Terms PDF as attachment
         if terms_pdf_path and os.path.exists(terms_pdf_path):
             message_attachments.append({
                 "file": terms_pdf_path,
@@ -1079,7 +1105,7 @@ async def send_existing_officer_pdfs_email(
                 }
             })
         
-        # Add Registration PDF as attachment (optional)
+        # Add Registration PDF as attachment
         if registration_pdf_path and os.path.exists(registration_pdf_path):
             message_attachments.append({
                 "file": registration_pdf_path,
@@ -1104,8 +1130,6 @@ async def send_existing_officer_pdfs_email(
     except Exception as e:
         logger.error(f"❌ Error queueing officer documents email: {str(e)}")
         return True
-
-# In app/services/email_service.py, update this function too:
 
 async def send_existing_officer_welcome_email(
     to_email: str,
@@ -1325,9 +1349,8 @@ if loop.is_running():
 else:
     loop.run_until_complete(start_email_queue())
 
-
 # ================================================
-# ✅ ADD NEW APPLICANT EMAIL FUNCTIONS HERE
+# ✅ APPLICANT EMAIL FUNCTIONS WITH DOWNLOAD LINKS
 # ================================================
 
 async def send_applicant_documents_email(
@@ -1343,32 +1366,56 @@ async def send_applicant_documents_email(
 ) -> bool:
     """
     Send application documents email to NEW APPLICANTS (Regular or VIP)
-    Uses inline HTML templates
+    WITH DIRECT DOWNLOAD LINKS
     """
     try:
         logger.info(f"📨 Queueing applicant documents email to: {to_email} (Tier: {tier})")
+        
+        # ✅ CREATE PUBLIC DOWNLOAD URLs
+        base_url = "https://backend-mcn-ltd.onrender.com"
+        
+        terms_filename = os.path.basename(terms_pdf_path) if terms_pdf_path else ""
+        app_filename = os.path.basename(application_pdf_path) if application_pdf_path else ""
+        guarantor_filename = "guarantor-form.pdf"
+        
+        terms_download_url = f"{base_url}/pdf/public/applicant/terms/{terms_filename}"
+        application_download_url = f"{base_url}/pdf/public/applicant/application/{app_filename}"
+        guarantor_download_url = f"{base_url}/static/guarantor-form.pdf"
+        
+        logger.info(f"✅ Generated download URLs for applicant {applicant_id}:")
+        logger.info(f"   Terms: {terms_download_url}")
+        logger.info(f"   Application: {application_download_url}")
+        logger.info(f"   Guarantor: {guarantor_download_url}")
         
         # Tier-specific configuration
         tier_config = {
             "regular": {
                 "application_fee": "₦5,180",
                 "uniform_fee": "₦95,000",
-                "subject_suffix": "Regular Applicant Documents"
+                "subject_suffix": "Regular Applicant Documents",
+                "template": create_regular_email_html_with_links
             },
             "vip": {
                 "application_fee": "₦25,900",
                 "uniform_fee": "₦200,000",
-                "subject_suffix": "VIP Applicant Documents"
+                "subject_suffix": "VIP Applicant Documents",
+                "template": create_vip_email_html_with_links
             }
         }
         
         config = tier_config.get(tier.lower(), tier_config["regular"])
         
-        # ✅ Use inline HTML templates
-        if tier.lower() == "vip":
-            html = create_vip_email_html(name, applicant_id, config, payment_amount, payment_reference)
-        else:
-            html = create_regular_email_html(name, applicant_id, config, payment_amount, payment_reference)
+        # ✅ Use HTML template with download links
+        html = config["template"](
+            name=name,
+            applicant_id=applicant_id,
+            config=config,
+            payment_amount=payment_amount,
+            payment_reference=payment_reference,
+            terms_download_url=terms_download_url,
+            application_download_url=application_download_url,
+            guarantor_download_url=guarantor_download_url
+        )
         
         # Prepare attachments
         attachments = []
@@ -1423,8 +1470,11 @@ async def send_applicant_documents_email(
         return True
 
 
-def create_vip_email_html(name: str, applicant_id: str, config: dict, payment_amount: float = None, payment_reference: str = None) -> str:
-    """Create VIP email HTML (second template from your code)"""
+def create_vip_email_html_with_links(name: str, applicant_id: str, config: dict, 
+                                   payment_amount: float = None, payment_reference: str = None,
+                                   terms_download_url: str = "", application_download_url: str = "",
+                                   guarantor_download_url: str = "") -> str:
+    """Create VIP email HTML with download links"""
     application_fee = f"₦{payment_amount:,.2f}" if payment_amount else config["application_fee"]
     date_str = datetime.now().strftime('%d %B, %Y')
     
@@ -1510,7 +1560,14 @@ def create_vip_email_html(name: str, applicant_id: str, config: dict, payment_am
         margin: 20px 0;
         border-radius: 0 5px 5px 0;
     }}
-    .button {{
+    .download-section {{
+        background-color: #e8f5e9;
+        padding: 20px;
+        border-radius: 8px;
+        margin: 20px 0;
+        border: 2px solid #4CAF50;
+    }}
+    .download-button {{
         display: inline-block;
         background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%);
         color: white;
@@ -1520,6 +1577,8 @@ def create_vip_email_html(name: str, applicant_id: str, config: dict, payment_am
         font-weight: bold;
         margin: 10px 5px;
         border: 2px solid #ffd700;
+        text-align: center;
+        width: 90%;
     }}
     .contact-link {{
         color: #1a237e;
@@ -1554,6 +1613,29 @@ def create_vip_email_html(name: str, applicant_id: str, config: dict, payment_am
                 <p><strong>Status:</strong> <span style="color: #4CAF50; font-weight: bold;">✓ VIP APPLICATION ACCEPTED</span></p>
             </div>
             
+            <div class="download-section">
+                <h4>📥 DOWNLOAD YOUR DOCUMENTS:</h4>
+                
+                <p><strong>1. Terms & Conditions PDF:</strong></p>
+                <a href="{terms_download_url}" class="download-button">
+                    📄 CLICK TO DOWNLOAD TERMS & CONDITIONS
+                </a>
+                
+                <p style="margin-top: 15px;"><strong>2. Application Form PDF:</strong></p>
+                <a href="{application_download_url}" class="download-button">
+                    📄 CLICK TO DOWNLOAD APPLICATION FORM
+                </a>
+                
+                <p style="margin-top: 15px;"><strong>3. Guarantor Form PDF:</strong></p>
+                <a href="{guarantor_download_url}" class="download-button">
+                    📄 CLICK TO DOWNLOAD GUARANTOR FORM
+                </a>
+                
+                <p style="margin-top: 20px; font-size: 14px; color: #666;">
+                    <em>These documents are also attached to this email. Click the buttons above for instant download.</em>
+                </p>
+            </div>
+            
             <div class="benefits-list">
                 <h4>🌟 VIP Benefits Include:</h4>
                 <ul>
@@ -1566,13 +1648,6 @@ def create_vip_email_html(name: str, applicant_id: str, config: dict, payment_am
                 </ul>
             </div>
             
-            <h4>📎 Attached VIP Documents (3 files):</h4>
-            <ol>
-                <li><strong>Terms & Conditions PDF</strong> - VIP Executive Agreement</li>
-                <li><strong>Application Form PDF</strong> - Your VIP application with passport photo and payment receipt</li>
-                <li><strong>Guarantor Form PDF</strong> - Required for executive verification</li>
-            </ol>
-            
             <div class="payment-highlight">
                 <h4>💰 VIP Payment Information:</h4>
                 <p><strong>Application Fee Paid:</strong> {application_fee} (completed)</p>
@@ -1581,7 +1656,7 @@ def create_vip_email_html(name: str, applicant_id: str, config: dict, payment_am
             
             <h4>📈 Next Steps for VIP Applicants:</h4>
             <ol>
-                <li><strong>Complete</strong> the attached Guarantor Form for executive verification</li>
+                <li><strong>Download and complete</strong> the Guarantor Form for executive verification</li>
                 <li><strong>Schedule</strong> your VIP orientation session</li>
                 <li><strong>Access</strong> the VIP portal for exclusive resources</li>
             </ol>
@@ -1604,8 +1679,11 @@ def create_vip_email_html(name: str, applicant_id: str, config: dict, payment_am
 </html>"""
 
 
-def create_regular_email_html(name: str, applicant_id: str, config: dict, payment_amount: float = None, payment_reference: str = None) -> str:
-    """Create Regular email HTML (third template from your code)"""
+def create_regular_email_html_with_links(name: str, applicant_id: str, config: dict, 
+                                       payment_amount: float = None, payment_reference: str = None,
+                                       terms_download_url: str = "", application_download_url: str = "",
+                                       guarantor_download_url: str = "") -> str:
+    """Create Regular email HTML with download links"""
     application_fee = f"₦{payment_amount:,.2f}" if payment_amount else config["application_fee"]
     date_str = datetime.now().strftime('%d %B, %Y')
     
@@ -1669,13 +1747,14 @@ def create_regular_email_html(name: str, applicant_id: str, config: dict, paymen
         margin: 20px 0;
         border-radius: 5px;
     }}
-    .doc-list {{
+    .download-section {{
         background-color: #fff3e0;
-        padding: 15px;
+        padding: 20px;
         border-radius: 5px;
         margin: 20px 0;
+        border: 2px solid #ff9800;
     }}
-    .button {{
+    .download-button {{
         display: inline-block;
         background-color: #d32f2f;
         color: white;
@@ -1684,6 +1763,13 @@ def create_regular_email_html(name: str, applicant_id: str, config: dict, paymen
         border-radius: 5px;
         font-weight: bold;
         margin: 10px 5px;
+        text-align: center;
+        width: 90%;
+    }}
+    .contact-link {{
+        color: #254a93;
+        font-weight: bold;
+        text-decoration: none;
     }}
   </style>
 </head>
@@ -1707,13 +1793,27 @@ def create_regular_email_html(name: str, applicant_id: str, config: dict, paymen
                 <p><strong>Application Date:</strong> {date_str}</p>
             </div>
             
-            <div class="doc-list">
-                <h4>📎 Attached Documents (3 files):</h4>
-                <ol>
-                    <li><strong>Terms & Conditions PDF</strong> - Official terms document</li>
-                    <li><strong>Application Form PDF</strong> - Your completed application with passport photo and payment receipt</li>
-                    <li><strong>Guarantor Form PDF</strong> - Required for final application processing</li>
-                </ol>
+            <div class="download-section">
+                <h4>📥 DOWNLOAD YOUR DOCUMENTS:</h4>
+                
+                <p><strong>1. Terms & Conditions PDF:</strong></p>
+                <a href="{terms_download_url}" class="download-button">
+                    📄 CLICK TO DOWNLOAD TERMS & CONDITIONS
+                </a>
+                
+                <p style="margin-top: 15px;"><strong>2. Application Form PDF:</strong></p>
+                <a href="{application_download_url}" class="download-button">
+                    📄 CLICK TO DOWNLOAD APPLICATION FORM
+                </a>
+                
+                <p style="margin-top: 15px;"><strong>3. Guarantor Form PDF:</strong></p>
+                <a href="{guarantor_download_url}" class="download-button">
+                    📄 CLICK TO DOWNLOAD GUARANTOR FORM
+                </a>
+                
+                <p style="margin-top: 20px; font-size: 14px; color: #666;">
+                    <em>These documents are also attached to this email. Click the buttons above for instant download.</em>
+                </p>
             </div>
             
             <div class="payment-box">
@@ -1724,7 +1824,7 @@ def create_regular_email_html(name: str, applicant_id: str, config: dict, paymen
             
             <h4>📝 Next Steps:</h4>
             <ol>
-                <li><strong>Print and complete</strong> the Guarantor Form</li>
+                <li><strong>Download and complete</strong> the Guarantor Form</li>
                 <li><strong>Submit</strong> the completed form to the nearest Marshal Core office</li>
                 <li><strong>Await further instructions</strong> regarding uniform payment and training schedule</li>
             </ol>

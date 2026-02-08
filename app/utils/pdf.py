@@ -1,4 +1,4 @@
-# app/utils/pdf.py - COMPLETE UPDATED VERSION WITH APPLICANT SUPPORT
+# app/utils/pdf.py - COMPLETE UPDATED VERSION WITH NAIRA SIGN AND WATERMARK
 import os
 import logging
 from datetime import datetime
@@ -485,7 +485,7 @@ class PDFGenerator:
         if self.logo_image and self.logo_bytes:
             try:
                 # Set transparency
-                canvas_obj.setFillAlpha(0.08)
+                canvas_obj.setFillAlpha(0.1)
                 
                 # Reset logo stream position
                 self.logo_image.seek(0)
@@ -495,8 +495,8 @@ class PDFGenerator:
                 center_y = doc.height/2 + doc.topMargin
                 
                 # Draw logo watermark
-                logo_width = 3.5 * inch
-                logo_height = 1.75 * inch
+                logo_width = 4 * inch
+                logo_height = 2 * inch
                 logo_x = center_x - logo_width/2
                 logo_y = center_y - logo_height/2
                 
@@ -516,7 +516,7 @@ class PDFGenerator:
     
     def _draw_text_watermark(self, canvas_obj, doc):
         """Draw text watermark"""
-        canvas_obj.setFillAlpha(0.1)
+        canvas_obj.setFillAlpha(0.08)
         
         # Calculate position for centered watermark
         center_x = doc.width/2 + doc.leftMargin
@@ -527,12 +527,12 @@ class PDFGenerator:
         canvas_obj.rotate(45)
         
         # Draw MCN text as watermark
-        canvas_obj.setFont('Helvetica-Bold', 52)
+        canvas_obj.setFont('Helvetica-Bold', 72)
         canvas_obj.setFillColor(colors.lightgrey)
         canvas_obj.drawCentredString(0, 0, "MCN")
         
-        canvas_obj.setFont('Helvetica-Bold', 26)
-        canvas_obj.drawCentredString(0, -40, "Marshal Core of Nigeria")
+        canvas_obj.setFont('Helvetica-Bold', 32)
+        canvas_obj.drawCentredString(0, -60, "Marshal Core")
     
     def _format_date(self, date_value):
         """Format date for display"""
@@ -1757,9 +1757,10 @@ class PDFGenerator:
             story.append(Paragraph("PAYMENT CONFIRMATION", heading1_style))
             
             if payment_data:
+                payment_amount = payment_data.get('amount', 0)
                 payment_info = [
                     ["Payment Status:", "✅ COMPLETED"],
-                    ["Application Fee Paid:", f"₦{payment_data.get('amount', 0):,}"],
+                    ["Application Fee Paid:", f"₦{payment_amount:,}"],
                     ["Payment Reference:", payment_data.get('reference', 'N/A')],
                     ["Payment Date:", self._format_date(payment_data.get('date')) or datetime.now().strftime("%d %B, %Y")],
                     ["Payment Method:", "Online Payment (Paystack)"]
