@@ -1439,7 +1439,7 @@ async def send_applicant_documents_email(
             })
         
         # Add Guarantor Form (static file)
-        guarantor_path = guarantor_pdf_path or "static/guarantor-form.pdf"
+        guarantor_path = guarantor_pdf_path or "static/pdfs/guarantor_form.pdf"
         if os.path.exists(guarantor_path):
             attachments.append({
                 "file": guarantor_path,
@@ -1474,7 +1474,7 @@ def create_vip_email_html_with_links(name: str, applicant_id: str, config: dict,
                                    payment_amount: float = None, payment_reference: str = None,
                                    terms_download_url: str = "", application_download_url: str = "",
                                    guarantor_download_url: str = "") -> str:
-    """Create VIP email HTML with download links"""
+    """Create VIP email HTML with download links and updated account details"""
     application_fee = f"₦{payment_amount:,.2f}" if payment_amount else config["application_fee"]
     date_str = datetime.now().strftime('%d %B, %Y')
     
@@ -1560,6 +1560,14 @@ def create_vip_email_html_with_links(name: str, applicant_id: str, config: dict,
         margin: 20px 0;
         border-radius: 0 5px 5px 0;
     }}
+    .account-details {{
+        background-color: #fff3e0;
+        border: 2px solid #ff9800;
+        padding: 20px;
+        border-radius: 8px;
+        margin: 20px 0;
+        text-align: center;
+    }}
     .download-section {{
         background-color: #e8f5e9;
         padding: 20px;
@@ -1589,13 +1597,29 @@ def create_vip_email_html_with_links(name: str, applicant_id: str, config: dict,
         color: #ffb300;
         font-weight: bold;
     }}
+    .account-info {{
+        font-size: 18px;
+        font-weight: bold;
+        color: #1a237e;
+        margin: 5px 0;
+    }}
+    .account-number {{
+        font-size: 20px;
+        font-weight: bold;
+        color: #d32f2f;
+        background-color: #ffebee;
+        padding: 10px;
+        border-radius: 5px;
+        margin: 10px 0;
+        letter-spacing: 2px;
+    }}
   </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <div class="vip-badge">VIP</div>
-            <h1>Marshal Core of Nigeria</h1>
+            <h1>Marshal Core of Nigeria Limited</h1>
             <h2>VIP Application Documents</h2>
             <p style="margin-top: 10px; opacity: 0.9;">Executive Security Association</p>
         </div>
@@ -1603,7 +1627,7 @@ def create_vip_email_html_with_links(name: str, applicant_id: str, config: dict,
         <div class="content">
             <h3>Dear {name},</h3>
             
-            <p>Welcome to the <span class="gold-text">VIP Executive Program</span> of <strong>Marshal Core of Nigeria</strong>!</p>
+            <p>Welcome to the <span class="gold-text">VIP Executive Program</span> of <strong>Marshal Core of Nigeria Limited</strong>!</p>
             
             <div class="vip-box">
                 <h4>🎖️ VIP Applicant Details:</h4>
@@ -1654,10 +1678,21 @@ def create_vip_email_html_with_links(name: str, applicant_id: str, config: dict,
                 <p><strong>VIP Uniform Package:</strong> {config['uniform_fee']} <em>(payable in flexible installments)</em></p>
             </div>
             
+            <div class="account-details">
+                <h4>🏦 VIP BANK ACCOUNT DETAILS:</h4>
+                <div class="account-number">3002619490</div>
+                <div class="account-info">Account Name: Marshal Core of Nigeria Limited</div>
+                <div class="account-info">Bank: KUDA Bank</div>
+                <p style="margin-top: 10px; font-size: 14px;">
+                    <em>Use your Applicant ID as payment reference: <strong>{applicant_id}</strong></em>
+                </p>
+            </div>
+            
             <h4>📈 Next Steps for VIP Applicants:</h4>
             <ol>
                 <li><strong>Download and complete</strong> the Guarantor Form for executive verification</li>
                 <li><strong>Schedule</strong> your VIP orientation session</li>
+                <li><strong>Make uniform payment</strong> using the VIP account details above</li>
                 <li><strong>Access</strong> the VIP portal for exclusive resources</li>
             </ol>
             
@@ -1668,10 +1703,10 @@ def create_vip_email_html_with_links(name: str, applicant_id: str, config: dict,
         </div>
         
         <div class="footer">
-            <p>Marshal Core of Nigeria | Certificate No: YA/CLB/10100</p>
+            <p>Marshal Core of Nigeria Limited | Certificate No: YA/CLB/10100</p>
             <p style="margin-top: 15px; font-size: 11px; color: #999;">
                 This is a VIP executive communication. Confidential and privileged.<br>
-                © 2025 Marshal Core of Nigeria. All rights reserved.
+                © 2025 Marshal Core of Nigeria Limited. All rights reserved.
             </p>
         </div>
     </div>
@@ -1683,7 +1718,7 @@ def create_regular_email_html_with_links(name: str, applicant_id: str, config: d
                                        payment_amount: float = None, payment_reference: str = None,
                                        terms_download_url: str = "", application_download_url: str = "",
                                        guarantor_download_url: str = "") -> str:
-    """Create Regular email HTML with download links"""
+    """Create Regular email HTML with download links and updated account details"""
     application_fee = f"₦{payment_amount:,.2f}" if payment_amount else config["application_fee"]
     date_str = datetime.now().strftime('%d %B, %Y')
     
@@ -1747,12 +1782,20 @@ def create_regular_email_html_with_links(name: str, applicant_id: str, config: d
         margin: 20px 0;
         border-radius: 5px;
     }}
-    .download-section {{
+    .account-details {{
         background-color: #fff3e0;
+        border: 2px solid #ff9800;
+        padding: 20px;
+        border-radius: 8px;
+        margin: 20px 0;
+        text-align: center;
+    }}
+    .download-section {{
+        background-color: #e8f5e9;
         padding: 20px;
         border-radius: 5px;
         margin: 20px 0;
-        border: 2px solid #ff9800;
+        border: 2px solid #4CAF50;
     }}
     .download-button {{
         display: inline-block;
@@ -1771,12 +1814,28 @@ def create_regular_email_html_with_links(name: str, applicant_id: str, config: d
         font-weight: bold;
         text-decoration: none;
     }}
+    .account-info {{
+        font-size: 18px;
+        font-weight: bold;
+        color: #1a237e;
+        margin: 5px 0;
+    }}
+    .account-number {{
+        font-size: 20px;
+        font-weight: bold;
+        color: #d32f2f;
+        background-color: #ffebee;
+        padding: 10px;
+        border-radius: 5px;
+        margin: 10px 0;
+        letter-spacing: 2px;
+    }}
   </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>Marshal Core of Nigeria</h1>
+            <h1>Marshal Core of Nigeria Limited</h1>
             <h2>Your Application Documents</h2>
             <p style="margin-top: 10px; opacity: 0.9;">Regular Applicant Registration</p>
         </div>
@@ -1784,7 +1843,7 @@ def create_regular_email_html_with_links(name: str, applicant_id: str, config: d
         <div class="content">
             <h3>Dear {name},</h3>
             
-            <p>Congratulations on completing your application to join <strong>Marshal Core of Nigeria</strong>!</p>
+            <p>Congratulations on completing your application to join <strong>Marshal Core of Nigeria Limited</strong>!</p>
             
             <div class="info-box">
                 <h4>📋 Your Application Details:</h4>
@@ -1817,16 +1876,27 @@ def create_regular_email_html_with_links(name: str, applicant_id: str, config: d
             </div>
             
             <div class="payment-box">
-                <h4>💰 Important Payment Information:</h4>
+                <h4>💰 Payment Information:</h4>
                 <p><strong>Application Fee Paid:</strong> {application_fee} (completed)</p>
                 <p><strong>Uniform Package Fee:</strong> {config['uniform_fee']} <em>(payable in installments)</em></p>
+            </div>
+            
+            <div class="account-details">
+                <h4>🏦 BANK ACCOUNT DETAILS FOR UNIFORM PAYMENT:</h4>
+                <div class="account-number">3002619490</div>
+                <div class="account-info">Account Name: Marshal Core of Nigeria Limited</div>
+                <div class="account-info">Bank: KUDA Bank</div>
+                <p style="margin-top: 10px; font-size: 14px;">
+                    <em>Use your Applicant ID as payment reference: <strong>{applicant_id}</strong></em>
+                </p>
             </div>
             
             <h4>📝 Next Steps:</h4>
             <ol>
                 <li><strong>Download and complete</strong> the Guarantor Form</li>
                 <li><strong>Submit</strong> the completed form to the nearest Marshal Core office</li>
-                <li><strong>Await further instructions</strong> regarding uniform payment and training schedule</li>
+                <li><strong>Make uniform payment</strong> using the account details above</li>
+                <li><strong>Await further instructions</strong> regarding training schedule</li>
             </ol>
             
             <p style="margin-top: 30px;">
@@ -1836,10 +1906,10 @@ def create_regular_email_html_with_links(name: str, applicant_id: str, config: d
         </div>
         
         <div class="footer">
-            <p>Marshal Core of Nigeria | Certificate No: YA/CLB/10100</p>
+            <p>Marshal Core of Nigeria Limited | Certificate No: YA/CLB/10100</p>
             <p style="margin-top: 15px; font-size: 11px; color: #999;">
                 This is an automated email. Please do not reply to this message.<br>
-                © 2025 Marshal Core of Nigeria. All rights reserved.
+                © 2025 Marshal Core of Nigeria Limited. All rights reserved.
             </p>
         </div>
     </div>
@@ -1885,19 +1955,22 @@ async def send_applicant_payment_receipt(
                 .footer {{ text-align: center; padding: 20px; color: #666; font-size: 12px; }}
                 .amount {{ font-size: 24px; color: #1a237e; font-weight: bold; margin: 10px 0; }}
                 .next-steps {{ background: #e8f5e9; padding: 15px; border-radius: 5px; margin: 20px 0; }}
+                .account-details {{ background-color: #fff3e0; border: 2px solid #ff9800; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: center; }}
+                .account-info {{ font-size: 18px; font-weight: bold; color: #1a237e; margin: 5px 0; }}
+                .account-number {{ font-size: 20px; font-weight: bold; color: #d32f2f; background-color: #ffebee; padding: 10px; border-radius: 5px; margin: 10px 0; letter-spacing: 2px; }}
             </style>
         </head>
         <body>
             <div class="container">
                 <div class="header">
-                    <h1>Marshal Core Nigeria</h1>
+                    <h1>Marshal Core of Nigeria Limited</h1>
                     <h2>Payment Receipt</h2>
                 </div>
                 
                 <div class="content">
                     <h3>Dear {name},</h3>
                     
-                    <p>Thank you for your payment to Marshal Core Nigeria. Your transaction has been completed successfully.</p>
+                    <p>Thank you for your payment to Marshal Core of Nigeria Limited. Your transaction has been completed successfully.</p>
                     
                     <div class="receipt">
                         <h4>Payment Details:</h4>
@@ -1907,6 +1980,16 @@ async def send_applicant_payment_receipt(
                         <p><strong>Date:</strong> {payment_date}</p>
                         <p><strong>Amount Paid:</strong> <span class="amount">₦{amount:,.2f}</span></p>
                         <p><strong>Status:</strong> <span style="color: #4CAF50; font-weight: bold;">✓ COMPLETED</span></p>
+                    </div>
+                    
+                    <div class="account-details">
+                        <h4>🏦 BANK ACCOUNT DETAILS FOR UNIFORM PAYMENT:</h4>
+                        <div class="account-number">3002619490</div>
+                        <div class="account-info">Account Name: Marshal Core of Nigeria Limited</div>
+                        <div class="account-info">Bank: KUDA Bank</div>
+                        <p style="margin-top: 10px; font-size: 14px;">
+                            <em>Use your payment reference: <strong>{payment_reference}</strong></em>
+                        </p>
                     </div>
                     
                     <div class="next-steps">
@@ -1931,7 +2014,7 @@ async def send_applicant_payment_receipt(
                 
                 <div class="footer">
                     <p>This is an automated email. Please do not reply to this message.</p>
-                    <p>© 2025 Marshal Core Nigeria. All rights reserved.</p>
+                    <p>© 2025 Marshal Core of Nigeria Limited. All rights reserved.</p>
                 </div>
             </div>
         </body>

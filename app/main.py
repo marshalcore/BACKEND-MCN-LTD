@@ -319,6 +319,7 @@ async def download_pdf(filename: str, request: Request):
         os.path.join(STATIC_DIR, "pdfs", filename),
         os.path.join(STATIC_DIR, "pdfs", "terms", filename),
         os.path.join(STATIC_DIR, "pdfs", "applications", filename),
+        os.path.join(STATIC_DIR, "pdfs", "guarantor_form", filename),
     ]
     
     pdf_path = None
@@ -343,6 +344,7 @@ async def download_pdf(filename: str, request: Request):
                 os.path.join(STATIC_DIR, "pdfs", filename_with_pdf),
                 os.path.join(STATIC_DIR, "pdfs", "terms", filename_with_pdf),
                 os.path.join(STATIC_DIR, "pdfs", "applications", filename_with_pdf),
+                os.path.join(STATIC_DIR, "pdfs", "guarantor_form", filename_with_pdf),
             ]
             
             for path in possible_paths:
@@ -369,12 +371,14 @@ async def download_pdf(filename: str, request: Request):
         os.makedirs(pdfs_dir, exist_ok=True)
         os.makedirs(os.path.join(STATIC_DIR, "pdfs", "terms"), exist_ok=True)
         os.makedirs(os.path.join(STATIC_DIR, "pdfs", "applications"), exist_ok=True)
+        os.makedirs(os.path.join(STATIC_DIR, "pdfs", "guarantor_form"), exist_ok=True)
         
         # Check one more time after creating directories
         possible_paths = [
             os.path.join(STATIC_DIR, "pdfs", filename),
             os.path.join(STATIC_DIR, "pdfs", "terms", filename),
             os.path.join(STATIC_DIR, "pdfs", "applications", filename),
+            os.path.join(STATIC_DIR, "pdfs", "guarantor_form", filename),
         ]
         
         for path in possible_paths:
@@ -430,6 +434,7 @@ async def preview_pdf(filename: str, request: Request):
         os.path.join(STATIC_DIR, "pdfs", filename),
         os.path.join(STATIC_DIR, "pdfs", "terms", filename),
         os.path.join(STATIC_DIR, "pdfs", "applications", filename),
+        os.path.join(STATIC_DIR, "pdfs", "guarantor_form", filename),
     ]
     
     pdf_path = None
@@ -446,6 +451,7 @@ async def preview_pdf(filename: str, request: Request):
                 os.path.join(STATIC_DIR, "pdfs", filename_with_pdf),
                 os.path.join(STATIC_DIR, "pdfs", "terms", filename_with_pdf),
                 os.path.join(STATIC_DIR, "pdfs", "applications", filename_with_pdf),
+                os.path.join(STATIC_DIR, "pdfs", "guarantor_form", filename_with_pdf),
             ]
             
             for path in possible_paths:
@@ -621,7 +627,8 @@ async def pdf_system_status():
         pdf_dirs_to_check = [
             ("pdfs_root", os.path.join(STATIC_DIR, "pdfs")),
             ("pdfs_terms", os.path.join(STATIC_DIR, "pdfs", "terms")),
-            ("pdfs_applications", os.path.join(STATIC_DIR, "pdfs", "applications"))
+            ("pdfs_applications", os.path.join(STATIC_DIR, "pdfs", "applications")),
+            ("pdfs_guarantor_form", os.path.join(STATIC_DIR, "pdfs", "guarantor_form"))
         ]
         
         dir_status = []

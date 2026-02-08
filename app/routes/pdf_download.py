@@ -420,3 +420,214 @@ async def get_applicant_pdf_status(
             status_code=500,
             detail=f"Failed to process request: {str(e)}"
         )
+
+# ================================================
+# ✅ ADDED: GUARANTOR FORM DOWNLOAD ROUTES
+# ================================================
+
+@router.get("/guarantor/{filename}")
+async def download_guarantor_form(filename: str):
+    """
+    Download Guarantor Form PDF by filename
+    """
+    try:
+        # Look for guarantor form in static folder
+        guarantor_path = "static/guarantor-form.pdf"
+        
+        # Also check for the filename directly
+        if filename != "guarantor-form.pdf":
+            logger.warning(f"Requested guarantor form with filename: {filename}, but serving default")
+        
+        if not Path(guarantor_path).exists():
+            # Check if there's a guarantor form in the static folder
+            guarantor_path = f"static/{filename}"
+            if not Path(guarantor_path).exists():
+                # Try in static/pdfs
+                guarantor_path = f"static/pdfs/{filename}"
+                if not Path(guarantor_path).exists():
+                    raise HTTPException(status_code=404, detail="Guarantor form not found")
+        
+        return FileResponse(
+            path=guarantor_path,
+            filename="Marshal_Core_Guarantor_Form.pdf",
+            media_type="application/pdf",
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Content-Disposition": 'inline; filename="Marshal_Core_Guarantor_Form.pdf"'
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to download guarantor form: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to process request: {str(e)}"
+        )
+
+@router.get("/static/{filename}")
+async def download_static_file(filename: str):
+    """
+    General static file download endpoint
+    """
+    try:
+        # Secure path checking
+        safe_filename = os.path.basename(filename)
+        static_path = f"static/{safe_filename}"
+        
+        # Check common static file locations
+        possible_paths = [
+            static_path,
+            f"static/pdfs/{safe_filename}",
+            f"static/images/{safe_filename}",
+            f"static/guarantor-form.pdf"  # Specifically for guarantor form
+        ]
+        
+        pdf_path = None
+        for path in possible_paths:
+            if Path(path).exists():
+                pdf_path = path
+                break
+        
+        if not pdf_path:
+            raise HTTPException(status_code=404, detail="File not found")
+        
+        # Determine content type
+        if safe_filename.endswith('.pdf'):
+            media_type = "application/pdf"
+        elif safe_filename.endswith('.jpg') or safe_filename.endswith('.jpeg'):
+            media_type = "image/jpeg"
+        elif safe_filename.endswith('.png'):
+            media_type = "image/png"
+        elif safe_filename.endswith('.txt'):
+            media_type = "text/plain"
+        else:
+            media_type = "application/octet-stream"
+        
+        return FileResponse(
+            path=pdf_path,
+            filename=safe_filename,
+            media_type=media_type,
+            headers={
+                "Access-Control-Allow-Origin": "*"
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to download static file: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to process request: {str(e)}"
+        )
+
+@router.get("/download/{file_type}/{filename}")
+async def direct_download(
+    file_type: str,
+    filename: str
+):
+    """
+    Direct download endpoint for various file types
+    """
+    try:
+        # Map file types to directories
+        dir_map = {
+            "pdf": "static/pdfs",
+            "terms": "static/pdfs/applicants",
+            "application": "static/pdfs/applicants",
+            "guarantor": "static",
+            "image": "static/images"
+        }
+        
+        # Get directory
+        base_dir = dir_map.get(file_type, "static")
+        file_path = f"{base_dir}/{filename}"
+        
+        # Check if file exists
+        if not Path(file_path).exists():
+            # Try with .pdf extension for PDFs
+            if file_type in ["pdf", "terms", "application", "guarantor"] and not filename.endswith('.pdf'):
+                file_path = f"{base_dir}/{filename}.pdf"
+            
+            if not Path(file_path).exists():
+                raise HTTPException(status_code=404, detail="File not found")
+        
+        # Determine content type
+        if filename.endswith('.pdf') or file_type in ["pdf", "terms", "application", "guarantor"]:
+            media_type = "application/pdf"
+        elif filename.endswith('.jpg') or filename.endswith('.jpeg'):
+            media_type = "image/jpeg"
+        elif filename.endswith('.png'):
+            media_type = "image/png"
+        else:
+            media_type = "application/octet-stream"
+        
+        # Set appropriate filename
+        if file_type == "guarantor" and not filename.endswith('.pdf'):
+            download_filename = "Marshal_Core_Guarantor_Form.pdf"
+        else:
+            download_filename = filename
+        
+        return FileResponse(
+            path=file_path,
+            filename=download_filename,
+            media_type=media_type,
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Content-Disposition": f'inline; filename="{download_filename}"'
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to download file: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to process request: {str(e)}"
+        )
+
+@router.get("/guarantor-form")
+async def download_guarantor_form_direct():
+    """
+    Direct endpoint for guarantor form download
+    """
+    try:
+        guarantor_path = "static/pdfs/guarantor_form.pdf"
+        
+        if not Path(guarantor_path).exists():
+            # Check for alternative names
+            possible_names = [
+                "static/pdfs/guarantor_form.pdf"
+                "static/guarantor_form.pdf",
+                "static/guarantor-form.pdf",
+                "static/guarantor form.pdf",
+            ]
+            
+            for path in possible_names:
+                if Path(path).exists():
+                    guarantor_path = path
+                    break
+            else:
+                raise HTTPException(status_code=404, detail="Guarantor form not found")
+        
+        return FileResponse(
+            path=guarantor_path,
+            filename="Marshal_Core_Guarantor_Form.pdf",
+            media_type="application/pdf",
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Content-Disposition": 'attachment; filename="Marshal_Core_Guarantor_Form.pdf"'
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to download guarantor form: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to process request: {str(e)}"
+        )
