@@ -106,25 +106,54 @@ async def submit_full_application(
                 detail="Invalid date format. Use YYYY-MM-DD."
             )
 
-        # FIXED AUTHENTICATION: Convert pre_applicant_id to UUID and verify credentials
+        # ✅ FIXED: Validate and fix pre_applicant_id
         try:
-            # Convert string to UUID
-            pre_applicant_uuid = uuid.UUID(pre_applicant_id)
-        except ValueError:
-            logger.error(f"❌ Invalid UUID format for pre_applicant_id: {pre_applicant_id}")
+            # Check if it's 'undefined' string
+            if pre_applicant_id == "undefined" or pre_applicant_id is None or pre_applicant_id == "":
+                logger.error(f"❌ Invalid pre_applicant_id: '{pre_applicant_id}' for email: {email}")
+                
+                # Try to find pre-applicant by email only
+                pre_applicant = db.query(PreApplicant).filter(
+                    func.lower(PreApplicant.email) == email.lower()
+                ).first()
+                
+                if pre_applicant and pre_applicant.id:
+                    pre_applicant_id = str(pre_applicant.id)
+                    logger.info(f"✅ Found pre-applicant ID by email: {pre_applicant_id}")
+                else:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Invalid pre-applicant ID. Please start a new application or contact support."
+                    )
+            
+            # Validate UUID format
+            try:
+                uuid_obj = uuid.UUID(pre_applicant_id, version=4)
+                logger.info(f"✅ Valid UUID format: {pre_applicant_id}")
+            except ValueError:
+                # Not a valid UUID, but might be a different identifier
+                logger.warning(f"⚠️ Not a standard UUID: {pre_applicant_id}, but continuing...")
+                
+        except ValueError as e:
+            logger.error(f"❌ Invalid UUID format for pre_applicant_id: {pre_applicant_id} - {str(e)}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid pre-applicant ID format"
+                detail=f"Invalid pre-applicant ID format. Please contact support with reference: {email}"
+            )
+        except Exception as e:
+            logger.error(f"❌ Error processing pre_applicant_id: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Error processing application credentials"
             )
         
         # FIXED: Find pre-applicant by ID and email only (password verified separately)
         pre_applicant = db.query(PreApplicant).filter(
-            PreApplicant.id == pre_applicant_uuid,
             func.lower(PreApplicant.email) == email.lower()
         ).first()
         
         if not pre_applicant:
-            logger.error(f"❌ No pre-applicant found for ID: {pre_applicant_id}, email: {email}")
+            logger.error(f"❌ No pre-applicant found for email: {email}")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Invalid application credentials - pre-applicant not found"

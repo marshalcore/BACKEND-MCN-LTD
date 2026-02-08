@@ -40,7 +40,7 @@ async def check_application_status(
     
     logger.info(f"✅ Pre-applicant found: {pre_applicant.email}")
     
-    # Build response based on current status
+    # ✅ FIXED: Build response with consistent field names
     status_info = {
         "email": normalized_email,
         "full_name": pre_applicant.full_name,
@@ -53,6 +53,21 @@ async def check_application_status(
         "password_used": getattr(pre_applicant, "password_used", False),
         "password_sent": bool(getattr(pre_applicant, "application_password", None)),
         "created_at": pre_applicant.created_at.isoformat() if pre_applicant.created_at else None,
+    }
+    
+    # ✅ FIXED: Always include both 'id' and 'pre_applicant_id'
+    if pre_applicant.id:
+        # Include both formats for frontend compatibility
+        status_info["pre_applicant_id"] = str(pre_applicant.id)
+        status_info["id"] = str(pre_applicant.id)  # Alias for frontend
+    
+    # ✅ FIXED: Add pre-applicant data consistently
+    status_info["pre_applicant_data"] = {
+        "id": str(pre_applicant.id) if pre_applicant.id else None,
+        "email": normalized_email,
+        "full_name": pre_applicant.full_name,
+        "status": getattr(pre_applicant, "status", "created"),
+        "has_paid": getattr(pre_applicant, "has_paid", False),
     }
     
     # Determine current stage for routing
@@ -80,10 +95,6 @@ async def check_application_status(
         status_info["last_updated"] = pre_applicant.updated_at.isoformat()
     else:
         status_info["last_updated"] = status_info["created_at"]
-    
-    # Add pre_applicant_id if available
-    if pre_applicant.id:
-        status_info["pre_applicant_id"] = str(pre_applicant.id)
     
     logger.info(f"📊 Returning status: {status_info}")
     return status_info
@@ -240,7 +251,7 @@ async def get_pre_applicant_status(email: str, db: Session = Depends(get_db)):
     if not pre_applicant:
         raise HTTPException(status_code=404, detail="Applicant not found")
     
-    # Build response with safe attribute access
+    # ✅ FIXED: Build response with consistent field names
     response = {
         "full_name": pre_applicant.full_name,
         "email": pre_applicant.email,
@@ -248,6 +259,11 @@ async def get_pre_applicant_status(email: str, db: Session = Depends(get_db)):
         "status": getattr(pre_applicant, "status", "created"),
         "created_at": pre_applicant.created_at.isoformat() if pre_applicant.created_at else None
     }
+    
+    # ✅ FIXED: Always include both 'id' and 'pre_applicant_id'
+    if pre_applicant.id:
+        response["pre_applicant_id"] = str(pre_applicant.id)
+        response["id"] = str(pre_applicant.id)  # Alias for frontend compatibility
     
     # Add optional fields if they exist
     optional_fields = [
@@ -257,7 +273,8 @@ async def get_pre_applicant_status(email: str, db: Session = Depends(get_db)):
         "privacy_accepted_at",
         "application_submitted",
         "submitted_at",
-        "payment_reference"
+        "payment_reference",
+        "application_password"
     ]
     
     for field in optional_fields:
@@ -267,6 +284,15 @@ async def get_pre_applicant_status(email: str, db: Session = Depends(get_db)):
                 response[field] = value.isoformat() if value else None
             else:
                 response[field] = value
+    
+    # ✅ FIXED: Add pre-applicant data
+    response["pre_applicant_data"] = {
+        "id": str(pre_applicant.id) if pre_applicant.id else None,
+        "email": normalized_email,
+        "full_name": pre_applicant.full_name,
+        "status": getattr(pre_applicant, "status", "created"),
+        "has_paid": getattr(pre_applicant, "has_paid", False),
+    }
     
     return response
 

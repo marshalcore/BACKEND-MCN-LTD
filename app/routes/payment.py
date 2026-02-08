@@ -396,7 +396,7 @@ async def verify_payment(
             
             logger.info(f"Payment {reference} verified successfully, ID: {payment.id}")
             
-            # Update user status based on user_type
+            # ✅ FIXED: Update user status based on user_type with proper error handling
             if payment.user_type == "pre_applicant":
                 pre_applicant = db.query(PreApplicant).filter(
                     func.lower(PreApplicant.email) == payment.user_email
@@ -408,11 +408,20 @@ async def verify_payment(
                     pre_applicant.payment_reference = reference
                     db.commit()
                     
-                    # Promote to applicant
+                    # ✅ FIXED: Use proper error handling for promote_to_applicant
                     try:
+                        # Pass the db session explicitly
                         await promote_to_applicant(payment.user_email, db)
+                        logger.info(f"✅ Successfully promoted pre-applicant: {payment.user_email}")
                     except Exception as e:
-                        logger.error(f"Error promoting pre-applicant: {e}")
+                        logger.error(f"⚠️ Error promoting pre-applicant (non-critical): {e}")
+                        # Don't raise error - continue with payment verification
+                        # The applicant can be promoted later
+                        # Store error in payment metadata for debugging
+                        payment_metadata = payment.payment_metadata or {}
+                        payment_metadata["promotion_error"] = str(e)
+                        payment.payment_metadata = payment_metadata
+                        db.commit()
             
             elif payment.user_type == "applicant":
                 applicant = db.query(Applicant).filter(

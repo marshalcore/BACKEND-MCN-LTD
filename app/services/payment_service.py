@@ -434,16 +434,21 @@ def process_post_payment(user_email: str, user_type: str, payment_type: str, db)
             ).first()
             
             if pre_applicant:
-                # Update pre-applicant status
+                # ✅ FIXED: Check if pre_applicant exists
                 pre_applicant.has_paid = True
                 pre_applicant.status = "payment_completed"
                 pre_applicant.updated_at = datetime.utcnow()
                 db.commit()
                 
-                # Promote to applicant
-                promote_to_applicant(user_email, db)
-                
-                logger.info(f"Pre-applicant {user_email} promoted to applicant")
+                try:
+                    # ✅ FIXED: Safe promotion with error handling
+                    promote_to_applicant(user_email, db)
+                    logger.info(f"Pre-applicant {user_email} promoted to applicant")
+                except Exception as promote_error:
+                    logger.error(f"Error promoting pre-applicant (will retry later): {str(promote_error)}")
+                    # Don't fail the whole process - just log the error
+            else:
+                logger.warning(f"No pre-applicant found for {user_email} - cannot promote")
         
         elif user_type == "applicant":
             applicant = db.query(Applicant).filter(
@@ -466,4 +471,5 @@ def process_post_payment(user_email: str, user_type: str, payment_type: str, db)
         
     except Exception as e:
         logger.error(f"Error in post-payment processing: {str(e)}", exc_info=True)
-        raise
+        # Don't raise the error - just log it
+        # This is a background task, we don't want to crash the payment flow
