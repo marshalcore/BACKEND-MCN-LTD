@@ -1324,3 +1324,298 @@ if loop.is_running():
     asyncio.create_task(start_email_queue())
 else:
     loop.run_until_complete(start_email_queue())
+
+
+    # Add these new functions to your existing email_service.py file:
+
+async def send_applicant_documents_email(
+    to_email: str,
+    name: str,
+    applicant_id: str,
+    tier: str,
+    terms_pdf_path: str,
+    application_pdf_path: str,
+    guarantor_pdf_path: str = None,
+    payment_amount: float = None,
+    payment_reference: str = None
+) -> bool:
+    """
+    Send application documents email to NEW APPLICANTS (Regular or VIP)
+    """
+    try:
+        logger.info(f"📨 Queueing applicant documents email to: {to_email} (Tier: {tier})")
+        
+        # Tier-specific configuration
+        tier_config = {
+            "regular": {
+                "application_fee": "₦5,180",
+                "uniform_fee": "₦95,000",
+                "template": "regular_applicant_docs.html",
+                "subject_suffix": "Regular Applicant"
+            },
+            "vip": {
+                "application_fee": "₦25,900",
+                "uniform_fee": "₦200,000",
+                "template": "vip_applicant_docs.html",
+                "subject_suffix": "VIP Applicant"
+            }
+        }
+        
+        config = tier_config.get(tier.lower(), tier_config["regular"])
+        
+        # Prepare HTML content with tier-specific details
+        try:
+            template = env.get_template(config["template"])
+            html = template.render(
+                name=name,
+                applicant_id=applicant_id,
+                tier=tier.upper(),
+                application_fee=config["application_fee"],
+                uniform_fee=config["uniform_fee"],
+                payment_amount=f"₦{payment_amount:,.2f}" if payment_amount else config["application_fee"],
+                payment_reference=payment_reference or "N/A",
+                date=datetime.now().strftime('%d %B, %Y')
+            )
+        except Exception as template_error:
+            logger.warning(f"Template rendering failed, using fallback: {str(template_error)}")
+            html = create_applicant_email_fallback(name, applicant_id, tier, config)
+        
+        # Prepare attachments
+        attachments = []
+        
+        # Add Terms PDF
+        if terms_pdf_path and os.path.exists(terms_pdf_path):
+            attachments.append({
+                "file": terms_pdf_path,
+                "headers": {
+                    "Content-Disposition": f'attachment; filename="Marshal_Core_Terms_{applicant_id}.pdf"'
+                }
+            })
+        
+        # Add Application PDF
+        if application_pdf_path and os.path.exists(application_pdf_path):
+            attachments.append({
+                "file": application_pdf_path,
+                "headers": {
+                    "Content-Disposition": f'attachment; filename="Marshal_Core_Application_{applicant_id}.pdf"'
+                }
+            })
+        
+        # Add Guarantor Form (static file)
+        guarantor_path = guarantor_pdf_path or "static/guarantor-form.pdf"
+        if os.path.exists(guarantor_path):
+            attachments.append({
+                "file": guarantor_path,
+                "headers": {
+                    "Content-Disposition": f'attachment; filename="Marshal_Core_Guarantor_Form.pdf"'
+                }
+            })
+        else:
+            logger.warning(f"Guarantor form not found: {guarantor_path}")
+        
+        # Create message
+        subject = f"Marshal Core Nigeria - Application Documents for {config['subject_suffix']}"
+        message = MessageSchema(
+            subject=subject,
+            recipients=[to_email],
+            body=html,
+            subtype="html",
+            attachments=attachments if attachments else None
+        )
+        
+        # Queue email
+        await email_queue.add_email(message, f"Applicant Documents - {tier.upper()}", to_email)
+        logger.info(f"✅ Applicant documents email queued for {to_email} ({tier.upper()})")
+        return True
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to queue applicant documents email for {to_email}: {str(e)}")
+        # Return True to not block application submission
+        return True
+
+def create_applicant_email_fallback(name: str, applicant_id: str, tier: str, config: dict) -> str:
+    """Create fallback HTML email for applicants"""
+    uniform_fee = config["uniform_fee"]
+    application_fee = config["application_fee"]
+    
+    return f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+            .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+            .header {{ background-color: #1a237e; color: white; padding: 20px; text-align: center; }}
+            .content {{ padding: 30px; background-color: #f9f9f9; }}
+            .footer {{ text-align: center; padding: 20px; color: #666; font-size: 12px; }}
+            .button {{ display: inline-block; background-color: #d32f2f; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; margin: 10px 5px; font-weight: bold; }}
+            .info-box {{ background: white; padding: 20px; border-radius: 8px; border-left: 4px solid #1a237e; margin: 20px 0; }}
+            .tier-badge {{ display: inline-block; background-color: #1a237e; color: white; padding: 5px 15px; border-radius: 20px; font-size: 14px; margin-left: 10px; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>Marshal Core of Nigeria</h1>
+                <h2>Application Documents</h2>
+            </div>
+            
+            <div class="content">
+                <h3>Dear {name},</h3>
+                
+                <p>Thank you for completing your application to join <strong>Marshal Core of Nigeria</strong>.</p>
+                
+                <div class="info-box">
+                    <h4>Your Application Details:</h4>
+                    <p><strong>Applicant ID:</strong> {applicant_id} <span class="tier-badge">{tier.upper()}</span></p>
+                    <p><strong>Application Fee Paid:</strong> {application_fee}</p>
+                    <p><strong>Application Date:</strong> {datetime.now().strftime('%d %B, %Y')}</p>
+                </div>
+                
+                <p><strong>📎 Attached Documents:</strong></p>
+                <ol>
+                    <li><strong>Terms & Conditions</strong> - Official terms document</li>
+                    <li><strong>Application Form</strong> - Your completed application with passport photo</li>
+                    <li><strong>Guarantor Form</strong> - Required for final processing</li>
+                </ol>
+                
+                <div class="info-box">
+                    <h4>💰 Important Payment Information:</h4>
+                    <p><strong>Uniform Package Fee:</strong> {uniform_fee} (payable in installments)</p>
+                    <p><em>Please note: This is separate from the application fee you've already paid.</em></p>
+                </div>
+                
+                <p><strong>📋 Next Steps:</strong></p>
+                <ol>
+                    <li>Print and complete the attached Guarantor Form</li>
+                    <li>Submit it to the nearest Marshal Core office</li>
+                    <li>Awurther instructions regarding uniform payment and training</li>
+                </ol>
+                
+                <p>If you have any questions, please contact our support team:</p>
+                <p style="text-align: center;">
+                    <a href="mailto:support@marshalcoreofnigeria.ng" style="color: #254a93; font-weight: bold;">
+                        support@marshalcoreofnigeria.ng
+                    </a>
+                </p>
+                
+                <p>Best regards,<br>
+                <strong>Marshal Core Nigeria Recruitment Team</strong></p>
+            </div>
+            
+            <div class="footer">
+                <p>© 2025 Marshal Core of Nigeria | Certificate No: YA/CLB/10100</p>
+                <p>This is an automated email. Please do not reply to this message.</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+
+async def send_applicant_payment_receipt(
+    to_email: str,
+    name: str,
+    payment_reference: str,
+    amount: float,
+    tier: str,
+    paid_at: datetime = None
+) -> bool:
+    """
+    Send payment receipt email to applicants
+    """
+    try:
+        logger.info(f"Queueing payment receipt email to: {to_email}")
+        
+        # Tier-specific messaging
+        if tier.lower() == "vip":
+            uniform_fee = "₦200,000"
+            benefits = "VIP benefits including advanced training and tech career pathway"
+        else:
+            uniform_fee = "₦95,000"
+            benefits = "comprehensive security training and job placement support"
+        
+        # Format the date
+        payment_date = paid_at.strftime('%d %B, %Y %I:%M %p') if paid_at else datetime.now().strftime('%d %B, %Y %I:%M %p')
+        
+        html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                .header {{ background-color: #1a237e; color: white; padding: 20px; text-align: center; }}
+                .content {{ padding: 30px; background-color: #f9f9f9; }}
+                .receipt {{ background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin: 20px 0; }}
+                .footer {{ text-align: center; padding: 20px; color: #666; font-size: 12px; }}
+                .amount {{ font-size: 24px; color: #1a237e; font-weight: bold; margin: 10px 0; }}
+                .next-steps {{ background: #e8f5e9; padding: 15px; border-radius: 5px; margin: 20px 0; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>Marshal Core Nigeria</h1>
+                    <h2>Payment Receipt</h2>
+                </div>
+                
+                <div class="content">
+                    <h3>Dear {name},</h3>
+                    
+                    <p>Thank you for your payment to Marshal Core Nigeria. Your transaction has been completed successfully.</p>
+                    
+                    <div class="receipt">
+                        <h4>Payment Details:</h4>
+                        <p><strong>Reference Number:</strong> {payment_reference}</p>
+                        <p><strong>Tier:</strong> {tier.upper()}</p>
+                        <p><strong>Payment Type:</strong> Application Fee</p>
+                        <p><strong>Date:</strong> {payment_date}</p>
+                        <p><strong>Amount Paid:</strong> <span class="amount">₦{amount:,.2f}</span></p>
+                        <p><strong>Status:</strong> <span style="color: #4CAF50; font-weight: bold;">✓ COMPLETED</span></p>
+                    </div>
+                    
+                    <div class="next-steps">
+                        <h4>✅ What's Next:</h4>
+                        <ol>
+                            <li>Complete your application form (if not already done)</li>
+                            <li>You will receive your application documents via email</li>
+                            <li>Uniform package fee: {uniform_fee} (payable in installments)</li>
+                            <li>Prepare for {benefits}</li>
+                        </ol>
+                    </div>
+                    
+                    <p>This receipt confirms that your application fee has been received and processed successfully.</p>
+                    
+                    <p>Please keep this receipt for your records. Your application documents will be sent to you shortly.</p>
+                    
+                    <p>If you have any questions about this payment, please contact our support team.</p>
+                    
+                    <p>Best regards,<br>
+                    <strong>Marshal Core Nigeria Finance Team</strong></p>
+                </div>
+                
+                <div class="footer">
+                    <p>This is an automated email. Please do not reply to this message.</p>
+                    <p>© 2025 Marshal Core Nigeria. All rights reserved.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        
+        # Create message
+        subject = f"Payment Receipt - {payment_reference} - Marshal Core Nigeria"
+        message = MessageSchema(
+            subject=subject,
+            recipients=[to_email],
+            body=html,
+            subtype="html"
+        )
+        
+        # Queue email
+        await email_queue.add_email(message, "Payment Receipt", to_email)
+        return True
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to queue payment receipt email for {to_email}: {str(e)}")
+        return True

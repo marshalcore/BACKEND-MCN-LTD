@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Marshal Core Nigeria - VIP Applicant Documents</title>
+  <style>
+    body { 
+        font-family: Arial, sans-serif; 
+        line-height: 1.6; 
+        color: #333; 
+        max-width: 600px; 
+        margin: 0 auto; 
+        padding: 20px;
+        background-color: #f5f5f5;
+    }
+    .container {
+        background-color: white;
+        border-radius: 10px;
+        box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+        overflow: hidden;
+        border: 2px solid #ffd700;
+    }
+    .header {
+        background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%);
+        color: white;
+        padding: 25px;
+        text-align: center;
+        position: relative;
+    }
+    .vip-badge {
+        position: absolute;
+        top: 15px;
+        right: 15px;
+        background-color: #ffd700;
+        color: #1a237e;
+        padding: 5px 15px;
+        border-radius: 20px;
+        font-weight: bold;
+        font-size: 14px;
+    }
+    .content {
+        padding: 30px;
+    }
+    .footer {
+        text-align: center;
+        padding: 20px;
+        color: #666;
+        font-size: 12px;
+        border-top: 1px solid #eee;
+        background-color: #f9f9f9;
+    }
+    .gold-badge {
+        display: inline-block;
+        background: linear-gradient(135deg, #ffd700 0%, #ffb300 100%);
+        color: #1a237e;
+        padding: 8px 20px;
+        border-radius: 25px;
+        font-size: 16px;
+        font-weight: bold;
+        margin-left: 10px;
+        border: 2px solid #1a237e;
+    }
+    .vip-box {
+        background-color: #fff8e1;
+        border: 2px solid #ffd700;
+        padding: 20px;
+        margin: 20px 0;
+        border-radius: 8px;
+    }
+    .benefits-list {
+        background-color: #e3f2fd;
+        padding: 15px;
+        border-radius: 5px;
+        margin: 20px 0;
+    }
+    .payment-highlight {
+        background-color: #f1f8e9;
+        border-left: 4px solid #4CAF50;
+        padding: 15px;
+        margin: 20px 0;
+        border-radius: 0 5px 5px 0;
+    }
+    .button {
+        display: inline-block;
+        background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%);
+        color: white;
+        padding: 14px 28px;
+        text-decoration: none;
+        border-radius: 5px;
+        font-weight: bold;
+        margin: 10px 5px;
+        border: 2px solid #ffd700;
+    }
+    .contact-link {
+        color: #1a237e;
+        font-weight: bold;
+        text-decoration: none;
+    }
+    .gold-text {
+        color: #ffb300;
+        font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="vip-badge">VIP</div>
+            <h1>Marshal Core of Nigeria</h1>
+            <h2>VIP Application Documents</h2>
+            <p style="margin-top: 10px; opacity: 0.9;">Executive Security Association</p>
+        </div>
+        
+        <div class="content">
+            <h3>Dear {{ name }},</h3>
+            
+            <p>Welcome to the <span class="gold-text">VIP Executive Program</span> of <strong>Marshal Core of Nigeria</strong>!</p>
+            
+            <div class="vip-box">
+                <h4>🎖️ VIP Applicant Details:</h4>
+                <p><strong>Applicant ID:</strong> {{ applicant_id }} <span class="gold-badge">VIP EXECUTIVE</span></p>
+                <p><strong>Application Fee Paid:</strong> {{ application_fee }}</p>
+                <p><strong>Application Date:</strong> {{ date }}</p>
+                <p><strong>Status:</strong> <span style="color: #4CAF50; font-weight: bold;">✓ VIP APPLICATION ACCEPTED</span></p>
+            </div>
+            
+            <div class="benefits-list">
+                <h4>🌟 VIP Benefits Include:</h4>
+                <ul>
+                    <li><strong>Tech Career Pathway</strong> - Full SXTM Training Program</li>
+                    <li><strong>Executive Security Association</strong> - Enhanced legal protection</li>
+                    <li><strong>Advanced Training</strong> - Specialized security protocols</li>
+                    <li><strong>Networking Access</strong> - Professional community</li>
+                    <li><strong>Business Protection</strong> - Organizational security backup</li>
+                    <li><strong>Priority Support</strong> - Dedicated assistance team</li>
+                </ul>
+            </div>
+            
+            <h4>📎 Attached VIP Documents (3 files):</h4>
+            <ol>
+                <li><strong>Terms & Conditions PDF</strong> - VIP Executive Agreement</li>
+                <li><strong>Application Form PDF</strong> - Your VIP application with passport photo and payment receipt</li>
+                <li><strong>Guarantor Form PDF</strong> - Required for executive verification</li>
+            </ol>
+            <p style="font-size: 14px; color: #666; margin-top: 10px;">
+                <em>These documents constitute your official VIP registration package.</em>
+            </p>
+            
+            <div class="payment-highlight">
+                <h4>💰 VIP Payment Information:</h4>
+                <p><strong>Application Fee Paid:</strong> {{ application_fee }} (completed)</p>
+                <p><strong>VIP Uniform Package:</strong> {{ uniform_fee }} <em>(payable in flexible installments)</em></p>
+                <p style="margin-top: 10px; font-size: 14px;">
+                    <strong>Note:</strong> The VIP package includes premium training materials, executive gear, 
+                    tech career pathway access, and enhanced security protocols.
+                </p>
+            </div>
+            
+            <h4>📈 Next Steps for VIP Applicants:</h4>
+            <ol>
+                <li><strong>Complete</strong> the attached Guarantor Form for executive verification</li>
+                <li><strong>Schedule</strong> your VIP orientation session</li>
+                <li><strong>Access</strong> the VIP portal for exclusive resources</li>
+                <li><strong>Prepare</strong> for advanced security and tech training</li>
+                <li><strong>Connect</strong> with the executive network</li>
+            </ol>
+            
+            <p style="margin-top: 30px; text-align: center;">
+                <a href="https://marshalcoreofnigeria.ng/vip-portal" class="button">Access VIP Portal</a>
+                <a href="https://marshalcoreofnigeria.ng/vip-support" class="button" style="background: linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%);">VIP Support</a>
+            </p>
+            
+            <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 30px 0;">
+                <h4>📞 VIP Executive Support:</h4>
+                <p>As a VIP applicant, you have access to dedicated executive support:</p>
+                <p style="text-align: center;">
+                    <a href="mailto:vip@marshalcoreofnigeria.ng" class="contact-link">
+                        vip@marshalcoreofnigeria.ng
+                    </a>
+                </p>
+                <p style="text-align: center; font-size: 14px;">
+                    Phone: +234 9137 428 031 (Ask for VIP Desk)
+                </p>
+            </div>
+            
+            <p style="margin-top: 30px;">
+                We look forward to welcoming you to our executive community.
+            </p>
+            
+            <p>
+                Best regards,<br>
+                <strong>Marshal Core Nigeria Executive Team</strong>
+            </p>
+        </div>
+        
+        <div class="footer">
+            <p>Marshal Core of Nigeria | Certificate No: YA/CLB/10100</p>
+            <p>Executive Office: KM. 3, Marshal Core National Headquarters, Benin City</p>
+            <p>VIP Desk: vip@marshalcoreofnigeria.ng | Executive Line: +234 9137 428 031</p>
+            <p style="margin-top: 15px; font-size: 11px; color: #999;">
+                This is a VIP executive communication. Confidential and privileged.<br>
+                © 2025 Marshal Core of Nigeria. All rights reserved.
+            </p>
+        </div>
+    </div>
+</body>
+</html>

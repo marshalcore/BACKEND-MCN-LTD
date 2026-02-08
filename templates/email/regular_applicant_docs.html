@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Marshal Core Nigeria - Regular Applicant Documents</title>
+  <style>
+    body { 
+        font-family: Arial, sans-serif; 
+        line-height: 1.6; 
+        color: #333; 
+        max-width: 600px; 
+        margin: 0 auto; 
+        padding: 20px;
+        background-color: #f9f9f9;
+    }
+    .container {
+        background-color: white;
+        border-radius: 10px;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        overflow: hidden;
+    }
+    .header {
+        background-color: #1a237e;
+        color: white;
+        padding: 25px;
+        text-align: center;
+    }
+    .content {
+        padding: 30px;
+    }
+    .footer {
+        text-align: center;
+        padding: 20px;
+        color: #666;
+        font-size: 12px;
+        border-top: 1px solid #eee;
+    }
+    .badge {
+        display: inline-block;
+        background-color: #254a93;
+        color: white;
+        padding: 5px 15px;
+        border-radius: 20px;
+        font-size: 14px;
+        margin-left: 10px;
+    }
+    .info-box {
+        background-color: #f0f7ff;
+        border-left: 4px solid #254a93;
+        padding: 15px;
+        margin: 20px 0;
+        border-radius: 0 5px 5px 0;
+    }
+    .payment-box {
+        background-color: #e8f5e9;
+        border: 1px solid #4CAF50;
+        padding: 15px;
+        margin: 20px 0;
+        border-radius: 5px;
+    }
+    .doc-list {
+        background-color: #fff3e0;
+        padding: 15px;
+        border-radius: 5px;
+        margin: 20px 0;
+    }
+    .button {
+        display: inline-block;
+        background-color: #d32f2f;
+        color: white;
+        padding: 12px 24px;
+        text-decoration: none;
+        border-radius: 5px;
+        font-weight: bold;
+        margin: 10px 5px;
+    }
+    .contact-link {
+        color: #254a93;
+        font-weight: bold;
+        text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Marshal Core of Nigeria</h1>
+            <h2>Your Application Documents</h2>
+            <p style="margin-top: 10px; opacity: 0.9;">Regular Applicant Registration</p>
+        </div>
+        
+        <div class="content">
+            <h3>Dear {{ name }},</h3>
+            
+            <p>Congratulations on completing your application to join <strong>Marshal Core of Nigeria</strong>!</p>
+            
+            <div class="info-box">
+                <h4>📋 Your Application Details:</h4>
+                <p><strong>Applicant ID:</strong> {{ applicant_id }} <span class="badge">{{ tier }} APPLICANT</span></p>
+                <p><strong>Application Fee Paid:</strong> {{ application_fee }}</p>
+                <p><strong>Application Date:</strong> {{ date }}</p>
+            </div>
+            
+            <div class="doc-list">
+                <h4>📎 Attached Documents (3 files):</h4>
+                <ol>
+                    <li><strong>Terms & Conditions PDF</strong> - Official terms document for Marshal Core Nigeria</li>
+                    <li><strong>Application Form PDF</strong> - Your completed application with passport photo and payment receipt</li>
+                    <li><strong>Guarantor Form PDF</strong> - Required for final application processing</li>
+                </ol>
+                <p style="margin-top: 10px; font-size: 14px; color: #666;">
+                    <em>Please save all documents to your device for future reference.</em>
+                </p>
+            </div>
+            
+            <div class="payment-box">
+                <h4>💰 Important Payment Information:</h4>
+                <p><strong>Application Fee Paid:</strong> {{ application_fee }} (completed)</p>
+                <p><strong>Uniform Package Fee:</strong> {{ uniform_fee }} <em>(payable in installments)</em></p>
+                <p style="margin-top: 10px; font-size: 14px;">
+                    <strong>Note:</strong> The uniform package includes complete training materials, gear, and certification. 
+                    Payment plans are available upon request.
+                </p>
+            </div>
+            
+            <h4>📝 Next Steps:</h4>
+            <ol>
+                <li><strong>Print and complete</strong> the Guarantor Form</li>
+                <li><strong>Submit</strong> the completed form to the nearest Marshal Core office</li>
+                <li><strong>Await further instructions</strong> regarding uniform payment and training schedule</li>
+                <li><strong>Prepare</strong> for comprehensive security training program</li>
+            </ol>
+            
+            <p style="margin-top: 30px; text-align: center;">
+                <a href="https://marshalcoreofnigeria.ng/contact" class="button">Contact Support</a>
+                <a href="https://marshalcoreofnigeria.ng/faq" class="button" style="background-color: #254a93;">Visit FAQ</a>
+            </p>
+            
+            <p style="margin-top: 30px;">
+                If you have any questions or need assistance, please contact our support team:
+            </p>
+            <p style="text-align: center;">
+                <a href="mailto:support@marshalcoreofnigeria.ng" class="contact-link">
+                    support@marshalcoreofnigeria.ng
+                </a>
+            </p>
+            
+            <p style="margin-top: 30px;">
+                Best regards,<br>
+                <strong>Marshal Core Nigeria Recruitment Team</strong>
+            </p>
+        </div>
+        
+        <div class="footer">
+            <p>Marshal Core of Nigeria | Certificate No: YA/CLB/10100</p>
+            <p>KM. 3, Marshal Core National Headquarters, Benin City, Edo State</p>
+            <p>Phone: +234 9137 428 031 | Email: info@marshalcoreofnigeria.ng</p>
+            <p style="margin-top: 15px; font-size: 11px; color: #999;">
+                This is an automated email. Please do not reply to this message.<br>
+                © 2025 Marshal Core of Nigeria. All rights reserved.
+            </p>
+        </div>
+    </div>
+</body>
+</html>
