@@ -1326,21 +1326,24 @@ else:
     loop.run_until_complete(start_email_queue())
 
 
-    # Add these new functions to your existing email_service.py file:
+# ================================================
+# ✅ ADD NEW APPLICANT EMAIL FUNCTIONS HERE
+# ================================================
 
 async def send_applicant_documents_email(
     to_email: str,
     name: str,
     applicant_id: str,
     tier: str,
-    terms_pdf_path: str,
-    application_pdf_path: str,
+    terms_pdf_path: str = None,
+    application_pdf_path: str = None,
     guarantor_pdf_path: str = None,
     payment_amount: float = None,
     payment_reference: str = None
 ) -> bool:
     """
     Send application documents email to NEW APPLICANTS (Regular or VIP)
+    Uses inline HTML templates
     """
     try:
         logger.info(f"📨 Queueing applicant documents email to: {to_email} (Tier: {tier})")
@@ -1350,35 +1353,22 @@ async def send_applicant_documents_email(
             "regular": {
                 "application_fee": "₦5,180",
                 "uniform_fee": "₦95,000",
-                "template": "regular_applicant_docs.html",
-                "subject_suffix": "Regular Applicant"
+                "subject_suffix": "Regular Applicant Documents"
             },
             "vip": {
                 "application_fee": "₦25,900",
                 "uniform_fee": "₦200,000",
-                "template": "vip_applicant_docs.html",
-                "subject_suffix": "VIP Applicant"
+                "subject_suffix": "VIP Applicant Documents"
             }
         }
         
         config = tier_config.get(tier.lower(), tier_config["regular"])
         
-        # Prepare HTML content with tier-specific details
-        try:
-            template = env.get_template(config["template"])
-            html = template.render(
-                name=name,
-                applicant_id=applicant_id,
-                tier=tier.upper(),
-                application_fee=config["application_fee"],
-                uniform_fee=config["uniform_fee"],
-                payment_amount=f"₦{payment_amount:,.2f}" if payment_amount else config["application_fee"],
-                payment_reference=payment_reference or "N/A",
-                date=datetime.now().strftime('%d %B, %Y')
-            )
-        except Exception as template_error:
-            logger.warning(f"Template rendering failed, using fallback: {str(template_error)}")
-            html = create_applicant_email_fallback(name, applicant_id, tier, config)
+        # ✅ Use inline HTML templates
+        if tier.lower() == "vip":
+            html = create_vip_email_html(name, applicant_id, config, payment_amount, payment_reference)
+        else:
+            html = create_regular_email_html(name, applicant_id, config, payment_amount, payment_reference)
         
         # Prepare attachments
         attachments = []
@@ -1414,7 +1404,7 @@ async def send_applicant_documents_email(
             logger.warning(f"Guarantor form not found: {guarantor_path}")
         
         # Create message
-        subject = f"Marshal Core Nigeria - Application Documents for {config['subject_suffix']}"
+        subject = f"Marshal Core Nigeria - {config['subject_suffix']}"
         message = MessageSchema(
             subject=subject,
             recipients=[to_email],
@@ -1430,87 +1420,332 @@ async def send_applicant_documents_email(
         
     except Exception as e:
         logger.error(f"❌ Failed to queue applicant documents email for {to_email}: {str(e)}")
-        # Return True to not block application submission
         return True
 
-def create_applicant_email_fallback(name: str, applicant_id: str, tier: str, config: dict) -> str:
-    """Create fallback HTML email for applicants"""
-    uniform_fee = config["uniform_fee"]
-    application_fee = config["application_fee"]
+
+def create_vip_email_html(name: str, applicant_id: str, config: dict, payment_amount: float = None, payment_reference: str = None) -> str:
+    """Create VIP email HTML (second template from your code)"""
+    application_fee = f"₦{payment_amount:,.2f}" if payment_amount else config["application_fee"]
+    date_str = datetime.now().strftime('%d %B, %Y')
     
-    return f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <style>
-            body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-            .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-            .header {{ background-color: #1a237e; color: white; padding: 20px; text-align: center; }}
-            .content {{ padding: 30px; background-color: #f9f9f9; }}
-            .footer {{ text-align: center; padding: 20px; color: #666; font-size: 12px; }}
-            .button {{ display: inline-block; background-color: #d32f2f; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; margin: 10px 5px; font-weight: bold; }}
-            .info-box {{ background: white; padding: 20px; border-radius: 8px; border-left: 4px solid #1a237e; margin: 20px 0; }}
-            .tier-badge {{ display: inline-block; background-color: #1a237e; color: white; padding: 5px 15px; border-radius: 20px; font-size: 14px; margin-left: 10px; }}
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="header">
-                <h1>Marshal Core of Nigeria</h1>
-                <h2>Application Documents</h2>
-            </div>
-            
-            <div class="content">
-                <h3>Dear {name},</h3>
-                
-                <p>Thank you for completing your application to join <strong>Marshal Core of Nigeria</strong>.</p>
-                
-                <div class="info-box">
-                    <h4>Your Application Details:</h4>
-                    <p><strong>Applicant ID:</strong> {applicant_id} <span class="tier-badge">{tier.upper()}</span></p>
-                    <p><strong>Application Fee Paid:</strong> {application_fee}</p>
-                    <p><strong>Application Date:</strong> {datetime.now().strftime('%d %B, %Y')}</p>
-                </div>
-                
-                <p><strong>📎 Attached Documents:</strong></p>
-                <ol>
-                    <li><strong>Terms & Conditions</strong> - Official terms document</li>
-                    <li><strong>Application Form</strong> - Your completed application with passport photo</li>
-                    <li><strong>Guarantor Form</strong> - Required for final processing</li>
-                </ol>
-                
-                <div class="info-box">
-                    <h4>💰 Important Payment Information:</h4>
-                    <p><strong>Uniform Package Fee:</strong> {uniform_fee} (payable in installments)</p>
-                    <p><em>Please note: This is separate from the application fee you've already paid.</em></p>
-                </div>
-                
-                <p><strong>📋 Next Steps:</strong></p>
-                <ol>
-                    <li>Print and complete the attached Guarantor Form</li>
-                    <li>Submit it to the nearest Marshal Core office</li>
-                    <li>Awurther instructions regarding uniform payment and training</li>
-                </ol>
-                
-                <p>If you have any questions, please contact our support team:</p>
-                <p style="text-align: center;">
-                    <a href="mailto:support@marshalcoreofnigeria.ng" style="color: #254a93; font-weight: bold;">
-                        support@marshalcoreofnigeria.ng
-                    </a>
-                </p>
-                
-                <p>Best regards,<br>
-                <strong>Marshal Core Nigeria Recruitment Team</strong></p>
-            </div>
-            
-            <div class="footer">
-                <p>© 2025 Marshal Core of Nigeria | Certificate No: YA/CLB/10100</p>
-                <p>This is an automated email. Please do not reply to this message.</p>
-            </div>
+    return f"""<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Marshal Core Nigeria - VIP Applicant Documents</title>
+  <style>
+    body {{ 
+        font-family: Arial, sans-serif; 
+        line-height: 1.6; 
+        color: #333; 
+        max-width: 600px; 
+        margin: 0 auto; 
+        padding: 20px;
+        background-color: #f5f5f5;
+    }}
+    .container {{
+        background-color: white;
+        border-radius: 10px;
+        box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+        overflow: hidden;
+        border: 2px solid #ffd700;
+    }}
+    .header {{
+        background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%);
+        color: white;
+        padding: 25px;
+        text-align: center;
+        position: relative;
+    }}
+    .vip-badge {{
+        position: absolute;
+        top: 15px;
+        right: 15px;
+        background-color: #ffd700;
+        color: #1a237e;
+        padding: 5px 15px;
+        border-radius: 20px;
+        font-weight: bold;
+        font-size: 14px;
+    }}
+    .content {{
+        padding: 30px;
+    }}
+    .footer {{
+        text-align: center;
+        padding: 20px;
+        color: #666;
+        font-size: 12px;
+        border-top: 1px solid #eee;
+        background-color: #f9f9f9;
+    }}
+    .gold-badge {{
+        display: inline-block;
+        background: linear-gradient(135deg, #ffd700 0%, #ffb300 100%);
+        color: #1a237e;
+        padding: 8px 20px;
+        border-radius: 25px;
+        font-size: 16px;
+        font-weight: bold;
+        margin-left: 10px;
+        border: 2px solid #1a237e;
+    }}
+    .vip-box {{
+        background-color: #fff8e1;
+        border: 2px solid #ffd700;
+        padding: 20px;
+        margin: 20px 0;
+        border-radius: 8px;
+    }}
+    .benefits-list {{
+        background-color: #e3f2fd;
+        padding: 15px;
+        border-radius: 5px;
+        margin: 20px 0;
+    }}
+    .payment-highlight {{
+        background-color: #f1f8e9;
+        border-left: 4px solid #4CAF50;
+        padding: 15px;
+        margin: 20px 0;
+        border-radius: 0 5px 5px 0;
+    }}
+    .button {{
+        display: inline-block;
+        background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%);
+        color: white;
+        padding: 14px 28px;
+        text-decoration: none;
+        border-radius: 5px;
+        font-weight: bold;
+        margin: 10px 5px;
+        border: 2px solid #ffd700;
+    }}
+    .contact-link {{
+        color: #1a237e;
+        font-weight: bold;
+        text-decoration: none;
+    }}
+    .gold-text {{
+        color: #ffb300;
+        font-weight: bold;
+    }}
+  </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="vip-badge">VIP</div>
+            <h1>Marshal Core of Nigeria</h1>
+            <h2>VIP Application Documents</h2>
+            <p style="margin-top: 10px; opacity: 0.9;">Executive Security Association</p>
         </div>
-    </body>
-    </html>
-    """
+        
+        <div class="content">
+            <h3>Dear {name},</h3>
+            
+            <p>Welcome to the <span class="gold-text">VIP Executive Program</span> of <strong>Marshal Core of Nigeria</strong>!</p>
+            
+            <div class="vip-box">
+                <h4>🎖️ VIP Applicant Details:</h4>
+                <p><strong>Applicant ID:</strong> {applicant_id} <span class="gold-badge">VIP EXECUTIVE</span></p>
+                <p><strong>Application Fee Paid:</strong> {application_fee}</p>
+                <p><strong>Application Date:</strong> {date_str}</p>
+                <p><strong>Status:</strong> <span style="color: #4CAF50; font-weight: bold;">✓ VIP APPLICATION ACCEPTED</span></p>
+            </div>
+            
+            <div class="benefits-list">
+                <h4>🌟 VIP Benefits Include:</h4>
+                <ul>
+                    <li><strong>Tech Career Pathway</strong> - Full SXTM Training Program</li>
+                    <li><strong>Executive Security Association</strong> - Enhanced legal protection</li>
+                    <li><strong>Advanced Training</strong> - Specialized security protocols</li>
+                    <li><strong>Networking Access</strong> - Professional community</li>
+                    <li><strong>Business Protection</strong> - Organizational security backup</li>
+                    <li><strong>Priority Support</strong> - Dedicated assistance team</li>
+                </ul>
+            </div>
+            
+            <h4>📎 Attached VIP Documents (3 files):</h4>
+            <ol>
+                <li><strong>Terms & Conditions PDF</strong> - VIP Executive Agreement</li>
+                <li><strong>Application Form PDF</strong> - Your VIP application with passport photo and payment receipt</li>
+                <li><strong>Guarantor Form PDF</strong> - Required for executive verification</li>
+            </ol>
+            
+            <div class="payment-highlight">
+                <h4>💰 VIP Payment Information:</h4>
+                <p><strong>Application Fee Paid:</strong> {application_fee} (completed)</p>
+                <p><strong>VIP Uniform Package:</strong> {config['uniform_fee']} <em>(payable in flexible installments)</em></p>
+            </div>
+            
+            <h4>📈 Next Steps for VIP Applicants:</h4>
+            <ol>
+                <li><strong>Complete</strong> the attached Guarantor Form for executive verification</li>
+                <li><strong>Schedule</strong> your VIP orientation session</li>
+                <li><strong>Access</strong> the VIP portal for exclusive resources</li>
+            </ol>
+            
+            <p style="margin-top: 30px;">
+                Best regards,<br>
+                <strong>Marshal Core Nigeria Executive Team</strong>
+            </p>
+        </div>
+        
+        <div class="footer">
+            <p>Marshal Core of Nigeria | Certificate No: YA/CLB/10100</p>
+            <p style="margin-top: 15px; font-size: 11px; color: #999;">
+                This is a VIP executive communication. Confidential and privileged.<br>
+                © 2025 Marshal Core of Nigeria. All rights reserved.
+            </p>
+        </div>
+    </div>
+</body>
+</html>"""
+
+
+def create_regular_email_html(name: str, applicant_id: str, config: dict, payment_amount: float = None, payment_reference: str = None) -> str:
+    """Create Regular email HTML (third template from your code)"""
+    application_fee = f"₦{payment_amount:,.2f}" if payment_amount else config["application_fee"]
+    date_str = datetime.now().strftime('%d %B, %Y')
+    
+    return f"""<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Marshal Core Nigeria - Regular Applicant Documents</title>
+  <style>
+    body {{ 
+        font-family: Arial, sans-serif; 
+        line-height: 1.6; 
+        color: #333; 
+        max-width: 600px; 
+        margin: 0 auto; 
+        padding: 20px;
+        background-color: #f9f9f9;
+    }}
+    .container {{
+        background-color: white;
+        border-radius: 10px;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        overflow: hidden;
+    }}
+    .header {{
+        background-color: #1a237e;
+        color: white;
+        padding: 25px;
+        text-align: center;
+    }}
+    .content {{
+        padding: 30px;
+    }}
+    .footer {{
+        text-align: center;
+        padding: 20px;
+        color: #666;
+        font-size: 12px;
+        border-top: 1px solid #eee;
+    }}
+    .badge {{
+        display: inline-block;
+        background-color: #254a93;
+        color: white;
+        padding: 5px 15px;
+        border-radius: 20px;
+        font-size: 14px;
+        margin-left: 10px;
+    }}
+    .info-box {{
+        background-color: #f0f7ff;
+        border-left: 4px solid #254a93;
+        padding: 15px;
+        margin: 20px 0;
+        border-radius: 0 5px 5px 0;
+    }}
+    .payment-box {{
+        background-color: #e8f5e9;
+        border: 1px solid #4CAF50;
+        padding: 15px;
+        margin: 20px 0;
+        border-radius: 5px;
+    }}
+    .doc-list {{
+        background-color: #fff3e0;
+        padding: 15px;
+        border-radius: 5px;
+        margin: 20px 0;
+    }}
+    .button {{
+        display: inline-block;
+        background-color: #d32f2f;
+        color: white;
+        padding: 12px 24px;
+        text-decoration: none;
+        border-radius: 5px;
+        font-weight: bold;
+        margin: 10px 5px;
+    }}
+  </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Marshal Core of Nigeria</h1>
+            <h2>Your Application Documents</h2>
+            <p style="margin-top: 10px; opacity: 0.9;">Regular Applicant Registration</p>
+        </div>
+        
+        <div class="content">
+            <h3>Dear {name},</h3>
+            
+            <p>Congratulations on completing your application to join <strong>Marshal Core of Nigeria</strong>!</p>
+            
+            <div class="info-box">
+                <h4>📋 Your Application Details:</h4>
+                <p><strong>Applicant ID:</strong> {applicant_id} <span class="badge">REGULAR APPLICANT</span></p>
+                <p><strong>Application Fee Paid:</strong> {application_fee}</p>
+                <p><strong>Application Date:</strong> {date_str}</p>
+            </div>
+            
+            <div class="doc-list">
+                <h4>📎 Attached Documents (3 files):</h4>
+                <ol>
+                    <li><strong>Terms & Conditions PDF</strong> - Official terms document</li>
+                    <li><strong>Application Form PDF</strong> - Your completed application with passport photo and payment receipt</li>
+                    <li><strong>Guarantor Form PDF</strong> - Required for final application processing</li>
+                </ol>
+            </div>
+            
+            <div class="payment-box">
+                <h4>💰 Important Payment Information:</h4>
+                <p><strong>Application Fee Paid:</strong> {application_fee} (completed)</p>
+                <p><strong>Uniform Package Fee:</strong> {config['uniform_fee']} <em>(payable in installments)</em></p>
+            </div>
+            
+            <h4>📝 Next Steps:</h4>
+            <ol>
+                <li><strong>Print and complete</strong> the Guarantor Form</li>
+                <li><strong>Submit</strong> the completed form to the nearest Marshal Core office</li>
+                <li><strong>Await further instructions</strong> regarding uniform payment and training schedule</li>
+            </ol>
+            
+            <p style="margin-top: 30px;">
+                Best regards,<br>
+                <strong>Marshal Core Nigeria Recruitment Team</strong>
+            </p>
+        </div>
+        
+        <div class="footer">
+            <p>Marshal Core of Nigeria | Certificate No: YA/CLB/10100</p>
+            <p style="margin-top: 15px; font-size: 11px; color: #999;">
+                This is an automated email. Please do not reply to this message.<br>
+                © 2025 Marshal Core of Nigeria. All rights reserved.
+            </p>
+        </div>
+    </div>
+</body>
+</html>"""
+
 
 async def send_applicant_payment_receipt(
     to_email: str,

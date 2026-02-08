@@ -33,7 +33,7 @@ def get_db():
         db.close()
 
 # FIXED: Main application submission endpoint - WITH AUTHENTICATION FIX
-@router.post("/apply")
+@router.post("/apply", response_model=ApplicantResponse)
 async def submit_full_application(
     background_tasks: BackgroundTasks,
     application_password: str = Form(...),

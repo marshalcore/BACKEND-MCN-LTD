@@ -1,4 +1,3 @@
-# app/routes/application_form.py - COMMENT OUT THE /apply ENDPOINT
 # app/routes/application_form.py - COMPLETE FIXED VERSION
 from fastapi import APIRouter, UploadFile, Form, Depends, File, HTTPException, status
 from sqlalchemy.orm import Session
@@ -13,14 +12,50 @@ import json
 from zoneinfo import ZoneInfo
 
 router = APIRouter()
-# ================================================
-# KEEP ALL CODE, JUST COMMENT OUT THE ROUTE DECORATOR
-# AND FUNCTION DEFINITION
-# ================================================
 
-"""
-COMMENT OUT FROM HERE:
-"""
+# ✅ KEEP THIS ENDPOINT ACTIVE - For checking application status
+@router.get("/status/{email}")
+async def get_application_status(email: str, db: Session = Depends(get_db)):
+    """Check application status"""
+    normalized_email = email.strip().lower()
+    
+    # Check applicant
+    applicant = db.query(Applicant).filter(
+        Applicant.email == normalized_email
+    ).first()
+    
+    if applicant:
+        return {
+            "status": "submitted",
+            "applicant_id": str(applicant.id),
+            "full_name": applicant.full_name,
+            "email": applicant.email,
+            "application_tier": applicant.application_tier,
+            "submitted_at": applicant.created_at.isoformat() if applicant.created_at else None
+        }
+    
+    # Check pre-applicant
+    pre_applicant = db.query(PreApplicant).filter(
+        PreApplicant.email == normalized_email
+    ).first()
+    
+    if pre_applicant:
+        return {
+            "status": pre_applicant.status,
+            "has_paid": pre_applicant.has_paid,
+            "privacy_accepted": pre_applicant.privacy_accepted,
+            "application_submitted": pre_applicant.application_submitted,
+            "password_generated": pre_applicant.password_generated,
+            "password_used": pre_applicant.password_used
+        }
+    
+    raise HTTPException(
+        status_code=404,
+        detail="No application found for this email"
+    )
+
+# ✅ IMPORTANT: DO NOT KEEP THE OLD /apply ENDPOINT HERE
+# It should only exist in form_submission.py to avoid conflicts
 
 # @router.post("/apply", response_model=ApplicantResponse)
 # async def apply(

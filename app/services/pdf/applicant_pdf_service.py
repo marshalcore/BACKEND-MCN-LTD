@@ -4,7 +4,6 @@ import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, Optional, Tuple
-from sqlalchemy.orm import Session
 import uuid
 from io import BytesIO
 
@@ -194,39 +193,35 @@ class ApplicantPDFService:
         """Create header and footer for PDF pages - ENHANCED LOGO"""
         canvas_obj.saveState()
         
-        # Add logo at top right - ENHANCED: Bigger and sharper
+        # Add logo at top right
         if self.logo_image and self.logo_bytes:
             try:
                 self.logo_image.seek(0)
-                # ENHANCED LOGO SIZE: Bigger and sharper
-                logo_width = 1.8 * inch  # Increased size
-                logo_height = 0.9 * inch  # Increased size
+                logo_width = 1.8 * inch
+                logo_height = 0.9 * inch
                 logo_x = doc.width + doc.leftMargin - logo_width - 0.1*inch
                 logo_y = doc.height + doc.topMargin - 0.0*inch
                 
-                # Draw logo with higher quality
                 canvas_obj.drawImage(ImageReader(self.logo_image), logo_x, logo_y,
                                    width=logo_width, height=logo_height,
                                    mask='auto', preserveAspectRatio=True)
                 
-                # Add subtle shadow/border for sharpness
                 canvas_obj.setStrokeColor(colors.HexColor('#1a237e'))
                 canvas_obj.setLineWidth(0.5)
                 canvas_obj.rect(logo_x, logo_y, logo_width, logo_height)
                 
             except Exception as e:
                 logger.warning(f"Could not draw logo: {e}")
-                # Fallback to text
                 self._draw_logo_placeholder(canvas_obj, doc)
         else:
             self._draw_logo_placeholder(canvas_obj, doc)
         
-        # Header text - ENHANCED: Bolder and clearer
-        canvas_obj.setFont('Helvetica-Bold', 16)  # Increased size
+        # Header text
+        canvas_obj.setFont('Helvetica-Bold', 16)
         canvas_obj.setFillColor(colors.HexColor('#1a237e'))
         canvas_obj.drawString(doc.leftMargin, doc.height + doc.topMargin + 0.9*inch, COMPANY_INFO['name'])
         
-        # Address - ENHANCED: Clearer formatting
+        # Address
         canvas_obj.setFont('Helvetica-Bold', 9)
         canvas_obj.setFillColor(colors.HexColor('#1a237e'))
         
@@ -235,9 +230,9 @@ class ApplicantPDFService:
         canvas_obj.drawString(doc.leftMargin, address_y - 0.2*inch, COMPANY_INFO['address_line2'])
         canvas_obj.drawString(doc.leftMargin, address_y - 0.4*inch, COMPANY_INFO['address_line3'])
         
-        # Line under header - ENHANCED: Thicker and colored
-        canvas_obj.setStrokeColor(colors.HexColor('#d32f2f'))  # Red color
-        canvas_obj.setLineWidth(2)  # Thicker line
+        # Line under header
+        canvas_obj.setStrokeColor(colors.HexColor('#d32f2f'))
+        canvas_obj.setLineWidth(2)
         line_y = doc.height + doc.topMargin - 0.05*inch
         canvas_obj.line(doc.leftMargin, line_y, doc.width + doc.leftMargin, line_y)
         
@@ -264,7 +259,7 @@ class ApplicantPDFService:
         canvas_obj.restoreState()
     
     def _draw_logo_placeholder(self, canvas_obj, doc):
-        """Draw logo placeholder text - ENHANCED"""
+        """Draw logo placeholder text"""
         canvas_obj.setFillColor(colors.HexColor('#1a237e'))
         canvas_obj.setFont('Helvetica-Bold', 16)
         canvas_obj.drawRightString(doc.width + doc.leftMargin - 0.2*inch, 
@@ -274,34 +269,25 @@ class ApplicantPDFService:
                                   doc.height + doc.topMargin + 0.4*inch, "LOGO")
     
     def _add_background_watermark(self, canvas_obj, doc):
-        """Add logo as background watermark - ENHANCED"""
+        """Add logo as background watermark"""
         canvas_obj.saveState()
         
-        # Only add watermark if logo is available
         if self.logo_image and self.logo_bytes:
             try:
-                # Set transparency - ENHANCED: Slightly more visible
-                canvas_obj.setFillAlpha(0.12)  # Increased from 0.08
-                
-                # Reset logo stream position
+                canvas_obj.setFillAlpha(0.12)
                 self.logo_image.seek(0)
                 
-                # Calculate position for centered watermark
                 center_x = doc.width/2 + doc.leftMargin
                 center_y = doc.height/2 + doc.topMargin
                 
-                # Draw logo watermark - ENHANCED: Bigger and sharper
-                logo_width = 4 * inch  # Increased size
-                logo_height = 2 * inch  # Increased size
+                logo_width = 4 * inch
+                logo_height = 2 * inch
                 logo_x = center_x - logo_width/2
                 logo_y = center_y - logo_height/2
                 
-                # Draw with better quality
                 canvas_obj.drawImage(ImageReader(self.logo_image), logo_x, logo_y, 
                                    width=logo_width, height=logo_height, 
                                    mask='auto', preserveAspectRatio=True)
-                
-                logger.info("✅ Enhanced logo watermark added to PDF")
                 
             except Exception as e:
                 logger.warning(f"Could not draw watermark: {e}")
@@ -312,23 +298,20 @@ class ApplicantPDFService:
         canvas_obj.restoreState()
     
     def _draw_text_watermark(self, canvas_obj, doc):
-        """Draw text watermark - ENHANCED"""
-        canvas_obj.setFillAlpha(0.12)  # Increased visibility
+        """Draw text watermark"""
+        canvas_obj.setFillAlpha(0.12)
         
-        # Calculate position for centered watermark
         center_x = doc.width/2 + doc.leftMargin
         center_y = doc.height/2 + doc.topMargin
         
-        # Rotate the watermark
         canvas_obj.translate(center_x, center_y)
         canvas_obj.rotate(45)
         
-        # Draw MCN text as watermark - ENHANCED: Bolder and bigger
-        canvas_obj.setFont('Helvetica-Bold', 60)  # Increased size
-        canvas_obj.setFillColor(colors.HexColor('#1a237e'))  # Brand color
+        canvas_obj.setFont('Helvetica-Bold', 60)
+        canvas_obj.setFillColor(colors.HexColor('#1a237e'))
         canvas_obj.drawCentredString(0, 0, "MCN")
         
-        canvas_obj.setFont('Helvetica-Bold', 30)  # Increased size
+        canvas_obj.setFont('Helvetica-Bold', 30)
         canvas_obj.drawCentredString(0, -50, "Marshal Core")
     
     def _format_date(self, date_value) -> str:
@@ -495,8 +478,146 @@ class ApplicantPDFService:
             
             story.append(Spacer(1, 12))
             
-            # Continue with standard terms content...
-            # [Rest of the terms content - you can copy from existing terms PDF generation]
+            # 2. PURPOSE OF AGREEMENT
+            story.append(Paragraph("2. PURPOSE OF AGREEMENT", heading1_style))
+            story.append(Paragraph(
+                "This agreement outlines the terms and conditions governing the "
+                "applicant's participation in the Marshal Core of Nigeria program. "
+                "The applicant agrees to abide by all rules, regulations, and "
+                "instructions provided by the organization.",
+                normal_style
+            ))
+            story.append(Spacer(1, 12))
+            
+            # 3. MEMBERSHIP BENEFITS
+            story.append(Paragraph("3. MEMBERSHIP BENEFITS", heading1_style))
+            story.append(Paragraph(
+                "3.1 The organization shall provide the following benefits:",
+                bold_style
+            ))
+            
+            benefits = [
+                "Comprehensive security training",
+                "Skill acquisition programs",
+                "Networking opportunities",
+                "Professional development",
+                "Career placement assistance",
+                "Legal protection and security association benefits"
+            ]
+            
+            for benefit in benefits:
+                story.append(Paragraph(f"• {benefit}", normal_style))
+                story.append(Spacer(1, 2))
+            
+            story.append(Spacer(1, 12))
+            
+            # 4. OBLIGATIONS OF THE APPLICANT
+            story.append(Paragraph("4. OBLIGATIONS OF THE APPLICANT", heading1_style))
+            
+            obligations = [
+                "Adhere to all training schedules and requirements",
+                "Maintain professional conduct at all times",
+                "Complete all assigned tasks and responsibilities",
+                "Respect the authority of training officers",
+                "Maintain confidentiality of organizational information",
+                "Participate actively in all programs and activities"
+            ]
+            
+            for obligation in obligations:
+                story.append(Paragraph(f"• {obligation}", normal_style))
+                story.append(Spacer(1, 2))
+            
+            story.append(Spacer(1, 12))
+            
+            # 5. FEES AND PAYMENTS
+            story.append(Paragraph("5. FEES AND PAYMENTS", heading1_style))
+            
+            if tier.lower() == "vip":
+                fee_info = [
+                    ("Application Fee", "₦25,900 (Non-refundable)"),
+                    ("Uniform Package", "₦200,000 (Payable in installments)"),
+                    ("VIP Benefits", "Full SXTM training, executive security association, advanced protocols")
+                ]
+            else:
+                fee_info = [
+                    ("Application Fee", "₦5,180 (Non-refundable)"),
+                    ("Uniform Package", "₦95,000 (Payable in installments)"),
+                    ("Training Benefits", "Comprehensive security training and job placement")
+                ]
+            
+            for fee_name, fee_amount in fee_info:
+                story.append(Paragraph(f"<b>{fee_name}:</b> {fee_amount}", normal_style))
+                story.append(Spacer(1, 2))
+            
+            story.append(Spacer(1, 12))
+            
+            # 6. TERMINATION
+            story.append(Paragraph("6. TERMINATION", heading1_style))
+            story.append(Paragraph(
+                "6.1 The organization reserves the right to terminate this agreement "
+                "if the applicant violates any terms or engages in misconduct.",
+                normal_style
+            ))
+            story.append(Paragraph(
+                "6.2 The applicant may terminate this agreement with written notice, "
+                "but application fees are non-refundable.",
+                normal_style
+            ))
+            story.append(Spacer(1, 12))
+            
+            # 7. CONFIDENTIALITY
+            story.append(Paragraph("7. CONFIDENTIALITY", heading1_style))
+            story.append(Paragraph(
+                "The applicant agrees to maintain the confidentiality of all "
+                "organizational information, training materials, and internal "
+                "procedures.",
+                normal_style
+            ))
+            story.append(Spacer(1, 12))
+            
+            # 8. GOVERNING LAW
+            story.append(Paragraph("8. GOVERNING LAW", heading1_style))
+            story.append(Paragraph(
+                "This agreement shall be governed by and construed in accordance "
+                "with the laws of the Federal Republic of Nigeria.",
+                normal_style
+            ))
+            
+            story.append(PageBreak())
+            
+            # SIGNATURE PAGE
+            story.append(Paragraph("ACCEPTANCE AND SIGNATURE", title_style))
+            story.append(Spacer(1, 24))
+            
+            story.append(Paragraph(
+                "I, the undersigned Applicant, hereby acknowledge that I have "
+                "read, understood, and agree to all the terms and conditions "
+                "outlined in this agreement.",
+                normal_style
+            ))
+            story.append(Spacer(1, 36))
+            
+            # Applicant signature
+            story.append(Paragraph(f"<b>Name of Applicant:</b> {applicant_data.get('full_name', '')}", bold_style))
+            story.append(Spacer(1, 48))
+            story.append(Paragraph("________________________________________", normal_style))
+            story.append(Paragraph("<b>Signature of Applicant</b>", bold_style))
+            story.append(Spacer(1, 24))
+            story.append(Paragraph(f"<b>Date:</b> {datetime.now().strftime('%d %B, %Y')}", bold_style))
+            
+            story.append(Spacer(1, 72))
+            
+            # Organization signature
+            story.append(Paragraph("<b>FOR MARSHAL CORE OF NIGERIA:</b>", bold_style))
+            story.append(Spacer(1, 48))
+            story.append(Paragraph("________________________________________", normal_style))
+            story.append(Paragraph("<b>OSEOBOH JOSHUA EROMONSELE</b>", bold_style))
+            story.append(Paragraph("<b>Director General</b>", bold_style))
+            story.append(Paragraph(f"<b>Date:</b> {datetime.now().strftime('%d %B, %Y')}", bold_style))
+            
+            story.append(Spacer(1, 48))
+            story.append(Paragraph("<b>Official Stamp:</b>", bold_style))
+            story.append(Paragraph("[ORGANIZATION SEAL]", normal_style))
             
             # Build PDF
             def on_first_page(canvas_obj, doc_obj):
@@ -509,11 +630,11 @@ class ApplicantPDFService:
             
             doc.build(story, onFirstPage=on_first_page, onLaterPages=on_later_pages)
             
-            logger.info(f"Applicant Terms PDF generated: {relative_path}")
+            logger.info(f"✅ Applicant Terms PDF generated: {relative_path}")
             return relative_path
             
         except Exception as e:
-            logger.error(f"Failed to generate Applicant Terms PDF: {str(e)}")
+            logger.error(f"❌ Failed to generate Applicant Terms PDF: {str(e)}")
             raise ApplicantPDFGenerationError(f"Failed to generate Applicant Terms PDF: {str(e)}")
     
     def generate_applicant_application_pdf(self, applicant_data: Dict[str, Any], applicant_id: str, tier: str, 
@@ -573,15 +694,7 @@ class ApplicantPDFService:
                 textColor=colors.HexColor('#1a237e')
             )
             
-            payment_style = ParagraphStyle(
-                'PaymentStyle',
-                parent=normal_style,
-                fontName='Helvetica-Bold',
-                textColor=colors.HexColor('#d32f2f'),
-                fontSize=11
-            )
-            
-            # ✅ PASSPORT PHOTO SECTION - HIGH PRIORITY
+            # ✅ PASSPORT PHOTO SECTION
             passport_embedded = False
             passport_table = None
             
@@ -589,7 +702,6 @@ class ApplicantPDFService:
             if passport_path:
                 passport_img = self._prepare_passport_image(passport_path)
                 if passport_img:
-                    # Create table for passport photo with label
                     passport_data = [
                         [Paragraph("<b>PASSPORT PHOTOGRAPH</b>", bold_style)],
                         [passport_img],
@@ -610,7 +722,6 @@ class ApplicantPDFService:
                     passport_embedded = True
                     logger.info("✅ Passport photo embedded in Applicant PDF")
             
-            # Start content
             # Title
             story.append(Paragraph("MARSHAL CORE OF NIGERIA", title_style))
             story.append(Paragraph("APPLICANT REGISTRATION FORM", title_style))
@@ -633,10 +744,7 @@ class ApplicantPDFService:
             
             # Create two-column layout with passport photo
             if passport_table and passport_embedded:
-                # Left column: Personal Info, Right column: Passport Photo
                 personal_info = []
-                
-                # Personal Information
                 personal_info.append([Paragraph("PERSONAL INFORMATION", heading1_style), ""])
                 
                 personal_fields = [
@@ -653,7 +761,6 @@ class ApplicantPDFService:
                         ""
                     ])
                 
-                # Create two-column table
                 personal_table = Table(personal_info, colWidths=[4*inch, 0.5*inch])
                 
                 two_col_data = [
@@ -670,7 +777,6 @@ class ApplicantPDFService:
                 
                 story.append(two_col_table)
             else:
-                # Single column layout (no passport)
                 story.append(Paragraph("PERSONAL INFORMATION", heading1_style))
                 
                 personal_fields = [
@@ -730,11 +836,10 @@ class ApplicantPDFService:
                 story.append(Paragraph(additional_details, normal_style))
                 story.append(Spacer(1, 12))
             
-            # ✅ PAYMENT RECEIPT SECTION (HIGH PRIORITY)
+            # ✅ PAYMENT RECEIPT SECTION
             story.append(Paragraph("PAYMENT CONFIRMATION", heading1_style))
             
             if payment_data:
-                # Create payment receipt box
                 payment_info = [
                     ["Payment Status:", "✅ COMPLETED"],
                     ["Application Fee Paid:", f"₦{payment_data.get('amount', 0):,}"],
@@ -831,7 +936,7 @@ class ApplicantPDFService:
                 )
             ))
             
-            # Build PDF with enhanced watermark
+            # Build PDF with watermark
             def on_first_page(canvas_obj, doc_obj):
                 self._create_header_footer(canvas_obj, doc_obj, "Application Form")
                 self._add_background_watermark(canvas_obj, doc_obj)
@@ -842,11 +947,11 @@ class ApplicantPDFService:
             
             doc.build(story, onFirstPage=on_first_page, onLaterPages=on_later_pages)
             
-            logger.info(f"Applicant Application PDF generated: {relative_path}")
+            logger.info(f"✅ Applicant Application PDF generated: {relative_path}")
             return relative_path
             
         except Exception as e:
-            logger.error(f"Failed to generate Applicant Application PDF: {str(e)}")
+            logger.error(f"❌ Failed to generate Applicant Application PDF: {str(e)}")
             raise ApplicantPDFGenerationError(f"Failed to generate Applicant Application PDF: {str(e)}")
     
     def generate_applicant_pdfs(self, applicant_data: Dict[str, Any], applicant_id: str, tier: str,
