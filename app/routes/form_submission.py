@@ -1,4 +1,4 @@
-# app/routes/form_submission.py - COMPLETE UPDATED VERSION WITH AUTHENTICATION FIX
+# app/routes/form_submission.py - COMPLETE UPDATED VERSION
 from fastapi import APIRouter, UploadFile, Form, Depends, File, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 from app.database import SessionLocal
@@ -7,9 +7,9 @@ from app.models.pre_applicant import PreApplicant
 from app.models.officer import Officer
 from app.models.existing_officer import ExistingOfficer
 from app.utils.upload import save_upload
-from app.schemas.applicant import ApplicantResponse
+from app.schemas.applicant import ApplicantSimpleResponse
 from app.services.email_service import send_guarantor_confirmation_email
-from app.services.pdf.applicant_pdf_service import applicant_pdf_service
+from app.services.pdf_service import PDFService  # ✅ CHANGED: Import unified PDFService
 from app.services.email_service import send_applicant_documents_email, send_applicant_payment_receipt
 from pydantic import EmailStr
 from datetime import datetime
@@ -32,8 +32,8 @@ def get_db():
     finally:
         db.close()
 
-# FIXED: Main application submission endpoint - WITH AUTHENTICATION FIX
-@router.post("/apply", response_model=ApplicantResponse)
+# FIXED: Main application submission endpoint - WITH CORRECT RESPONSE MODEL
+@router.post("/apply", response_model=ApplicantSimpleResponse)
 async def submit_full_application(
     background_tasks: BackgroundTasks,
     application_password: str = Form(...),
@@ -58,7 +58,7 @@ async def submit_full_application(
     """
     ✅ SUBMIT COMPLETE APPLICATION for NEW APPLICANTS (Regular/VIP)
     - Handles all applicant data submission
-    - Generates PDFs using ApplicantPDFService
+    - Generates PDFs using unified PDFService
     - Sends tier-specific emails with PDF attachments
     - Returns application details with PDF paths
     """
@@ -276,24 +276,6 @@ async def submit_full_application(
         
         logger.info(f"✅ Applicant created with ID: {applicant.id}")
 
-        # ✅ Prepare data for PDF generation
-        applicant_data = {
-            "id": str(applicant.id),
-            "unique_id": applicant.unique_id or f"APP-{applicant.id}",
-            "full_name": full_name,
-            "email": email,
-            "phone_number": phone_number,
-            "nin_number": nin_number,
-            "date_of_birth": dob,
-            "state_of_residence": state_of_residence,
-            "lga": lga,
-            "address": address,
-            "passport_photo": passport_path,
-            "selected_reasons": reasons_list,
-            "additional_details": additional_details,
-            "application_tier": application_tier
-        }
-        
         # ✅ Prepare payment data for PDF
         payment_data = None
         if payment_reference and amount_paid:
@@ -303,19 +285,21 @@ async def submit_full_application(
                 "date": current_time
             }
         
-        # ✅ Generate PDFs using NEW Applicant PDF Service
+        # ✅ Generate PDFs using UNIFIED PDF Service
         pdf_results = None
         try:
             logger.info(f"📄 Generating PDFs for applicant: {applicant.id}")
             
-            pdf_results = applicant_pdf_service.generate_applicant_pdfs(
-                applicant_data=applicant_data,
-                applicant_id=str(applicant.id),
+            # ✅ CHANGED: Use unified PDFService
+            pdf_service = PDFService(db)
+            
+            pdf_results = pdf_service.generate_applicant_pdfs(
+                user_id=str(applicant.id),
                 tier=application_tier,
                 payment_data=payment_data
             )
             
-            logger.info(f"✅ PDFs generated successfully")
+            logger.info(f"✅ PDFs generated successfully using unified service")
             
             # Update applicant with PDF paths
             applicant.terms_pdf_path = pdf_results["terms_pdf_path"]
@@ -372,29 +356,17 @@ async def submit_full_application(
         except Exception as email_error:
             logger.error(f"❌ Failed to send guarantor email: {email_error}")
             
-        # ✅ Return response with PDF paths
-        response_data = {
-            "id": str(applicant.id),
-            "applicant_id": applicant.unique_id or str(applicant.id),
-            "full_name": full_name,
-            "email": email,
-            "phone_number": phone_number,
-            "application_tier": application_tier,
-            "is_verified": True,
-            "has_paid": True,
-            "created_at": current_time.isoformat(),
-            "message": "Application submitted successfully. Documents are being processed and will be emailed to you."
-        }
-        
-        # Add PDF paths if available
-        if pdf_results:
-            response_data.update({
-                "terms_pdf_path": pdf_results.get("terms_pdf_path"),
-                "application_pdf_path": pdf_results.get("application_pdf_path"),
-                "guarantor_pdf_path": pdf_results.get("guarantor_pdf_path", "static/guarantor-form.pdf")
-            })
-        
-        return response_data
+        # ✅ Return SIMPLE response - MATCHING ApplicantSimpleResponse
+        return ApplicantSimpleResponse(
+            id=applicant.id,
+            full_name=full_name,
+            email=email,
+            phone_number=phone_number,
+            application_tier=application_tier,
+            is_verified=True,
+            has_paid=True,
+            created_at=current_time
+        )
 
     except HTTPException as he:
         logger.error(f"❌ HTTP Exception in apply: {he.detail}")
@@ -428,30 +400,14 @@ async def submit_application(
 
         name = full_name or applicant.full_name
 
-        # Prepare applicant data for PDF
-        applicant_data = {
-            "id": str(applicant.id),
-            "unique_id": applicant.unique_id or f"APP-{applicant.id}",
-            "full_name": applicant.full_name,
-            "email": applicant.email,
-            "phone_number": applicant.phone_number,
-            "nin_number": applicant.nin_number,
-            "date_of_birth": applicant.date_of_birth,
-            "state_of_residence": applicant.state_of_residence,
-            "lga": applicant.lga,
-            "address": applicant.address,
-            "passport_photo": applicant.passport_photo,
-            "selected_reasons": applicant.selected_reasons,
-            "additional_details": applicant.additional_details,
-            "application_tier": applicant.application_tier or application_tier
-        }
+        # ✅ CHANGED: Use unified PDFService
+        pdf_service = PDFService(db)
         
         # Generate PDFs
         pdf_results = None
         try:
-            pdf_results = applicant_pdf_service.generate_applicant_pdfs(
-                applicant_data=applicant_data,
-                applicant_id=str(applicant.id),
+            pdf_results = pdf_service.generate_applicant_pdfs(
+                user_id=str(applicant.id),
                 tier=applicant.application_tier or application_tier
             )
             
@@ -601,14 +557,24 @@ async def submit_officer_application(
 
         name = officer.full_name or f"Officer {officer.unique_id}"
         
-        # Note: Officer submissions use different PDF service
-        # For now, just acknowledge the submission
-        logger.info(f"Officer application submitted: {email}")
+        # ✅ CHANGED: Use unified PDFService for officers too
+        pdf_service = PDFService(db)
+        pdf_results = pdf_service.generate_officer_pdfs(
+            user_id=str(officer.id),
+            user_type="officer"
+        )
+        
+        # Update database
+        officer.terms_pdf_path = pdf_results["terms_pdf_path"]
+        officer.application_pdf_path = pdf_results["application_pdf_path"]
+        db.commit()
         
         return {
             "message": "Officer application submitted successfully.",
             "officer_id": officer.unique_id,
-            "name": name
+            "name": name,
+            "terms_pdf_path": pdf_results["terms_pdf_path"],
+            "application_pdf_path": pdf_results["application_pdf_path"]
         }
         
     except HTTPException:

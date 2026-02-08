@@ -1,4 +1,4 @@
-# app/models/applicant.py - UPDATE TO MAKE NIN FIELDS OPTIONAL
+# app/models/applicant.py - COMPLETE FIXED VERSION
 from sqlalchemy import Column, String, Boolean, Date, DateTime, Text, Float
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.sql import func
@@ -16,28 +16,28 @@ class Applicant(Base):
     full_name = Column(String(100), nullable=False)
     email = Column(String(255), nullable=False, unique=True, index=True)
     phone_number = Column(String(20), nullable=False)
-    nin_number = Column(String(20), nullable=True, unique=True, index=True)  # CHANGED: nullable=True
-    date_of_birth = Column(Date, nullable=False)
-    state_of_residence = Column(String(50), nullable=False)
-    lga = Column(String(50), nullable=False)  # Local Government Area
-    address = Column(Text, nullable=False)
+    nin_number = Column(String(20), nullable=True, unique=True, index=True)
+    date_of_birth = Column(Date, nullable=True)
+    state_of_residence = Column(String(50), nullable=True)
+    lga = Column(String(50), nullable=True)
+    address = Column(Text, nullable=True)
 
     # SECTION B: Documents
-    passport_photo = Column(String(255), nullable=False)
-    nin_slip = Column(String(255), nullable=True)  # CHANGED: nullable=True
+    passport_photo = Column(String(255), nullable=True)
+    nin_slip = Column(String(255), nullable=True)
 
     # SECTION C: Application Details
-    application_tier = Column(String(20), nullable=False, default="regular")  # 'regular' or 'vip'
-    selected_reasons = Column(JSONB, nullable=False)  # Array of selected reason codes
+    application_tier = Column(String(20), nullable=False, default="regular")
+    selected_reasons = Column(JSONB, nullable=True)
     additional_details = Column(Text, nullable=True)
     
     # SECTION D: Auto-generated fields
-    segmentation_tags = Column(JSONB, nullable=True)  # Auto-generated tags based on reasons
-    assigned_programs = Column(JSONB, nullable=True)  # Auto-assigned programs
+    segmentation_tags = Column(JSONB, nullable=True)
+    assigned_programs = Column(JSONB, nullable=True)
 
     # SECTION E: Payment Information
-    payment_type = Column(String(20), nullable=True)  # 'regular' or 'vip'
-    payment_status = Column(String(20), default="pending")  # 'pending', 'paid', 'failed'
+    payment_type = Column(String(20), nullable=True)
+    payment_status = Column(String(20), default="pending")
     amount_paid = Column(Float, nullable=True)
     payment_reference = Column(String(100), nullable=True, index=True)
 

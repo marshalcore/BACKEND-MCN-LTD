@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional, Tuple
 from sqlalchemy.orm import Session
 import uuid
+import json
 from io import BytesIO
 
 from reportlab.lib.pagesizes import A4
@@ -32,11 +33,12 @@ STATIC_DIR = BASE_DIR / "static"
 PDFS_DIR = STATIC_DIR / "pdfs"
 TERMS_DIR = PDFS_DIR / "terms"
 APPLICATIONS_DIR = PDFS_DIR / "applications"
+APPLICANTS_DIR = PDFS_DIR / "applicants"  # NEW: For applicant PDFs
 LOGO_DIR = STATIC_DIR / "images"
 UPLOADS_DIR = STATIC_DIR / "uploads"
 
 # Ensure directories exist
-for directory in [PDFS_DIR, TERMS_DIR, APPLICATIONS_DIR, LOGO_DIR, UPLOADS_DIR]:
+for directory in [PDFS_DIR, TERMS_DIR, APPLICATIONS_DIR, APPLICANTS_DIR, LOGO_DIR, UPLOADS_DIR]:
     directory.mkdir(parents=True, exist_ok=True)
 
 # Company information
@@ -58,11 +60,11 @@ class PDFGenerationError(Exception):
     pass
 
 class PDFGenerator:
-    """PDF generation utility using ReportLab with passport photo embedding"""
+    """PDF generation utility using ReportLab with passport photo embedding - NOW SUPPORTS APPLICANTS"""
     
     def __init__(self):
         """Initialize PDF generator"""
-        logger.info("Initializing PDF Generator")
+        logger.info("Initializing PDF Generator with Applicant Support")
         self.logo_image = None
         self.logo_bytes = None
         self._load_logo()
@@ -121,6 +123,7 @@ class PDFGenerator:
                 UPLOADS_DIR / passport_path,
                 STATIC_DIR / passport_path,
                 BASE_DIR / passport_path,
+                UPLOADS_DIR / "passports" / os.path.basename(passport_path),
             ]
             
             for path in possible_paths:
@@ -181,11 +184,12 @@ class PDFGenerator:
             logger.error(f"Error preparing passport image: {e}")
             return None
     
-    def _generate_filename(self, user_id: str, document_type: str) -> str:
+    def _generate_filename(self, user_id: str, document_type: str, tier: str = "") -> str:
         """Generate unique filename for PDF"""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         unique_id = str(uuid.uuid4())[:8]
-        return f"{user_id}_{document_type}_{timestamp}_{unique_id}.pdf"
+        tier_prefix = f"{tier}_" if tier else ""
+        return f"{tier_prefix}{user_id}_{document_type}_{timestamp}_{unique_id}.pdf"
     
     def _save_pdf(self, category: str, filename: str) -> Tuple[str, str]:
         """Get filepath for saving PDF"""
@@ -198,18 +202,16 @@ class PDFGenerator:
         return str(file_path), relative_path
     
     def _create_header_footer(self, canvas_obj, doc, title="", is_terms=False):
-        """Create header and footer for PDF pages - MODIFIED: Adjusted line position and increased logo size"""
+        """Create header and footer for PDF pages"""
         canvas_obj.saveState()
         
-        # Add logo at top right - MODIFIED: Increased logo size
+        # Add logo at top right
         if self.logo_image and self.logo_bytes:
             try:
                 self.logo_image.seek(0)
-                # INCREASED LOGO SIZE: Changed from 1.2*inch to 1.5*inch width
                 logo_width = 1.5 * inch
                 logo_height = 0.75 * inch
                 logo_x = doc.width + doc.leftMargin - logo_width - 0.2*inch
-                # ADJUSTED LOGO POSITION: Raised logo by 0.1*inch to give more space
                 logo_y = doc.height + doc.topMargin - 0.0*inch
                 
                 canvas_obj.drawImage(ImageReader(self.logo_image), logo_x, logo_y,
@@ -218,28 +220,25 @@ class PDFGenerator:
             except Exception as e:
                 logger.warning(f"Could not draw logo: {e}")
         
-        # Header text - MODIFIED: Made organization name bolder
-        canvas_obj.setFont('Helvetica-Bold', 14)  # Increased from 12 to 14
+        # Header text
+        canvas_obj.setFont('Helvetica-Bold', 14)
         canvas_obj.setFillColor(colors.HexColor('#1a237e'))
-        # ADJUSTED POSITION: Moved organization name down to align with larger logo
         canvas_obj.drawString(doc.leftMargin, doc.height + doc.topMargin + 0.8*inch,
                             COMPANY_INFO['name'])
         
-        # Address - MODIFIED: Made address bold and adjusted spacing
-        canvas_obj.setFont('Helvetica-Bold', 9)  # Made address bold and slightly larger
-        canvas_obj.setFillColor(colors.HexColor('#1a237e'))  # Changed from gray to blue
+        # Address
+        canvas_obj.setFont('Helvetica-Bold', 9)
+        canvas_obj.setFillColor(colors.HexColor('#1a237e'))
         
-        # ADJUSTED ADDRESS POSITION: Moved down to accommodate larger logo
-        address_y = doc.height + doc.topMargin + 0.55*inch  # Moved down from 0.4*inch
+        address_y = doc.height + doc.topMargin + 0.55*inch
         canvas_obj.drawString(doc.leftMargin, address_y, COMPANY_INFO['address_line1'])
-        canvas_obj.drawString(doc.leftMargin, address_y - 0.18*inch, COMPANY_INFO['address_line2'])  # Increased spacing
-        canvas_obj.drawString(doc.leftMargin, address_y - 0.36*inch, COMPANY_INFO['address_line3'])  # Increased spacing
+        canvas_obj.drawString(doc.leftMargin, address_y - 0.18*inch, COMPANY_INFO['address_line2'])
+        canvas_obj.drawString(doc.leftMargin, address_y - 0.36*inch, COMPANY_INFO['address_line3'])
         
-        # Line under header - MODIFIED: Moved line down further to avoid crossing logo
+        # Line under header
         canvas_obj.setStrokeColor(colors.HexColor('#1a237e'))
         canvas_obj.setLineWidth(1)
-        # ADJUSTED LINE POSITION: Moved down significantly (from +0.1*inch to -0.05*inch)
-        line_y = doc.height + doc.topMargin - 0.05*inch  # Moved line below logo area
+        line_y = doc.height + doc.topMargin - 0.05*inch
         canvas_obj.line(doc.leftMargin, line_y,
                        doc.width + doc.leftMargin, line_y)
         
@@ -286,12 +285,30 @@ class PDFGenerator:
         
         return str(date_value)
     
-    def generate_terms_conditions(self, user_data: Dict[str, Any], user_id: str) -> str:
-        """Generate Terms & Conditions PDF"""
+    def _format_reason(self, reason_code: str) -> str:
+        """Convert reason code to human-readable text"""
+        reason_map = {
+            'seeking_employment': 'Seeking Employment & Work',
+            'skill_acquisition': 'Skill Acquisition & Handwork Training',
+            'armed_forces': 'Armed Forces Preparation',
+            'personal_development': 'Personal Development & Discipline',
+            'ict_knowledge': 'ICT Knowledge & Basic Computer Skills',
+            'security_association': 'Security Association & Legal Protection',
+            'tech_career': 'Tech Career Pathway (Full SXTM Training)',
+            'networking': 'Networking & Professional Status Enhancement',
+            'security_awareness': 'Security Awareness & Risk Management',
+            'business_protection': 'Business Protection & Organizational Backup'
+        }
+        return reason_map.get(reason_code, reason_code.replace('_', ' ').title())
+    
+    # ==================== OFFICER PDF METHODS (EXISTING) ====================
+    
+    def generate_officer_terms_conditions(self, user_data: Dict[str, Any], user_id: str) -> str:
+        """Generate Terms & Conditions PDF for OFFICERS"""
         try:
-            logger.info(f"Generating Terms & Conditions PDF for user: {user_id}")
+            logger.info(f"Generating Officer Terms PDF for: {user_id}")
             
-            filename = self._generate_filename(user_id, "terms")
+            filename = self._generate_filename(user_id, "officer_terms")
             filepath, relative_path = self._save_pdf("terms", filename)
             
             doc = SimpleDocTemplate(
@@ -413,19 +430,19 @@ class PDFGenerator:
             
             doc.build(story, onFirstPage=on_first_page, onLaterPages=on_later_pages)
             
-            logger.info(f"Terms & Conditions PDF generated successfully: {relative_path}")
+            logger.info(f"Officer Terms PDF generated successfully: {relative_path}")
             return relative_path
             
         except Exception as e:
-            logger.error(f"Failed to generate Terms & Conditions PDF: {str(e)}")
-            raise PDFGenerationError(f"Failed to generate Terms & Conditions PDF: {str(e)}")
+            logger.error(f"Failed to generate Officer Terms PDF: {str(e)}")
+            raise PDFGenerationError(f"Failed to generate Officer Terms PDF: {str(e)}")
     
-    def generate_application_form(self, user_data: Dict[str, Any], user_id: str) -> str:
-        """Generate Application Form PDF with passport photo"""
+    def generate_officer_application_form(self, user_data: Dict[str, Any], user_id: str) -> str:
+        """Generate Application Form PDF for OFFICERS with passport photo"""
         try:
-            logger.info(f"Generating Application Form PDF for user: {user_id}")
+            logger.info(f"Generating Officer Application PDF for: {user_id}")
             
-            filename = self._generate_filename(user_id, "application")
+            filename = self._generate_filename(user_id, "officer_application")
             filepath, relative_path = self._save_pdf("applications", filename)
             
             doc = SimpleDocTemplate(
@@ -476,11 +493,11 @@ class PDFGenerator:
                 textColor=colors.HexColor('#1a237e')
             )
             
-            # ✅ PASSPORT PHOTO SECTION - FIXED AND WORKING
+            # ✅ PASSPORT PHOTO SECTION
             passport_embedded = False
             passport_table = None
             
-            # MODIFIED: Check both passport_photo and passport_path for existing officers
+            # Check both passport_photo and passport_path for existing officers
             passport_path = user_data.get('passport_photo') or user_data.get('passport_path')
             if passport_path:
                 passport_img = self._prepare_passport_image(passport_path)
@@ -500,7 +517,7 @@ class PDFGenerator:
                         ('PADDING', (0, 0), (-1, -1), 6),
                     ]))
                     passport_embedded = True
-                    logger.info("✅ Passport photo embedded in PDF")
+                    logger.info("✅ Passport photo embedded in Officer PDF")
             
             # Start content
             # Title
@@ -728,43 +745,649 @@ class PDFGenerator:
             
             doc.build(story, onFirstPage=on_first_page, onLaterPages=on_later_pages)
             
-            logger.info(f"Application Form PDF generated successfully: {relative_path}")
+            logger.info(f"Officer Application PDF generated successfully: {relative_path}")
             return relative_path
             
         except Exception as e:
-            logger.error(f"Failed to generate Application Form PDF: {str(e)}")
-            raise PDFGenerationError(f"Failed to generate Application Form PDF: {str(e)}")
+            logger.error(f"Failed to generate Officer Application PDF: {str(e)}")
+            raise PDFGenerationError(f"Failed to generate Officer Application PDF: {str(e)}")
     
-    def generate_both_pdfs(self, user_data: Dict[str, Any], user_id: str) -> Dict[str, str]:
+    # ==================== APPLICANT PDF METHODS (NEW) ====================
+    
+    def generate_applicant_terms_pdf(self, user_data: Dict[str, Any], user_id: str, tier: str) -> str:
+        """Generate Terms & Conditions PDF for APPLICANTS"""
+        try:
+            logger.info(f"Generating Applicant Terms PDF for: {user_id} (Tier: {tier})")
+            
+            filename = self._generate_filename(user_id, "applicant_terms", tier)
+            filepath, relative_path = self._save_pdf("applicants", filename)
+            
+            doc = SimpleDocTemplate(
+                filepath,
+                pagesize=A4,
+                rightMargin=72,
+                leftMargin=72,
+                topMargin=120,
+                bottomMargin=72
+            )
+            
+            story = []
+            styles = getSampleStyleSheet()
+            
+            # Custom styles
+            title_style = ParagraphStyle(
+                'TitleStyle',
+                parent=styles['Title'],
+                fontSize=18,
+                textColor=colors.HexColor('#1a237e'),
+                alignment=TA_CENTER,
+                spaceAfter=24,
+                fontName='Helvetica-Bold'
+            )
+            
+            heading1_style = ParagraphStyle(
+                'Heading1',
+                parent=styles['Heading1'],
+                fontSize=14,
+                textColor=colors.HexColor('#283593'),
+                spaceBefore=12,
+                spaceAfter=6,
+                fontName='Helvetica-Bold'
+            )
+            
+            normal_style = ParagraphStyle(
+                'NormalStyle',
+                parent=styles['Normal'],
+                fontSize=10,
+                leading=14,
+                alignment=TA_JUSTIFY,
+                fontName='Helvetica'
+            )
+            
+            bold_style = ParagraphStyle(
+                'BoldStyle',
+                parent=normal_style,
+                fontName='Helvetica-Bold'
+            )
+            
+            # Title
+            story.append(Paragraph("TERMS AND CONDITIONS OF SERVICE", title_style))
+            story.append(Spacer(1, 12))
+            
+            # Document info
+            story.append(Paragraph(
+                f"<b>Document Reference:</b> MCN-APP-{user_id}-{datetime.now().strftime('%Y%m%d')}",
+                normal_style
+            ))
+            story.append(Paragraph(
+                f"<b>Effective Date:</b> {datetime.now().strftime('%d %B %Y')}",
+                normal_style
+            ))
+            story.append(Paragraph(
+                f"<b>Applicant Tier:</b> {tier.upper()}",
+                normal_style
+            ))
+            story.append(Spacer(1, 24))
+            
+            # IMPORTANT NOTICE
+            story.append(Paragraph(
+                "<b>IMPORTANT NOTICE:</b> This is a legally binding agreement between "
+                "Marshal Core of Nigeria (hereinafter referred to as 'the Organization') "
+                "and the Applicant (hereinafter referred to as 'the Applicant'). "
+                "Please read carefully before accepting.",
+                bold_style
+            ))
+            story.append(Spacer(1, 12))
+            
+            # 1. PARTIES TO THE AGREEMENT
+            story.append(Paragraph("1. PARTIES TO THE AGREEMENT", heading1_style))
+            
+            # 1.1 The Organization
+            story.append(Paragraph(
+                f"<b>1.1 The Organization:</b> Marshal Core of Nigeria, a voluntary organization "
+                "duly registered under ministry of humanitarian affairs with certificate number: "
+                f"<b>{COMPANY_INFO['certificate_number']}</b>, and incorporated under the "
+                "COMPANIES AND ALLIED MATTERS ACT 2020 Federal Republic of Nigeria with "
+                f"RC Number: <b>{COMPANY_INFO['rc_number']}</b>, having its principal office at",
+                normal_style
+            ))
+            story.append(Paragraph(
+                f"{COMPANY_INFO['address_line1']}<br/>{COMPANY_INFO['address_line2']}<br/>{COMPANY_INFO['address_line3']}",
+                normal_style
+            ))
+            
+            # 1.2 The Applicant
+            story.append(Paragraph(
+                f"<b>1.2 The Applicant:</b> {user_data.get('full_name', 'Applicant')}",
+                normal_style
+            ))
+            
+            if user_data.get('nin_number'):
+                story.append(Paragraph(
+                    f"<b>National Identification Number:</b> {user_data.get('nin_number')}",
+                    normal_style
+                ))
+            
+            story.append(Paragraph(
+                f"<b>Email Address:</b> {user_data.get('email', 'Not provided')}",
+                normal_style
+            ))
+            
+            if user_data.get('phone_number'):
+                story.append(Paragraph(
+                    f"<b>Phone Number:</b> {user_data.get('phone_number')}",
+                    normal_style
+            ))
+            
+            story.append(Spacer(1, 12))
+            
+            # 2. PURPOSE OF AGREEMENT
+            story.append(Paragraph("2. PURPOSE OF AGREEMENT", heading1_style))
+            story.append(Paragraph(
+                "This agreement outlines the terms and conditions governing the "
+                "applicant's participation in the Marshal Core of Nigeria program. "
+                "The applicant agrees to abide by all rules, regulations, and "
+                "instructions provided by the organization.",
+                normal_style
+            ))
+            story.append(Spacer(1, 12))
+            
+            # 3. MEMBERSHIP BENEFITS
+            story.append(Paragraph("3. MEMBERSHIP BENEFITS", heading1_style))
+            story.append(Paragraph(
+                "3.1 The organization shall provide the following benefits:",
+                bold_style
+            ))
+            
+            benefits = [
+                "Comprehensive security training",
+                "Skill acquisition programs",
+                "Networking opportunities",
+                "Professional development",
+                "Career placement assistance",
+                "Legal protection and security association benefits"
+            ]
+            
+            for benefit in benefits:
+                story.append(Paragraph(f"• {benefit}", normal_style))
+                story.append(Spacer(1, 2))
+            
+            story.append(Spacer(1, 12))
+            
+            # 4. OBLIGATIONS OF THE APPLICANT
+            story.append(Paragraph("4. OBLIGATIONS OF THE APPLICANT", heading1_style))
+            
+            obligations = [
+                "Adhere to all training schedules and requirements",
+                "Maintain professional conduct at all times",
+                "Complete all assigned tasks and responsibilities",
+                "Respect the authority of training officers",
+                "Maintain confidentiality of organizational information",
+                "Participate actively in all programs and activities"
+            ]
+            
+            for obligation in obligations:
+                story.append(Paragraph(f"• {obligation}", normal_style))
+                story.append(Spacer(1, 2))
+            
+            story.append(Spacer(1, 12))
+            
+            # 5. FEES AND PAYMENTS
+            story.append(Paragraph("5. FEES AND PAYMENTS", heading1_style))
+            
+            if tier.lower() == "vip":
+                fee_info = [
+                    ("Application Fee", "₦25,900 (Non-refundable)"),
+                    ("Uniform Package", "₦200,000 (Payable in installments)"),
+                    ("VIP Benefits", "Full SXTM training, executive security association, advanced protocols")
+                ]
+            else:
+                fee_info = [
+                    ("Application Fee", "₦5,180 (Non-refundable)"),
+                    ("Uniform Package", "₦95,000 (Payable in installments)"),
+                    ("Training Benefits", "Comprehensive security training and job placement")
+                ]
+            
+            for fee_name, fee_amount in fee_info:
+                story.append(Paragraph(f"<b>{fee_name}:</b> {fee_amount}", normal_style))
+                story.append(Spacer(1, 2))
+            
+            story.append(Spacer(1, 12))
+            
+            # 6. TERMINATION
+            story.append(Paragraph("6. TERMINATION", heading1_style))
+            story.append(Paragraph(
+                "6.1 The organization reserves the right to terminate this agreement "
+                "if the applicant violates any terms or engages in misconduct.",
+                normal_style
+            ))
+            story.append(Paragraph(
+                "6.2 The applicant may terminate this agreement with written notice, "
+                "but application fees are non-refundable.",
+                normal_style
+            ))
+            story.append(Spacer(1, 12))
+            
+            # 7. CONFIDENTIALITY
+            story.append(Paragraph("7. CONFIDENTIALITY", heading1_style))
+            story.append(Paragraph(
+                "The applicant agrees to maintain the confidentiality of all "
+                "organizational information, training materials, and internal "
+                "procedures.",
+                normal_style
+            ))
+            story.append(Spacer(1, 12))
+            
+            # 8. GOVERNING LAW
+            story.append(Paragraph("8. GOVERNING LAW", heading1_style))
+            story.append(Paragraph(
+                "This agreement shall be governed by and construed in accordance "
+                "with the laws of the Federal Republic of Nigeria.",
+                normal_style
+            ))
+            
+            story.append(PageBreak())
+            
+            # SIGNATURE PAGE
+            story.append(Paragraph("ACCEPTANCE AND SIGNATURE", title_style))
+            story.append(Spacer(1, 24))
+            
+            story.append(Paragraph(
+                "I, the undersigned Applicant, hereby acknowledge that I have "
+                "read, understood, and agree to all the terms and conditions "
+                "outlined in this agreement.",
+                normal_style
+            ))
+            story.append(Spacer(1, 36))
+            
+            # Applicant signature
+            story.append(Paragraph(f"<b>Name of Applicant:</b> {user_data.get('full_name', '')}", bold_style))
+            story.append(Spacer(1, 48))
+            story.append(Paragraph("________________________________________", normal_style))
+            story.append(Paragraph("<b>Signature of Applicant</b>", bold_style))
+            story.append(Spacer(1, 24))
+            story.append(Paragraph(f"<b>Date:</b> {datetime.now().strftime('%d %B, %Y')}", bold_style))
+            
+            story.append(Spacer(1, 72))
+            
+            # Organization signature
+            story.append(Paragraph("<b>FOR MARSHAL CORE OF NIGERIA:</b>", bold_style))
+            story.append(Spacer(1, 48))
+            story.append(Paragraph("________________________________________", normal_style))
+            story.append(Paragraph("<b>OSEOBOH JOSHUA EROMONSELE</b>", bold_style))
+            story.append(Paragraph("<b>Director General</b>", bold_style))
+            story.append(Paragraph(f"<b>Date:</b> {datetime.now().strftime('%d %B, %Y')}", bold_style))
+            
+            story.append(Spacer(1, 48))
+            story.append(Paragraph("<b>Official Stamp:</b>", bold_style))
+            story.append(Paragraph("[ORGANIZATION SEAL]", normal_style))
+            
+            # Build PDF
+            def on_first_page(canvas_obj, doc_obj):
+                self._create_header_footer(canvas_obj, doc_obj, "Terms & Conditions", is_terms=True)
+            
+            def on_later_pages(canvas_obj, doc_obj):
+                self._create_header_footer(canvas_obj, doc_obj, "Terms & Conditions", is_terms=True)
+            
+            doc.build(story, onFirstPage=on_first_page, onLaterPages=on_later_pages)
+            
+            logger.info(f"✅ Applicant Terms PDF generated: {relative_path}")
+            return relative_path
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to generate Applicant Terms PDF: {str(e)}")
+            raise PDFGenerationError(f"Failed to generate Applicant Terms PDF: {str(e)}")
+    
+    def generate_applicant_application_pdf(self, user_data: Dict[str, Any], user_id: str, tier: str, 
+                                         payment_data: Dict[str, Any] = None) -> str:
+        """Generate Application Form PDF for APPLICANTS with passport photo and payment details"""
+        try:
+            logger.info(f"Generating Applicant Application PDF for: {user_id} (Tier: {tier})")
+            
+            filename = self._generate_filename(user_id, "applicant_application", tier)
+            filepath, relative_path = self._save_pdf("applicants", filename)
+            
+            doc = SimpleDocTemplate(
+                filepath,
+                pagesize=A4,
+                rightMargin=72,
+                leftMargin=72,
+                topMargin=120,
+                bottomMargin=72
+            )
+            
+            story = []
+            styles = getSampleStyleSheet()
+            
+            # Custom styles
+            title_style = ParagraphStyle(
+                'TitleStyle',
+                parent=styles['Title'],
+                fontSize=16,
+                textColor=colors.HexColor('#1a237e'),
+                alignment=TA_CENTER,
+                spaceAfter=12,
+                fontName='Helvetica-Bold'
+            )
+            
+            heading1_style = ParagraphStyle(
+                'Heading1',
+                parent=styles['Heading1'],
+                fontSize=12,
+                textColor=colors.HexColor('#283593'),
+                spaceBefore=12,
+                spaceAfter=6,
+                fontName='Helvetica-Bold'
+            )
+            
+            normal_style = ParagraphStyle(
+                'NormalStyle',
+                parent=styles['Normal'],
+                fontSize=10,
+                leading=12,
+                fontName='Helvetica'
+            )
+            
+            bold_style = ParagraphStyle(
+                'BoldStyle',
+                parent=normal_style,
+                fontName='Helvetica-Bold',
+                textColor=colors.HexColor('#1a237e')
+            )
+            
+            # ✅ PASSPORT PHOTO SECTION
+            passport_embedded = False
+            passport_table = None
+            
+            passport_path = user_data.get('passport_photo')
+            if passport_path:
+                passport_img = self._prepare_passport_image(passport_path)
+                if passport_img:
+                    passport_data = [
+                        [Paragraph("<b>PASSPORT PHOTOGRAPH</b>", bold_style)],
+                        [passport_img],
+                        [Paragraph("<i>Required for identification</i>", 
+                                 ParagraphStyle('PhotoNote', parent=normal_style, fontSize=8, 
+                                              textColor=colors.gray, alignment=TA_CENTER))]
+                    ]
+                    
+                    passport_table = Table(passport_data, colWidths=[2*inch])
+                    passport_table.setStyle(TableStyle([
+                        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                        ('BOX', (0, 0), (-1, -1), 1.5, colors.HexColor('#1a237e')),
+                        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e3f2fd')),
+                        ('PADDING', (0, 0), (-1, -1), 8),
+                        ('GRID', (0, 0), (-1, -1), 0.5, colors.lightgrey),
+                    ]))
+                    passport_embedded = True
+                    logger.info("✅ Passport photo embedded in Applicant PDF")
+            
+            # Title
+            story.append(Paragraph("MARSHAL CORE OF NIGERIA", title_style))
+            story.append(Paragraph("APPLICANT REGISTRATION FORM", title_style))
+            story.append(Spacer(1, 12))
+            
+            # Application Information
+            story.append(Paragraph("APPLICATION INFORMATION", heading1_style))
+            
+            app_info = [
+                ("Application ID", user_id),
+                ("Application Tier", tier.upper()),
+                ("Submission Date", datetime.now().strftime("%d %B %Y")),
+            ]
+            
+            for label, value in app_info:
+                story.append(Paragraph(f"<b>{label}:</b> {value}", normal_style))
+                story.append(Spacer(1, 2))
+            
+            story.append(Spacer(1, 12))
+            
+            # Create two-column layout with passport photo
+            if passport_table and passport_embedded:
+                personal_info = []
+                personal_info.append([Paragraph("PERSONAL INFORMATION", heading1_style), ""])
+                
+                personal_fields = [
+                    ("Full Name", user_data.get('full_name')),
+                    ("Email Address", user_data.get('email')),
+                    ("Phone Number", user_data.get('phone_number')),
+                    ("Date of Birth", self._format_date(user_data.get('date_of_birth'))),
+                    ("NIN Number", user_data.get('nin_number', 'Optional - To be provided later')),
+                ]
+                
+                for label, value in personal_fields:
+                    personal_info.append([
+                        Paragraph(f"<b>{label}:</b> {value}", normal_style),
+                        ""
+                    ])
+                
+                personal_table = Table(personal_info, colWidths=[4*inch, 0.5*inch])
+                
+                two_col_data = [
+                    [personal_table, passport_table]
+                ]
+                
+                two_col_table = Table(two_col_data, colWidths=[4.5*inch, 2.5*inch])
+                two_col_table.setStyle(TableStyle([
+                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                    ('ALIGN', (0, 0), (0, -1), 'LEFT'),
+                    ('ALIGN', (1, 0), (1, -1), 'CENTER'),
+                    ('PADDING', (0, 0), (-1, -1), 6),
+                ]))
+                
+                story.append(two_col_table)
+            else:
+                story.append(Paragraph("PERSONAL INFORMATION", heading1_style))
+                
+                personal_fields = [
+                    ("Full Name", user_data.get('full_name')),
+                    ("Email Address", user_data.get('email')),
+                    ("Phone Number", user_data.get('phone_number')),
+                    ("Date of Birth", self._format_date(user_data.get('date_of_birth'))),
+                    ("NIN Number", user_data.get('nin_number', 'Optional - To be provided later')),
+                ]
+                
+                for label, value in personal_fields:
+                    story.append(Paragraph(f"<b>{label}:</b> {value}", normal_style))
+                    story.append(Spacer(1, 2))
+            
+            story.append(Spacer(1, 12))
+            
+            # Contact Information
+            story.append(Paragraph("CONTACT INFORMATION", heading1_style))
+            
+            contact_fields = [
+                ("State of Residence", user_data.get('state_of_residence')),
+                ("Local Government Area", user_data.get('lga')),
+                ("Residential Address", user_data.get('address')),
+            ]
+            
+            for label, value in contact_fields:
+                if value:
+                    story.append(Paragraph(f"<b>{label}:</b> {value}", normal_style))
+                    story.append(Spacer(1, 2))
+            
+            story.append(Spacer(1, 12))
+            
+            # Reasons for Joining
+            story.append(Paragraph("REASONS FOR JOINING", heading1_style))
+            
+            selected_reasons = user_data.get('selected_reasons', [])
+            if isinstance(selected_reasons, str):
+                try:
+                    selected_reasons = json.loads(selected_reasons)
+                except:
+                    selected_reasons = []
+            
+            if selected_reasons:
+                for reason in selected_reasons:
+                    story.append(Paragraph(f"• {self._format_reason(reason)}", normal_style))
+                    story.append(Spacer(1, 2))
+            else:
+                story.append(Paragraph("No reasons specified", normal_style))
+            
+            story.append(Spacer(1, 12))
+            
+            # Additional Details
+            additional_details = user_data.get('additional_details')
+            if additional_details:
+                story.append(Paragraph("ADDITIONAL DETAILS", heading1_style))
+                story.append(Paragraph(additional_details, normal_style))
+                story.append(Spacer(1, 12))
+            
+            # ✅ PAYMENT RECEIPT SECTION
+            story.append(Paragraph("PAYMENT CONFIRMATION", heading1_style))
+            
+            if payment_data:
+                payment_info = [
+                    ["Payment Status:", "✅ COMPLETED"],
+                    ["Application Fee Paid:", f"₦{payment_data.get('amount', 0):,}"],
+                    ["Payment Reference:", payment_data.get('reference', 'N/A')],
+                    ["Payment Date:", self._format_date(payment_data.get('date')) or datetime.now().strftime("%d %B, %Y")],
+                    ["Payment Method:", "Online Payment (Paystack)"]
+                ]
+                
+                payment_table = Table(payment_info, colWidths=[2.5*inch, 3.5*inch])
+                payment_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e8f5e9')),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#2e7d32')),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('BOX', (0, 0), (-1, -1), 1, colors.HexColor('#4CAF50')),
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.lightgrey),
+                    ('PADDING', (0, 0), (-1, -1), 8),
+                ]))
+                
+                story.append(payment_table)
+                story.append(Spacer(1, 4))
+                story.append(Paragraph(
+                    "<i>This confirms successful payment of application fee. Keep this receipt for your records.</i>",
+                    ParagraphStyle('ReceiptNote', parent=normal_style, fontSize=9, textColor=colors.gray)
+                ))
+            else:
+                story.append(Paragraph(
+                    "<i>Payment confirmation will be updated once payment is verified.</i>",
+                    ParagraphStyle('ReceiptNote', parent=normal_style, fontSize=9, textColor=colors.gray)
+                ))
+            
+            story.append(Spacer(1, 24))
+            
+            # Documents Section
+            story.append(Paragraph("DOCUMENTS SUBMITTED", heading1_style))
+            
+            docs_info = [
+                ("Passport Photograph", "✓ Submitted" if passport_embedded else "✗ Not Submitted"),
+                ("NIN Slip", "✓ Submitted" if user_data.get('nin_number') else "✗ Optional"),
+                ("Application Form", "✓ Completed"),
+                ("Payment Receipt", "✓ Included" if payment_data else "Pending"),
+            ]
+            
+            for label, status in docs_info:
+                color = colors.HexColor('#2e7d32') if '✓' in status else colors.gray
+                story.append(Paragraph(
+                    f"<b>{label}:</b> <font color='{color}'>{status}</font>", 
+                    normal_style
+                ))
+                story.append(Spacer(1, 2))
+            
+            story.append(Spacer(1, 24))
+            
+            # Declaration
+            story.append(Paragraph("DECLARATION", heading1_style))
+            story.append(Paragraph(
+                "I hereby declare that all information provided in this application is true and correct "
+                "to the best of my knowledge. I understand that any false information may lead to "
+                "disqualification or termination of appointment as per the Terms and Conditions.",
+                normal_style
+            ))
+            story.append(Spacer(1, 48))
+            
+            # Signature lines
+            story.append(Paragraph("<b>Signature of Applicant:</b>", bold_style))
+            story.append(Spacer(1, 48))
+            story.append(Paragraph("________________________________________", normal_style))
+            story.append(Spacer(1, 24))
+            story.append(Paragraph(f"<b>Date:</b> {datetime.now().strftime('%d/%m/%Y')}", bold_style))
+            story.append(Spacer(1, 48))
+            
+            # Organization signature
+            story.append(Paragraph("<b>For Marshal Core of Nigeria:</b>", bold_style))
+            story.append(Spacer(1, 48))
+            story.append(Paragraph("________________________________________", normal_style))
+            story.append(Paragraph("Name: OSEOBOH JOSHUA EROMONSELE", normal_style))
+            story.append(Paragraph("RANK: Director General", normal_style))
+            story.append(Paragraph(f"Date: {datetime.now().strftime('%d/%m/%Y')}", normal_style))
+            
+            story.append(Spacer(1, 24))
+            story.append(Paragraph("<b>Official Stamp:</b>", bold_style))
+            
+            story.append(Spacer(1, 12))
+            
+            # Footer note
+            story.append(Paragraph(
+                "This document is electronically generated by Marshal Core of Nigeria. "
+                "For official use only.",
+                ParagraphStyle(
+                    'FooterNote',
+                    parent=normal_style,
+                    fontSize=8,
+                    textColor=colors.gray,
+                    alignment=TA_CENTER
+                )
+            ))
+            
+            # Build PDF
+            def on_first_page(canvas_obj, doc_obj):
+                self._create_header_footer(canvas_obj, doc_obj, "Application Form")
+            
+            def on_later_pages(canvas_obj, doc_obj):
+                self._create_header_footer(canvas_obj, doc_obj, "Application Form")
+            
+            doc.build(story, onFirstPage=on_first_page, onLaterPages=on_later_pages)
+            
+            logger.info(f"✅ Applicant Application PDF generated: {relative_path}")
+            return relative_path
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to generate Applicant Application PDF: {str(e)}")
+            raise PDFGenerationError(f"Failed to generate Applicant Application PDF: {str(e)}")
+    
+    def generate_applicant_pdfs(self, user_data: Dict[str, Any], user_id: str, tier: str,
+                              payment_data: Dict[str, Any] = None) -> Dict[str, str]:
         """
-        Generate both Terms & Conditions and Application Form PDFs
+        Generate all PDFs for a new applicant
         """
         try:
-            logger.info(f"Generating both PDFs for user: {user_id}")
+            logger.info(f"Generating all PDFs for applicant: {user_id} (Tier: {tier})")
             
-            # Generate Terms & Conditions
-            terms_pdf_path = self.generate_terms_conditions(user_data, user_id)
+            # Generate Terms PDF
+            terms_pdf_path = self.generate_applicant_terms_pdf(user_data, user_id, tier)
             
-            # Generate Application Form
-            app_pdf_path = self.generate_application_form(user_data, user_id)
+            # Generate Application PDF with passport and payment
+            app_pdf_path = self.generate_applicant_application_pdf(user_data, user_id, tier, payment_data)
+            
+            # Guarantor form path (static file)
+            guarantor_pdf_path = "static/guarantor-form.pdf"
             
             return {
                 "terms_pdf_path": terms_pdf_path,
                 "application_pdf_path": app_pdf_path,
+                "guarantor_pdf_path": guarantor_pdf_path,
                 "generated_at": datetime.now().isoformat(),
-                "user_id": user_id
+                "user_id": user_id,
+                "tier": tier
             }
             
         except Exception as e:
-            logger.error(f"Failed to generate both PDFs: {str(e)}")
-            raise PDFGenerationError(f"Failed to generate both PDFs: {str(e)}")
+            logger.error(f"Failed to generate applicant PDFs: {str(e)}")
+            raise PDFGenerationError(f"Failed to generate applicant PDFs: {str(e)}")
 
 # Singleton instance
 pdf_generator = PDFGenerator()
 
 
 class PDFService:
-    """Service class for PDF operations"""
+    """Service class for PDF operations - NOW SUPPORTS APPLICANTS"""
     
     def __init__(self, db: Session):
         self.db = db
@@ -844,7 +1467,7 @@ class PDFService:
                     'residential_address': user.residential_address,
                     'state_of_residence': user.state_of_residence,
                     'local_government_residence': user.local_government_residence,
-                    'passport_path': user.passport_path,  # ✅ FIXED: Use passport_path for existing officers
+                    'passport_path': user.passport_path,  # ✅ Use passport_path for existing officers
                     'rank': user.rank,
                     'position': user.position,
                     'additional_skills': user.additional_skills,
@@ -867,42 +1490,99 @@ class PDFService:
         
         return user_data
     
-    def generate_both_pdfs(self, user_id: str, user_type: str) -> Dict[str, str]:
+    def generate_officer_pdfs(self, user_id: str, user_type: str) -> Dict[str, str]:
         """
-        Generate both PDFs for a user
+        Generate officer PDFs (Terms & Conditions and Application Form)
         """
         try:
             user_data = self._get_user_data(user_id, user_type)
             if not user_data:
                 raise ValueError(f"User not found: {user_id}")
             
-            return pdf_generator.generate_both_pdfs(user_data, user_id)
+            # Generate Terms & Conditions
+            terms_pdf_path = pdf_generator.generate_officer_terms_conditions(user_data, user_id)
+            
+            # Generate Application Form
+            app_pdf_path = pdf_generator.generate_officer_application_form(user_data, user_id)
+            
+            return {
+                "terms_pdf_path": terms_pdf_path,
+                "application_pdf_path": app_pdf_path,
+                "generated_at": datetime.now().isoformat(),
+                "user_id": user_id,
+                "user_type": user_type
+            }
             
         except Exception as e:
-            logger.error(f"Failed to generate PDFs for {user_id}: {str(e)}")
+            logger.error(f"Failed to generate officer PDFs for {user_id}: {str(e)}")
             raise
     
-    def generate_terms_conditions(self, user_id: str, user_type: str) -> str:
+    def generate_applicant_pdfs(self, user_id: str, tier: str, payment_data: Dict[str, Any] = None) -> Dict[str, str]:
+        """
+        Generate applicant PDFs (Applicant Terms & Conditions and Applicant Application Form)
+        """
+        try:
+            user_data = self._get_user_data(user_id, "applicant")
+            if not user_data:
+                raise ValueError(f"Applicant not found: {user_id}")
+            
+            # Generate applicant PDFs
+            return pdf_generator.generate_applicant_pdfs(user_data, user_id, tier, payment_data)
+            
+        except Exception as e:
+            logger.error(f"Failed to generate applicant PDFs for {user_id}: {str(e)}")
+            raise
+    
+    def generate_both_pdfs(self, user_id: str, user_type: str, tier: str = None, 
+                          payment_data: Dict[str, Any] = None) -> Dict[str, str]:
+        """
+        Generate both PDFs for a user - NOW SUPPORTS APPLICANTS AND OFFICERS
+        """
+        if user_type == "applicant":
+            if not tier:
+                # Get tier from database if not provided
+                applicant = self.db.query(Applicant).filter(Applicant.id == user_id).first()
+                tier = applicant.application_tier if applicant else "regular"
+            
+            return self.generate_applicant_pdfs(user_id, tier, payment_data)
+        else:
+            # For officers (existing behavior)
+            return self.generate_officer_pdfs(user_id, user_type)
+    
+    def generate_terms_conditions(self, user_id: str, user_type: str, tier: str = None) -> str:
         """Generate Terms & Conditions PDF"""
         try:
             user_data = self._get_user_data(user_id, user_type)
             if not user_data:
                 raise ValueError(f"User not found: {user_id}")
             
-            return pdf_generator.generate_terms_conditions(user_data, user_id)
+            if user_type == "applicant":
+                if not tier:
+                    applicant = self.db.query(Applicant).filter(Applicant.id == user_id).first()
+                    tier = applicant.application_tier if applicant else "regular"
+                return pdf_generator.generate_applicant_terms_pdf(user_data, user_id, tier)
+            else:
+                return pdf_generator.generate_officer_terms_conditions(user_data, user_id)
             
         except Exception as e:
             logger.error(f"Failed to generate Terms PDF for {user_id}: {str(e)}")
             raise
     
-    def generate_application_form(self, user_id: str, user_type: str) -> str:
+    def generate_application_form(self, user_id: str, user_type: str, tier: str = None,
+                                payment_data: Dict[str, Any] = None) -> str:
         """Generate Application Form PDF with passport photo"""
         try:
             user_data = self._get_user_data(user_id, user_type)
             if not user_data:
                 raise ValueError(f"User not found: {user_id}")
             
-            return pdf_generator.generate_application_form(user_data, user_id)
+            if user_type == "applicant":
+                if not tier:
+                    applicant = self.db.query(Applicant).filter(Applicant.id == user_id).first()
+                    tier = applicant.application_tier if applicant else "regular"
+                return pdf_generator.generate_applicant_application_pdf(user_data, user_id, tier, payment_data)
+            else:
+                return pdf_generator.generate_officer_application_form(user_data, user_id)
             
         except Exception as e:
             logger.error(f"Failed to generate Application PDF for {user_id}: {str(e)}")

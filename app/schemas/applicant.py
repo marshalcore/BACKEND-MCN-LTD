@@ -1,4 +1,4 @@
-# app/schemas/applicant.py - UPDATE TO MAKE NIN FIELDS OPTIONAL
+# app/schemas/applicant.py - COMPLETE FIXED VERSION
 from pydantic import BaseModel, EmailStr, ConfigDict
 from uuid import UUID
 from datetime import date, datetime
@@ -10,19 +10,19 @@ class ApplicantBase(BaseModel):
     full_name: str
     email: EmailStr
     phone_number: str
-    nin_number: Optional[str] = None  # CHANGED: Now optional
-    date_of_birth: date
-    state_of_residence: str
-    lga: str
-    address: str
+    nin_number: Optional[str] = None
+    date_of_birth: Optional[date] = None
+    state_of_residence: Optional[str] = None
+    lga: Optional[str] = None
+    address: Optional[str] = None
 
     # SECTION B: Documents
-    passport_photo: str
-    nin_slip: Optional[str] = None  # CHANGED: Now optional
+    passport_photo: Optional[str] = None
+    nin_slip: Optional[str] = None
 
     # SECTION C: Application Details
-    application_tier: str  # 'regular' or 'vip'
-    selected_reasons: List[str]
+    application_tier: str
+    selected_reasons: Optional[List[str]] = None
     additional_details: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True, title="ApplicantBase")
@@ -61,14 +61,14 @@ class ApplicantResponse(ApplicantBase):
 class ApplicantCreate(BaseModel):
     # SECTION A: Basic Information (from form)
     phone_number: str
-    nin_number: Optional[str] = None  # CHANGED: Now optional
-    date_of_birth: date
-    state_of_residence: str
-    lga: str
-    address: str
+    nin_number: Optional[str] = None
+    date_of_birth: Optional[date] = None
+    state_of_residence: Optional[str] = None
+    lga: Optional[str] = None
+    address: Optional[str] = None
     
     # SECTION B: Application Details
-    selected_reasons: List[str]
+    selected_reasons: Optional[List[str]] = None
     additional_details: Optional[str] = None
     application_tier: str
     
@@ -76,8 +76,8 @@ class ApplicantCreate(BaseModel):
     application_password: str
     
     # SECTION D: Documents
-    passport_photo: str
-    nin_slip: Optional[str] = None  # CHANGED: Now optional
+    passport_photo: Optional[str] = None
+    nin_slip: Optional[str] = None
     
     # SECTION E: Auto-filled from pre-applicant
     full_name: str

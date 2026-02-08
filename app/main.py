@@ -54,7 +54,9 @@ origins = [
     "https://marshalcoreofficer.netlify.app",
     "https://mcn-org.netlify.app",
     "https://marshalcoreofnigerialimited.netlify.app",
-    "https://marshalcoreadmin.netlify.app", 
+    "https://marshalcoreadmin.netlify.app",
+    "http://127.0.0.1:5501",  # Added for local development
+    "*"  # TEMPORARY: Allow all origins for debugging (remove in production)
 ]
 
 # Use ONLY FastAPI's CORSMiddleware
@@ -245,6 +247,27 @@ async def normalize_static_paths(request: Request, call_next):
     
     # Continue with normal request processing
     response = await call_next(request)
+    return response
+
+# ==================== CORS FIX MIDDLEWARE FOR FORM SUBMISSIONS ====================
+
+@app.middleware("http")
+async def cors_fix_middleware(request: Request, call_next):
+    """
+    Fix CORS headers for form submission endpoints
+    """
+    response = await call_next(request)
+    
+    # Add CORS headers for all responses
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, PATCH, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    
+    # Special handling for OPTIONS requests
+    if request.method == "OPTIONS":
+        response.status_code = 200
+    
     return response
 
 # ==================== END MIDDLEWARE ====================
