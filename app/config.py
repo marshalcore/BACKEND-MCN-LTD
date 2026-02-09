@@ -7,25 +7,46 @@ import os
 class Settings(BaseSettings):
     # === DATABASE ===
     DATABASE_URL: str = Field(
-        default=os.getenv("DATABASE_URL", "postgresql://neondb_owner:npg_1QCyHBgaJNq3@ep-jolly-star-abr6n08i-pooler.eu-west-2.aws.neon.tech/neondb?sslmode=require"),
+        default=os.getenv("DATABASE_URL", ""),
         description="PostgreSQL database URL for Marshal Core"
     )
 
     # === JWT AUTH ===
     SECRET_KEY: str = Field(
-        default=os.getenv("SECRET_KEY", "tg4sECYEvXzWkscBdIUPD1O54k_X6-WN7k9KJjOGJv47Q7tK-j2UwBz9Qd8ae2Jh4WKPn1kPdlXwC2ABEMEwBA"),
+        default=os.getenv("SECRET_KEY", ""),
         description="Secret key for JWT token signing"
     )
     ALGORITHM: str = Field(default="HS256", description="JWT algorithm")
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=30, description="JWT token expiration time in minutes")
-    REFRESH_TOKEN_EXPIRE_DAYS: int = Field(default=7, description="Refresh token expiration time in days")
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(
+        default=int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440")), 
+        description="JWT token expiration time in minutes"
+    )
+    REFRESH_TOKEN_EXPIRE_DAYS: int = Field(
+        default=int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "30")), 
+        description="Refresh token expiration time in days"
+    )
 
     # === EMAIL ===
-    EMAIL_HOST: str = Field(default=os.getenv("EMAIL_HOST", "smtp-relay.brevo.com"), description="SMTP host")
-    EMAIL_PORT: int = Field(default=int(os.getenv("EMAIL_PORT", "587")), description="SMTP port")
-    EMAIL_HOST_USER: str = Field(default=os.getenv("EMAIL_HOST_USER", "9549c7003@smtp-brevo.com"), description="SMTP username")
-    EMAIL_HOST_PASSWORD: str = Field(default=os.getenv("EMAIL_HOST_PASSWORD", "2WRSyat5Yc4rIwTP"), description="SMTP password")
-    EMAIL_FROM: str = Field(default=os.getenv("EMAIL_FROM", "marshalcoreofnigeria@gmail.com"), description="Email sender address")
+    EMAIL_HOST: str = Field(
+        default=os.getenv("EMAIL_HOST", ""), 
+        description="SMTP host"
+    )
+    EMAIL_PORT: int = Field(
+        default=int(os.getenv("EMAIL_PORT", "587")), 
+        description="SMTP port"
+    )
+    EMAIL_HOST_USER: str = Field(
+        default=os.getenv("EMAIL_HOST_USER", ""), 
+        description="SMTP username"
+    )
+    EMAIL_HOST_PASSWORD: str = Field(
+        default=os.getenv("EMAIL_HOST_PASSWORD", ""), 
+        description="SMTP password"
+    )
+    EMAIL_FROM: str = Field(
+        default=os.getenv("EMAIL_FROM", ""), 
+        description="Email sender address"
+    )
 
     # === RESEND EMAIL API ===
     RESEND_API_KEY: Optional[str] = Field(
@@ -33,7 +54,7 @@ class Settings(BaseSettings):
         description="Resend.com API key for transactional emails"
     )
     RESEND_FROM_EMAIL: str = Field(
-        default=os.getenv("RESEND_FROM_EMAIL", "onboarding@marshalcoreofnigeria.ng"),
+        default=os.getenv("RESEND_FROM_EMAIL", ""),
         description="Resend sender email address"
     )
     RESEND_FROM_NAME: str = Field(
@@ -41,17 +62,17 @@ class Settings(BaseSettings):
         description="Resend sender display name"
     )
 
-    # === PAYMENT GATEWAY (LIVE KEYS) ===
+    # === PAYMENT GATEWAY ===
     PAYSTACK_PUBLIC_KEY: str = Field(
-        default=os.getenv("PAYSTACK_PUBLIC_KEY", "pk_live_f5c8f4811d213107200c089f061699694ae6c94f"),
-        description="Paystack LIVE public key"
+        default=os.getenv("PAYSTACK_PUBLIC_KEY", ""),
+        description="Paystack public key"
     )
     PAYSTACK_SECRET_KEY: str = Field(
-        default=os.getenv("PAYSTACK_SECRET_KEY", "sk_live_3d532a7215ffdb0166b8fffc49b3ebca5085e6df"),
-        description="Paystack LIVE secret key"
+        default=os.getenv("PAYSTACK_SECRET_KEY", ""),
+        description="Paystack secret key"
     )
     FLUTTERWAVE_SECRET_KEY: str = Field(
-        default=os.getenv("FLUTTERWAVE_SECRET_KEY", "flw_test_xxxxx"),
+        default=os.getenv("FLUTTERWAVE_SECRET_KEY", ""),
         description="Flutterwave secret key"
     )
 
@@ -61,19 +82,19 @@ class Settings(BaseSettings):
         description="Technical partner company name"
     )
     ESTECH_BANK_ACCOUNT_NAME: str = Field(
-        default=os.getenv("ESTECH_BANK_ACCOUNT_NAME", "eSTech System"),
+        default=os.getenv("ESTECH_BANK_ACCOUNT_NAME", ""),
         description="eSTech System account display name"
     )
     ESTECH_BANK_ACCOUNT_NUMBER: str = Field(
-        default=os.getenv("ESTECH_BANK_ACCOUNT_NUMBER", "6426991017"),
-        description="eSTech System account number (Updated to 6426991017)"
+        default=os.getenv("ESTECH_BANK_ACCOUNT_NUMBER", ""),
+        description="eSTech System account number"
     )
     ESTECH_BANK_NAME: str = Field(
         default=os.getenv("ESTECH_BANK_NAME", "Opay"),
         description="eSTech System bank name"
     )
     ESTECH_ACTUAL_BENEFICIARY: str = Field(
-        default=os.getenv("ESTECH_ACTUAL_BENEFICIARY", "Godwin Wisdom Author"),
+        default=os.getenv("ESTECH_ACTUAL_BENEFICIARY", ""),
         description="Actual account holder name"
     )
     ESTECH_COMMISSION_PERCENTAGE: int = Field(
@@ -88,11 +109,11 @@ class Settings(BaseSettings):
     # === IMMEDIATE TRANSFER CONFIGURATION ===
     # Director General Account
     DG_ACCOUNT_NAME: str = Field(
-        default=os.getenv("DG_ACCOUNT_NAME", "OSEOBOH JOSHUA EROMONSELE"),
+        default=os.getenv("DG_ACCOUNT_NAME", ""),
         description="Director General account name"
     )
     DG_ACCOUNT_NUMBER: str = Field(
-        default=os.getenv("DG_ACCOUNT_NUMBER", "2104644267"),
+        default=os.getenv("DG_ACCOUNT_NUMBER", ""),
         description="Director General account number"
     )
     DG_BANK_NAME: str = Field(
@@ -139,10 +160,13 @@ class Settings(BaseSettings):
     )
 
     # === DEBUG MODE ===
-    DEBUG: bool = Field(default=os.getenv("DEBUG", "false").lower() == "true", description="Debug mode")
+    DEBUG: bool = Field(
+        default=os.getenv("DEBUG", "false").lower() == "true", 
+        description="Debug mode"
+    )
     
     # === RENDER.COM DETECTION ===
-    RENDER: Optional[bool] = Field(
+    RENDER: bool = Field(
         default=os.getenv("RENDER", "false").lower() == "true",
         description="Running on Render.com platform"
     )
@@ -175,10 +199,10 @@ class Settings(BaseSettings):
         description="External URL for keep-alive pings (auto-detected on Render)"
     )
     
-    # === PAYSTACK MODE (SET TO FALSE FOR PRODUCTION) ===
+    # === PAYSTACK TEST MODE ===
     PAYSTACK_TEST_MODE: bool = Field(
         default=os.getenv("PAYSTACK_TEST_MODE", "false").lower() == "true",
-        description="Enable Paystack test mode (FALSE for production)"
+        description="Enable Paystack test mode"
     )
     
     # === IMMEDIATE TRANSFER SETTINGS ===
@@ -187,11 +211,11 @@ class Settings(BaseSettings):
         description="Enable immediate transfers after payment"
     )
     TRANSFER_RETRY_ATTEMPTS: int = Field(
-        default=int(os.getenv("TRANSFER_RETRY_ATTEMPTS", "5")),
+        default=int(os.getenv("TRANSFER_RETRY_ATTEMPTS", "3")),
         description="Number of retry attempts for failed transfers"
     )
     TRANSFER_RETRY_DELAY: int = Field(
-        default=int(os.getenv("TRANSFER_RETRY_DELAY", "60")),
+        default=int(os.getenv("TRANSFER_RETRY_DELAY", "300")),
         description="Delay between retry attempts in seconds"
     )
     
@@ -214,3 +238,23 @@ class Settings(BaseSettings):
         extra = "allow"
 
 settings = Settings()
+
+# Validate required settings
+def validate_settings():
+    required_settings = [
+        ("DATABASE_URL", settings.DATABASE_URL),
+        ("SECRET_KEY", settings.SECRET_KEY),
+        ("PAYSTACK_PUBLIC_KEY", settings.PAYSTACK_PUBLIC_KEY),
+        ("PAYSTACK_SECRET_KEY", settings.PAYSTACK_SECRET_KEY),
+    ]
+    
+    missing = []
+    for name, value in required_settings:
+        if not value:
+            missing.append(name)
+    
+    if missing:
+        raise ValueError(f"Missing required environment variables: {', '.join(missing)}")
+
+# Validate on import
+validate_settings()
