@@ -1,9 +1,7 @@
-# app/services/immediate_transfer.py - COMPLETE UPDATED VERSION FOR PRODUCTION
+# app/services/immediate_transfer.py - PRODUCTION LIVE MODE ONLY
 """
 Service to handle immediate bank transfers using Paystack LIVE Transfer API.
-After each successful payment, automatically transfer:
-- 35% to DG's UBA account
-- 15% to eSTech's OPay account
+PRODUCTION MODE - REAL MONEY TRANSFERS ONLY
 """
 import httpx
 import logging
@@ -20,7 +18,7 @@ from app.models.payment import Payment
 logger = logging.getLogger(__name__)
 
 class ImmediateTransferService:
-    """Service to handle immediate bank transfers with LIVE Paystack"""
+    """Service to handle immediate bank transfers with LIVE Paystack - PRODUCTION ONLY"""
     
     def __init__(self):
         self.paystack_secret = settings.PAYSTACK_SECRET_KEY
@@ -30,8 +28,8 @@ class ImmediateTransferService:
             "Content-Type": "application/json"
         }
         
-        # Check if we're in LIVE mode
-        self.is_live_mode = not settings.PAYSTACK_TEST_MODE
+        # PRODUCTION MODE - ALWAYS LIVE
+        self.is_live_mode = True  # Force LIVE mode in production
         self.enable_transfers = settings.ENABLE_IMMEDIATE_TRANSFERS
         
         # Recipient configurations for LIVE transfers
@@ -46,28 +44,24 @@ class ImmediateTransferService:
             },
             "estech_system": {
                 "type": "nuban",
-                "name": "AUTHOR WISDOM GODWIN",  # Actual beneficiary name
-                "account_number": settings.ESTECH_BANK_ACCOUNT_NUMBER,
+                "name": settings.ESTECH_IMMEDIATE_ACCOUNT_NAME,  # Actual beneficiary name
+                "account_number": settings.ESTECH_IMMEDIATE_ACCOUNT_NUMBER,
                 "bank_code": "100",  # OPay bank code
                 "currency": "NGN",
                 "description": settings.ESTECH_COMMISSION_PURPOSE
             }
         }
         
-        logger.info(f"ImmediateTransferService initialized: {'LIVE' if self.is_live_mode else 'TEST'} mode")
-        logger.info(f"Transfers enabled: {self.enable_transfers}")
+        logger.info("💰 ImmediateTransferService initialized: PRODUCTION LIVE MODE")
+        logger.info(f"💰 Transfers enabled: {self.enable_transfers}")
+        logger.info("💰 REAL MONEY TRANSFERS ACTIVE")
         
-        # Test mode validation
-        if not self.is_live_mode:
-            logger.warning("⚠️ WARNING: Running in TEST mode - No actual transfers will be made!")
-            logger.warning("⚠️ Set PAYSTACK_TEST_MODE=false for LIVE transfers")
-    
     async def create_transfer_recipient(
         self,
         recipient_type: str
     ) -> Dict[str, Any]:
         """
-        Create a transfer recipient in Paystack
+        Create a transfer recipient in Paystack - PRODUCTION LIVE MODE
         Returns recipient_code for future transfers
         """
         try:
@@ -79,22 +73,8 @@ class ImmediateTransferService:
             
             recipient_data = self.recipients[recipient_type]
             
-            # In test mode, return a mock recipient code
-            if not self.is_live_mode:
-                logger.info(f"TEST MODE: Simulating recipient creation for {recipient_type}")
-                mock_codes = {
-                    "director_general": "RCP_test_dg_001",
-                    "estech_system": "RCP_test_estech_001"
-                }
-                return {
-                    "status": "success",
-                    "recipient_code": mock_codes.get(recipient_type, f"RCP_test_{recipient_type}"),
-                    "recipient_type": recipient_type,
-                    "test_mode": True,
-                    "message": "TEST MODE - No actual recipient created"
-                }
-            
-            logger.info(f"Creating LIVE recipient for {recipient_type}: {recipient_data['account_number']}")
+            # PRODUCTION LIVE MODE - Real API calls
+            logger.info(f"💰 Creating LIVE recipient for {recipient_type}: {recipient_data['account_number']}")
             
             response = httpx.post(
                 f"{self.base_url}/transferrecipient",
@@ -108,7 +88,7 @@ class ImmediateTransferService:
             
             if data["status"]:
                 recipient_code = data["data"]["recipient_code"]
-                logger.info(f"✅ Created recipient for {recipient_type}: {recipient_code}")
+                logger.info(f"✅ Created LIVE recipient for {recipient_type}: {recipient_code}")
                 return {
                     "status": "success",
                     "recipient_code": recipient_code,
@@ -154,7 +134,7 @@ class ImmediateTransferService:
         payment_reference: str
     ) -> Dict[str, Any]:
         """
-        Initiate transfer to a recipient
+        Initiate transfer to a recipient - PRODUCTION LIVE MODE
         """
         try:
             # Convert amount to kobo
@@ -172,23 +152,9 @@ class ImmediateTransferService:
                 "currency": "NGN"
             }
             
-            # In test mode, simulate successful transfer
-            if not self.is_live_mode:
-                logger.info(f"TEST MODE: Simulating transfer of ₦{amount/100:,} to {recipient_type}")
-                
-                return {
-                    "status": "success",
-                    "transfer_code": f"TRC_TEST_{uuid.uuid4().hex[:8]}",
-                    "transfer_reference": transfer_ref,
-                    "amount": amount,
-                    "reason": reason,
-                    "recipient_type": recipient_type,
-                    "test_mode": True,
-                    "message": "Transfer simulated in test mode"
-                }
-            
-            logger.info(f"🔵 Initiating LIVE transfer: ₦{amount/100:,} to {recipient_type}")
-            logger.info(f"Transfer reference: {transfer_ref}")
+            # PRODUCTION LIVE MODE - Real transfer
+            logger.info(f"💰 Initiating LIVE transfer: ₦{amount/100:,} to {recipient_type}")
+            logger.info(f"💰 Transfer reference: {transfer_ref}")
             
             response = httpx.post(
                 f"{self.base_url}/transfer",
@@ -201,8 +167,8 @@ class ImmediateTransferService:
             data = response.json()
             
             if data["status"]:
-                logger.info(f"✅ Transfer initiated: ₦{amount/100:,} to {recipient_type}")
-                logger.info(f"Transfer code: {data['data']['transfer_code']}")
+                logger.info(f"✅✅✅ LIVE TRANSFER INITIATED: ₦{amount/100:,} to {recipient_type}")
+                logger.info(f"💰 Transfer code: {data['data']['transfer_code']}")
                 
                 return {
                     "status": "success",
@@ -215,7 +181,7 @@ class ImmediateTransferService:
                 }
             else:
                 error_msg = data.get("message", "Transfer failed")
-                logger.error(f"❌ Paystack transfer failed: {error_msg}")
+                logger.error(f"❌❌❌ Paystack LIVE transfer failed: {error_msg}")
                 return {
                     "status": "error",
                     "message": error_msg,
@@ -224,7 +190,7 @@ class ImmediateTransferService:
                 }
                 
         except httpx.RequestError as e:
-            logger.error(f"❌ Network error initiating transfer: {str(e)}")
+            logger.error(f"❌❌❌ Network error initiating LIVE transfer: {str(e)}")
             return {
                 "status": "error",
                 "message": "Network error while initiating transfer",
@@ -232,7 +198,7 @@ class ImmediateTransferService:
                 "test_mode": False
             }
         except Exception as e:
-            logger.error(f"❌ Error initiating transfer: {str(e)}")
+            logger.error(f"❌❌❌ Error initiating LIVE transfer: {str(e)}")
             return {
                 "status": "error",
                 "message": str(e),
@@ -242,17 +208,9 @@ class ImmediateTransferService:
     
     async def verify_transfer(self, transfer_code: str) -> Dict[str, Any]:
         """
-        Verify transfer status
+        Verify transfer status - PRODUCTION LIVE MODE
         """
         try:
-            if not self.is_live_mode:
-                return {
-                    "status": "success",
-                    "transfer_status": "success",
-                    "test_mode": True,
-                    "message": "TEST MODE - Transfer verified"
-                }
-            
             response = httpx.get(
                 f"{self.base_url}/transfer/{transfer_code}",
                 headers=self.headers,
@@ -264,7 +222,7 @@ class ImmediateTransferService:
             
             if data["status"]:
                 status = data["data"]["status"]
-                logger.info(f"Transfer {transfer_code} status: {status}")
+                logger.info(f"💰 Transfer {transfer_code} status: {status}")
                 return {
                     "status": "success",
                     "transfer_status": status,
@@ -297,18 +255,19 @@ class ImmediateTransferService:
         db: Session
     ) -> Dict[str, Any]:
         """
-        Process immediate transfers to DG and eSTech after payment
+        Process immediate transfers to DG and eSTech after payment - PRODUCTION LIVE MODE
         """
         try:
             if not self.enable_transfers:
-                logger.info(f"Immediate transfers disabled for {payment_reference}")
+                logger.info(f"💰 Immediate transfers disabled for {payment_reference}")
                 return {
                     "status": "skipped",
                     "message": "Immediate transfers are disabled",
                     "payment_reference": payment_reference
                 }
             
-            logger.info(f"🔵 Processing immediate splits for payment: {payment_reference}")
+            logger.info(f"💰💰💰 PROCESSING IMMEDIATE SPLITS FOR PAYMENT: {payment_reference}")
+            logger.info(f"💰💰💰 REAL MONEY TRANSFERS INITIATING...")
             
             # Get payment details
             payment = db.query(Payment).filter(
@@ -323,7 +282,7 @@ class ImmediateTransferService:
             
             # Check if transfers already processed
             if payment.immediate_transfers_processed:
-                logger.info(f"Transfers already processed for {payment_reference}")
+                logger.info(f"💰 Transfers already processed for {payment_reference}")
                 return {
                     "status": "success",
                     "message": "Transfers already processed",
@@ -338,7 +297,7 @@ class ImmediateTransferService:
             # Process Director General transfer (35%)
             dg_amount = payment.director_general_share
             if dg_amount > 0:
-                logger.info(f"🔵 Transferring ₦{dg_amount:,} to Director General")
+                logger.info(f"💰💰 Transferring ₦{dg_amount:,} to Director General (REAL MONEY)")
                 
                 # Create or get recipient code
                 recipient_result = await self.create_transfer_recipient("director_general")
@@ -366,7 +325,7 @@ class ImmediateTransferService:
                             transferred_at=datetime.utcnow(),
                             paystack_transfer_code=transfer_result.get("transfer_code"),
                             paystack_response=transfer_result,
-                            is_test_mode=transfer_result.get("test_mode", False)
+                            is_test_mode=False  # Always false in production
                         )
                         db.add(transfer)
                         
@@ -375,10 +334,10 @@ class ImmediateTransferService:
                             "amount": dg_amount,
                             "status": "initiated",
                             "transfer_reference": transfer_result.get("transfer_reference"),
-                            "test_mode": transfer_result.get("test_mode", False),
+                            "test_mode": False,
                             "timestamp": datetime.utcnow().isoformat()
                         })
-                        logger.info(f"✅ Director General transfer initiated: ₦{dg_amount:,}")
+                        logger.info(f"✅✅✅ Director General transfer initiated: ₦{dg_amount:,} (REAL MONEY)")
                     else:
                         all_successful = False
                         # Record failed transfer
@@ -392,7 +351,7 @@ class ImmediateTransferService:
                             status="failed",
                             transferred_at=datetime.utcnow(),
                             paystack_response=transfer_result,
-                            is_test_mode=True if not self.is_live_mode else False
+                            is_test_mode=False
                         )
                         db.add(transfer)
                         
@@ -401,9 +360,9 @@ class ImmediateTransferService:
                             "amount": dg_amount,
                             "status": "failed",
                             "error": transfer_result.get("message"),
-                            "test_mode": True if not self.is_live_mode else False
+                            "test_mode": False
                         })
-                        logger.error(f"❌ Director General transfer failed: {transfer_result.get('message')}")
+                        logger.error(f"❌❌❌ Director General transfer failed: {transfer_result.get('message')}")
                 else:
                     all_successful = False
                     transfer_results.append({
@@ -411,14 +370,14 @@ class ImmediateTransferService:
                         "amount": dg_amount,
                         "status": "failed",
                         "error": recipient_result.get("message"),
-                        "test_mode": True if not self.is_live_mode else False
+                        "test_mode": False
                     })
-                    logger.error(f"❌ Failed to create DG recipient: {recipient_result.get('message')}")
+                    logger.error(f"❌❌❌ Failed to create DG recipient: {recipient_result.get('message')}")
             
             # Process eSTech System transfer (15%)
             estech_amount = payment.estech_system_share
             if estech_amount > 0:
-                logger.info(f"🔵 Transferring ₦{estech_amount:,} to eSTech System")
+                logger.info(f"💰💰 Transferring ₦{estech_amount:,} to eSTech System (REAL MONEY)")
                 
                 recipient_result = await self.create_transfer_recipient("estech_system")
                 
@@ -443,7 +402,7 @@ class ImmediateTransferService:
                             transferred_at=datetime.utcnow(),
                             paystack_transfer_code=transfer_result.get("transfer_code"),
                             paystack_response=transfer_result,
-                            is_test_mode=transfer_result.get("test_mode", False)
+                            is_test_mode=False
                         )
                         db.add(transfer)
                         
@@ -452,10 +411,10 @@ class ImmediateTransferService:
                             "amount": estech_amount,
                             "status": "initiated",
                             "transfer_reference": transfer_result.get("transfer_reference"),
-                            "test_mode": transfer_result.get("test_mode", False),
+                            "test_mode": False,
                             "timestamp": datetime.utcnow().isoformat()
                         })
-                        logger.info(f"✅ eSTech System transfer initiated: ₦{estech_amount:,}")
+                        logger.info(f"✅✅✅ eSTech System transfer initiated: ₦{estech_amount:,} (REAL MONEY)")
                     else:
                         all_successful = False
                         # Record failed transfer
@@ -469,7 +428,7 @@ class ImmediateTransferService:
                             status="failed",
                             transferred_at=datetime.utcnow(),
                             paystack_response=transfer_result,
-                            is_test_mode=True if not self.is_live_mode else False
+                            is_test_mode=False
                         )
                         db.add(transfer)
                         
@@ -478,9 +437,9 @@ class ImmediateTransferService:
                             "amount": estech_amount,
                             "status": "failed",
                             "error": transfer_result.get("message"),
-                            "test_mode": True if not self.is_live_mode else False
+                            "test_mode": False
                         })
-                        logger.error(f"❌ eSTech System transfer failed: {transfer_result.get('message')}")
+                        logger.error(f"❌❌❌ eSTech System transfer failed: {transfer_result.get('message')}")
                 else:
                     all_successful = False
                     transfer_results.append({
@@ -488,9 +447,9 @@ class ImmediateTransferService:
                         "amount": estech_amount,
                         "status": "failed",
                         "error": recipient_result.get("message"),
-                        "test_mode": True if not self.is_live_mode else False
+                        "test_mode": False
                     })
-                    logger.error(f"❌ Failed to create eSTech recipient: {recipient_result.get('message')}")
+                    logger.error(f"❌❌❌ Failed to create eSTech recipient: {recipient_result.get('message')}")
             
             # Update payment record
             payment.immediate_transfers_processed = all_successful
@@ -504,7 +463,8 @@ class ImmediateTransferService:
             db.commit()
             
             if all_successful:
-                logger.info(f"✅✅✅ ALL immediate transfers processed for {payment_reference}")
+                logger.info(f"✅✅✅✅✅ ALL IMMEDIATE TRANSFERS PROCESSED SUCCESSFULLY FOR {payment_reference}")
+                logger.info(f"💰💰💰 REAL MONEY TRANSFERS COMPLETED SUCCESSFULLY")
                 return {
                     "status": "success",
                     "message": "All transfers processed successfully",
@@ -514,7 +474,7 @@ class ImmediateTransferService:
                     "is_live_mode": self.is_live_mode
                 }
             else:
-                logger.warning(f"⚠️ Some transfers failed for {payment_reference}")
+                logger.warning(f"⚠️⚠️⚠️ Some transfers failed for {payment_reference}")
                 return {
                     "status": "partial",
                     "message": "Some transfers failed",
@@ -525,7 +485,7 @@ class ImmediateTransferService:
                 }
             
         except Exception as e:
-            logger.error(f"❌❌❌ Error processing immediate splits: {str(e)}", exc_info=True)
+            logger.error(f"❌❌❌❌❌ ERROR PROCESSING IMMEDIATE SPLITS: {str(e)}", exc_info=True)
             
             # Update payment with error
             if payment:
@@ -553,7 +513,7 @@ class ImmediateTransferService:
         db: Session
     ) -> Dict[str, Any]:
         """
-        Retry failed transfers for a payment
+        Retry failed transfers for a payment - PRODUCTION LIVE MODE
         """
         try:
             if not self.enable_transfers:
@@ -574,12 +534,12 @@ class ImmediateTransferService:
                     "message": "No failed transfers found"
                 }
             
-            logger.info(f"🔄 Retrying {len(failed_transfers)} failed transfers for {payment_reference}")
+            logger.info(f"💰💰💰 RETRYING {len(failed_transfers)} failed transfers for {payment_reference}")
             
             retry_results = []
             
             for transfer in failed_transfers:
-                logger.info(f"🔄 Retrying transfer: {transfer.recipient_type} - ₦{transfer.amount:,}")
+                logger.info(f"💰💰 Retrying transfer: {transfer.recipient_type} - ₦{transfer.amount:,}")
                 
                 # Determine recipient type
                 recipient_type = transfer.recipient_type
@@ -605,16 +565,16 @@ class ImmediateTransferService:
                         transfer.last_retry_at = datetime.utcnow()
                         transfer.paystack_transfer_code = transfer_result.get("transfer_code")
                         transfer.paystack_response = transfer_result
-                        transfer.is_test_mode = transfer_result.get("test_mode", False)
+                        transfer.is_test_mode = False
                         
                         retry_results.append({
                             "recipient_type": recipient_type,
                             "amount": transfer.amount,
                             "status": "success",
                             "new_reference": transfer_result.get("transfer_reference"),
-                            "test_mode": transfer_result.get("test_mode", False)
+                            "test_mode": False
                         })
-                        logger.info(f"✅ Retry successful for {recipient_type}")
+                        logger.info(f"✅✅✅ Retry successful for {recipient_type}")
                     else:
                         transfer.retry_count = (transfer.retry_count or 0) + 1
                         transfer.last_retry_at = datetime.utcnow()
@@ -623,9 +583,9 @@ class ImmediateTransferService:
                             "amount": transfer.amount,
                             "status": "failed",
                             "error": transfer_result.get("message"),
-                            "test_mode": transfer_result.get("test_mode", False)
+                            "test_mode": False
                         })
-                        logger.error(f"❌ Retry failed for {recipient_type}: {transfer_result.get('message')}")
+                        logger.error(f"❌❌❌ Retry failed for {recipient_type}: {transfer_result.get('message')}")
                 else:
                     transfer.retry_count = (transfer.retry_count or 0) + 1
                     transfer.last_retry_at = datetime.utcnow()
@@ -634,9 +594,9 @@ class ImmediateTransferService:
                         "amount": transfer.amount,
                         "status": "failed",
                         "error": recipient_result.get("message"),
-                        "test_mode": recipient_result.get("test_mode", False)
+                        "test_mode": False
                     })
-                    logger.error(f"❌ Recipient creation failed for retry: {recipient_result.get('message')}")
+                    logger.error(f"❌❌❌ Recipient creation failed for retry: {recipient_result.get('message')}")
             
             db.commit()
             
@@ -656,7 +616,7 @@ class ImmediateTransferService:
                         "is_live_mode": self.is_live_mode
                     }
                     db.commit()
-                    logger.info(f"✅ All retries successful for {payment_reference}")
+                    logger.info(f"✅✅✅ All retries successful for {payment_reference}")
             
             return {
                 "status": "success",
@@ -667,7 +627,7 @@ class ImmediateTransferService:
             }
             
         except Exception as e:
-            logger.error(f"❌ Error retrying transfers: {str(e)}")
+            logger.error(f"❌❌❌ Error retrying transfers: {str(e)}")
             return {
                 "status": "error",
                 "message": str(e),
@@ -676,18 +636,9 @@ class ImmediateTransferService:
     
     async def check_transfer_balance(self) -> Dict[str, Any]:
         """
-        Check Paystack transfer balance
+        Check Paystack transfer balance - PRODUCTION LIVE MODE
         """
         try:
-            if not self.is_live_mode:
-                return {
-                    "status": "success",
-                    "balance": 1000000.00,
-                    "currency": "NGN",
-                    "test_mode": True,
-                    "message": "TEST MODE - Mock balance"
-                }
-            
             response = httpx.get(
                 f"{self.base_url}/balance",
                 headers=self.headers,
@@ -699,7 +650,7 @@ class ImmediateTransferService:
             
             if data.get("status"):
                 balance = data["data"][0]["balance"] / 100
-                logger.info(f"💰 Paystack transfer balance: ₦{balance:,.2f}")
+                logger.info(f"💰💰💰 Paystack LIVE transfer balance: ₦{balance:,.2f}")
                 return {
                     "status": "success",
                     "balance": balance,
@@ -714,9 +665,9 @@ class ImmediateTransferService:
                 }
                 
         except Exception as e:
-            logger.error(f"❌ Error checking transfer balance: {str(e)}")
+            logger.error(f"❌❌❌ Error checking transfer balance: {str(e)}")
             return {
                 "status": "error",
                 "message": str(e),
-                "test_mode": False if self.is_live_mode else True
+                "test_mode": False
             }

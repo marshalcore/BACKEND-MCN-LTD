@@ -1,4 +1,4 @@
-# app/routes/payment.py - COMPLETE PRODUCTION VERSION WITH LIVE KEYS
+# app/routes/payment.py - PRODUCTION LIVE MODE VERSION
 from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
@@ -24,7 +24,7 @@ router = APIRouter(
     tags=["Payments"]
 )
 
-# Account details for immediate transfers (INTERNAL USE ONLY)
+# Account details for immediate transfers (PRODUCTION LIVE MODE)
 IMMEDIATE_TRANSFER_CONFIG = {
     "director_general": {
         "account_name": settings.DG_ACCOUNT_NAME,
@@ -44,7 +44,7 @@ IMMEDIATE_TRANSFER_CONFIG = {
     }
 }
 
-# Updated payment configurations with immediate transfers
+# Payment configurations for PRODUCTION LIVE MODE
 PAYMENT_CONFIGS = {
     "regular": {
         "user_amount": settings.REGULAR_APPLICATION_FEE,
@@ -128,11 +128,11 @@ async def initiate_payment(
 ):
     """
     Initiate payment with immediate split configuration
-    User pays exact amount, splits happen automatically after payment
+    PRODUCTION LIVE MODE - Real money transactions only
     """
     try:
         # Log payment initiation attempt
-        logger.info(f"🔵 Payment initiation request: {payment_data.email} - {payment_data.payment_type}")
+        logger.info(f"💰💰💰 PAYMENT INITIATION REQUEST: {payment_data.email} - {payment_data.payment_type}")
         
         # Convert enum values to strings if needed
         payment_type_str = payment_data.payment_type
@@ -176,7 +176,7 @@ async def initiate_payment(
         
         # Allow payment even if user doesn't exist
         if not user:
-            logger.info(f"Payment initiated for new user: {payment_data.email} ({user_type_str})")
+            logger.info(f"💰 Payment initiated for new user: {payment_data.email} ({user_type_str})")
         
         # Check for existing successful payment
         existing_payment = db.query(Payment).filter(
@@ -192,7 +192,8 @@ async def initiate_payment(
                 "message": "Payment already completed",
                 "payment_reference": existing_payment.payment_reference,
                 "amount": config["user_amount"],
-                "user_message": "Payment already completed"
+                "user_message": "Payment already completed",
+                "environment": "PRODUCTION LIVE"
             }
         
         # Check for pending payment
@@ -220,7 +221,8 @@ async def initiate_payment(
                     "message": "Payment already completed",
                     "payment_reference": pending_payment.payment_reference,
                     "amount": config["user_amount"],
-                    "user_message": "Payment already completed"
+                    "user_message": "Payment already completed",
+                    "environment": "PRODUCTION LIVE"
                 }
             else:
                 # Return existing pending payment
@@ -230,7 +232,8 @@ async def initiate_payment(
                     "payment_reference": pending_payment.payment_reference,
                     "authorization_url": pending_payment.authorization_url,
                     "amount": config["user_amount"],
-                    "user_message": "Continue with existing payment"
+                    "user_message": "Continue with existing payment",
+                    "environment": "PRODUCTION LIVE"
                 }
         
         # Generate new payment reference
@@ -252,15 +255,15 @@ async def initiate_payment(
                 "phone": ""
             }
         
-        # Add environment info
-        is_live_mode = not settings.PAYSTACK_TEST_MODE
+        # PRODUCTION LIVE MODE - Always live
+        is_live_mode = True
         
         payment_metadata = {
             "user_info": user_info,
             "user_type": user_type_str,
             "email": payment_data.email.lower(),
             "payment_type": payment_type_str,
-            "environment": "LIVE" if is_live_mode else "TEST",
+            "environment": "PRODUCTION LIVE",
             
             "split_config": {
                 "user_paid": config["user_amount"],
@@ -288,7 +291,8 @@ async def initiate_payment(
             
             "category": config["category"],
             "payment_date": datetime.now().isoformat(),
-            "is_live_mode": is_live_mode
+            "is_live_mode": is_live_mode,
+            "system_mode": "PRODUCTION LIVE"
         }
         
         payment_service = PaymentService()
@@ -308,13 +312,13 @@ async def initiate_payment(
                 estech_system_share=0,
                 marshal_net_amount=0,
                 immediate_transfers_processed=True,
-                is_test_payment=not is_live_mode,
+                is_test_payment=False,  # Always false in production
                 paid_at=datetime.utcnow()
             )
             db.add(payment)
             db.commit()
             
-            logger.info(f"✅ Free registration completed: {payment_data.email}")
+            logger.info(f"✅✅✅ FREE REGISTRATION COMPLETED: {payment_data.email}")
             
             return {
                 "status": "success",
@@ -322,15 +326,14 @@ async def initiate_payment(
                 "payment_reference": payment_ref,
                 "amount": 0,
                 "user_message": config["user_message"],
-                "environment": "LIVE" if is_live_mode else "TEST"
+                "environment": "PRODUCTION LIVE"
             }
         else:
-            # Use the provided callback URL
+            # PRODUCTION callback URL
             callback_url = "https://marshalcoreofnigeria.ng/apply.html?payment_success=true"
-            logger.info(f"Using callback URL: {callback_url}")
+            logger.info(f"💰 PRODUCTION CALLBACK URL: {callback_url}")
             
-            logger.info(f"Initializing {'LIVE' if is_live_mode else 'TEST'} payment for {payment_data.email}")
-            logger.info(f"Callback URL: {callback_url}")
+            logger.info(f"💰💰💰 INITIATING PRODUCTION LIVE PAYMENT: {payment_data.email} - ₦{config['user_amount']:,}")
             
             payment_response = payment_service.initiate_payment(
                 email=payment_data.email,
@@ -342,10 +345,10 @@ async def initiate_payment(
             
             if payment_response.get("status") != "success" or not payment_response.get("authorization_url"):
                 error_msg = payment_response.get("message", "Payment initialization failed")
-                logger.error(f"Payment initialization error: {error_msg}")
+                logger.error(f"❌❌❌ PRODUCTION PAYMENT INITIALIZATION ERROR: {error_msg}")
                 raise HTTPException(
                     status_code=500,
-                    detail=error_msg
+                    detail=f"Failed to initialize payment: {error_msg}"
                 )
             
             payment = Payment(
@@ -365,13 +368,13 @@ async def initiate_payment(
                 marshal_net_amount=config["marshal_core"]["estimated_net"],
                 
                 immediate_transfers_processed=False,
-                is_test_payment=not is_live_mode,
+                is_test_payment=False,  # Always false in production
                 transfer_metadata=None
             )
             db.add(payment)
             db.commit()
             
-            logger.info(f"✅ Payment initialized: {payment_ref} for {payment_data.email}")
+            logger.info(f"✅✅✅ PRODUCTION PAYMENT INITIALIZED: {payment_ref} for {payment_data.email}")
             
             return {
                 "status": "success",
@@ -382,14 +385,14 @@ async def initiate_payment(
                 "amount_display": f"₦{config['user_amount']:,}",
                 "user_message": config["user_message"],
                 "payment_type": payment_type_str,
-                "environment": "LIVE" if is_live_mode else "TEST",
+                "environment": "PRODUCTION LIVE",
                 "immediate_transfers_enabled": config.get("immediate_transfers", False) and settings.ENABLE_IMMEDIATE_TRANSFERS
             }
             
     except HTTPException as he:
         raise he
     except Exception as e:
-        logger.error(f"❌ Error initiating payment: {str(e)}", exc_info=True)
+        logger.error(f"❌❌❌ ERROR INITIATING PRODUCTION PAYMENT: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"Failed to initiate payment: {str(e)}"
@@ -403,6 +406,7 @@ async def verify_payment(
 ):
     """
     Verify payment and trigger immediate transfers
+    PRODUCTION LIVE MODE - Real money verification
     """
     try:
         from app.services.immediate_transfer import ImmediateTransferService
@@ -423,17 +427,17 @@ async def verify_payment(
         
         # Check if already verified
         if payment.status == "success":
-            logger.info(f"Payment {reference} already verified")
+            logger.info(f"💰 Payment {reference} already verified")
             return {
                 "status": "success",
                 "message": "Payment already verified",
                 "payment_reference": reference,
                 "amount": f"₦{payment.amount:,}",
-                "environment": "LIVE" if not payment.is_test_payment else "TEST"
+                "environment": "PRODUCTION LIVE"
             }
         
-        # Verify payment with Paystack
-        logger.info(f"Verifying payment: {reference}")
+        # Verify payment with Paystack PRODUCTION
+        logger.info(f"💰💰💰 VERIFYING PRODUCTION PAYMENT: {reference}")
         verification = payment_service.verify_payment(reference)
         
         if verification.get("status") == "success":
@@ -445,8 +449,8 @@ async def verify_payment(
             db.commit()
             db.refresh(payment)
             
-            logger.info(f"✅ Payment verified successfully: {reference}")
-            logger.info(f"Payment mode: {'LIVE' if not payment.is_test_payment else 'TEST'}")
+            logger.info(f"✅✅✅ PRODUCTION PAYMENT VERIFIED SUCCESSFULLY: {reference}")
+            logger.info(f"💰💰💰 AMOUNT: ₦{payment.amount:,} - MODE: PRODUCTION LIVE")
             
             # Update user status based on user_type
             if payment.user_type == "pre_applicant":
@@ -463,9 +467,9 @@ async def verify_payment(
                     try:
                         # Promote to applicant
                         await promote_to_applicant(payment.user_email, db)
-                        logger.info(f"✅ Successfully promoted pre-applicant: {payment.user_email}")
+                        logger.info(f"✅✅✅ SUCCESSFULLY PROMOTED PRE-APPLICANT: {payment.user_email}")
                     except Exception as e:
-                        logger.error(f"⚠️ Error promoting pre-applicant (non-critical): {e}")
+                        logger.error(f"❌ ERROR PROMOTING PRE-APPLICANT: {e}")
                         # Store error in payment metadata
                         payment_metadata = payment.payment_metadata or {}
                         payment_metadata["promotion_error"] = str(e)
@@ -484,7 +488,7 @@ async def verify_payment(
                     applicant.amount_paid = payment.amount
                     applicant.paid_at = datetime.utcnow()
                     db.commit()
-                    logger.info(f"✅ Applicant payment marked as paid: {payment.user_email}")
+                    logger.info(f"✅✅✅ APPLICANT PAYMENT MARKED AS PAID: {payment.user_email}")
             
             # Process immediate transfers if enabled and amount > 0
             if payment.amount > 0 and settings.ENABLE_IMMEDIATE_TRANSFERS:
@@ -492,19 +496,19 @@ async def verify_payment(
                     config = PAYMENT_CONFIGS.get(payment.payment_type, {})
                     
                     if config.get("immediate_transfers", False):
-                        logger.info(f"Queuing immediate transfers for {reference}")
+                        logger.info(f"💰💰💰 QUEUING IMMEDIATE TRANSFERS FOR: {reference}")
                         background_tasks.add_task(
                             transfer_service.process_immediate_splits,
                             payment_reference=reference,
                             payment_amount=payment.amount,
                             db=db
                         )
-                        logger.info(f"✅ Immediate transfers queued for {reference}")
+                        logger.info(f"✅✅✅ IMMEDIATE TRANSFERS QUEUED FOR: {reference}")
                 except Exception as transfer_error:
-                    logger.error(f"❌ Failed to queue immediate transfers: {str(transfer_error)}")
+                    logger.error(f"❌❌❌ FAILED TO QUEUE IMMEDIATE TRANSFERS: {str(transfer_error)}")
             
             # Process post-payment tasks
-            logger.info(f"Queuing post-payment tasks for {payment.user_email}")
+            logger.info(f"💰 QUEUING POST-PAYMENT TASKS FOR: {payment.user_email}")
             background_tasks.add_task(
                 process_post_payment,
                 user_email=payment.user_email,
@@ -519,7 +523,7 @@ async def verify_payment(
                 "payment_reference": reference,
                 "amount": f"₦{payment.amount:,}",
                 "payment_date": payment.paid_at.isoformat() if payment.paid_at else None,
-                "environment": "LIVE" if not payment.is_test_payment else "TEST",
+                "environment": "PRODUCTION LIVE",
                 "immediate_transfers_queued": settings.ENABLE_IMMEDIATE_TRANSFERS
             }
         else:
@@ -529,7 +533,7 @@ async def verify_payment(
             db.commit()
             
             error_msg = verification.get("message", "Payment verification failed")
-            logger.error(f"❌ Payment verification failed: {error_msg}")
+            logger.error(f"❌❌❌ PRODUCTION PAYMENT VERIFICATION FAILED: {error_msg}")
             
             raise HTTPException(
                 status_code=400,
@@ -539,7 +543,7 @@ async def verify_payment(
     except HTTPException as he:
         raise he
     except Exception as e:
-        logger.error(f"❌ Error verifying payment: {str(e)}", exc_info=True)
+        logger.error(f"❌❌❌ ERROR VERIFYING PRODUCTION PAYMENT: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"Payment verification failed: {str(e)}"
@@ -553,7 +557,7 @@ async def paystack_callback(
 ):
     """
     Paystack webhook callback - triggers immediate transfers
-    IMPORTANT: This is called by Paystack, not the frontend
+    PRODUCTION LIVE MODE - Called by Paystack
     """
     try:
         from app.services.immediate_transfer import ImmediateTransferService
@@ -563,8 +567,8 @@ async def paystack_callback(
         event = payload.get("event")
         data = payload.get("data", {})
         
-        logger.info(f"🔵 Paystack webhook received: {event}")
-        logger.info(f"Webhook data: {data.get('reference')}")
+        logger.info(f"💰💰💰 PAYSTACK PRODUCTION WEBHOOK RECEIVED: {event}")
+        logger.info(f"💰💰💰 WEBHOOK DATA REFERENCE: {data.get('reference')}")
         
         # Verify webhook signature (recommended for production)
         # signature = request.headers.get('x-paystack-signature')
@@ -590,7 +594,7 @@ async def paystack_callback(
                         payment.verification_data = verification
                         db.commit()
                         
-                        logger.info(f"✅ Payment processed via webhook: {reference}")
+                        logger.info(f"✅✅✅ PAYMENT PROCESSED VIA PRODUCTION WEBHOOK: {reference}")
                         
                         # Process immediate transfers
                         if payment.amount > 0 and settings.ENABLE_IMMEDIATE_TRANSFERS:
@@ -599,7 +603,7 @@ async def paystack_callback(
                                 config = PAYMENT_CONFIGS.get(payment.payment_type, {})
                                 
                                 if config.get("immediate_transfers", False):
-                                    logger.info(f"Processing immediate transfers via webhook: {reference}")
+                                    logger.info(f"💰💰💰 PROCESSING IMMEDIATE TRANSFERS VIA WEBHOOK: {reference}")
                                     background_tasks.add_task(
                                         transfer_service.process_immediate_splits,
                                         payment_reference=reference,
@@ -607,7 +611,7 @@ async def paystack_callback(
                                         db=db
                                     )
                             except Exception as transfer_error:
-                                logger.error(f"❌ Webhook transfer error: {str(transfer_error)}")
+                                logger.error(f"❌❌❌ WEBHOOK TRANSFER ERROR: {str(transfer_error)}")
                         
                         # Process post-payment
                         background_tasks.add_task(
@@ -618,20 +622,20 @@ async def paystack_callback(
                             db=db
                         )
                         
-                        logger.info(f"✅ Webhook processing complete for {reference}")
+                        logger.info(f"✅✅✅ PRODUCTION WEBHOOK PROCESSING COMPLETE FOR {reference}")
         
         elif event == "transfer.success":
-            logger.info(f"Transfer successful: {data.get('reference')}")
+            logger.info(f"✅✅✅ PRODUCTION TRANSFER SUCCESSFUL: {data.get('reference')}")
             # You can update transfer status here if needed
         
         elif event == "transfer.failed":
-            logger.error(f"Transfer failed: {data.get('reference')}")
+            logger.error(f"❌❌❌ PRODUCTION TRANSFER FAILED: {data.get('reference')}")
             # Handle failed transfers
         
-        return {"status": "success", "message": "Webhook processed"}
+        return {"status": "success", "message": "PRODUCTION webhook processed"}
         
     except Exception as e:
-        logger.error(f"❌ Error processing webhook: {str(e)}")
+        logger.error(f"❌❌❌ ERROR PROCESSING PRODUCTION WEBHOOK: {str(e)}")
         return {"status": "error", "message": str(e)}
 
 @router.get("/admin/transfers")
@@ -643,6 +647,7 @@ async def get_transfer_history(
 ):
     """
     ADMIN ONLY: View all immediate transfers
+    PRODUCTION LIVE MODE
     """
     try:
         from app.models.immediate_transfer import ImmediateTransfer
@@ -662,12 +667,9 @@ async def get_transfer_history(
         total_dg = sum(t.amount for t in transfers if t.recipient_type == "director_general")
         total_estech = sum(t.amount for t in transfers if t.recipient_type == "estech_system")
         
-        # Count live vs test transfers
-        live_transfers = [t for t in transfers if not getattr(t, 'is_test_mode', True)]
-        test_transfers = [t for t in transfers if getattr(t, 'is_test_mode', False)]
-        
         return {
             "status": "success",
+            "environment": "PRODUCTION LIVE",
             "transfers": [
                 {
                     "id": t.id,
@@ -679,14 +681,12 @@ async def get_transfer_history(
                     "transfer_reference": t.transfer_reference,
                     "transferred_at": t.transferred_at.isoformat() if t.transferred_at else None,
                     "bank": t.recipient_bank,
-                    "is_test_mode": getattr(t, 'is_test_mode', False)
+                    "is_test_mode": False  # Always false in production
                 }
                 for t in transfers
             ],
             "summary": {
                 "total_transfers": len(transfers),
-                "live_transfers": len(live_transfers),
-                "test_transfers": len(test_transfers),
                 "total_amount": f"₦{total_amount:,}",
                 "director_general_total": f"₦{total_dg:,}",
                 "estech_system_total": f"₦{total_estech:,}",
@@ -695,7 +695,7 @@ async def get_transfer_history(
         }
         
     except Exception as e:
-        logger.error(f"Error getting transfer history: {str(e)}")
+        logger.error(f"❌❌❌ ERROR GETTING TRANSFER HISTORY: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail="Failed to get transfer history"
@@ -708,6 +708,7 @@ async def get_transfer_status(
 ):
     """
     ADMIN ONLY: Check transfer status for a specific payment
+    PRODUCTION LIVE MODE
     """
     try:
         from app.models.immediate_transfer import ImmediateTransfer
@@ -745,12 +746,13 @@ async def get_transfer_status(
         
         return {
             "status": "success",
+            "environment": "PRODUCTION LIVE",
             "payment": {
                 "reference": payment.payment_reference,
                 "amount": f"₦{payment.amount:,}",
                 "type": payment.payment_type,
                 "status": payment.status,
-                "is_test_payment": payment.is_test_payment,
+                "is_test_payment": False,  # Always false in production
                 "immediate_transfers_processed": payment.immediate_transfers_processed,
                 "paid_at": payment.paid_at.isoformat() if payment.paid_at else None
             },
@@ -762,7 +764,7 @@ async def get_transfer_status(
                     "status": t.status,
                     "transfer_reference": t.transfer_reference,
                     "transferred_at": t.transferred_at.isoformat() if t.transferred_at else None,
-                    "is_test_mode": getattr(t, 'is_test_mode', False)
+                    "is_test_mode": False  # Always false in production
                 }
                 for t in transfers
             ],
@@ -772,7 +774,7 @@ async def get_transfer_status(
     except HTTPException as he:
         raise he
     except Exception as e:
-        logger.error(f"Error getting transfer status: {str(e)}")
+        logger.error(f"❌❌❌ ERROR GETTING TRANSFER STATUS: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail="Failed to get transfer status"
@@ -785,6 +787,7 @@ async def get_user_payments(
 ):
     """
     Get payment history for a user
+    PRODUCTION LIVE MODE
     """
     try:
         payments = db.query(Payment).filter(
@@ -800,18 +803,20 @@ async def get_user_payments(
                 "payment_type": payment.payment_type,
                 "date": payment.paid_at.isoformat() if payment.paid_at else payment.created_at.isoformat(),
                 "description": "Application Fee" if payment.payment_type in ["regular", "vip"] else "Registration",
-                "is_test_payment": payment.is_test_payment
+                "is_test_payment": False,  # Always false in production
+                "environment": "PRODUCTION LIVE"
             })
         
         return {
             "status": "success",
+            "environment": "PRODUCTION LIVE",
             "email": email,
             "payments": user_payments,
             "total_count": len(user_payments)
         }
         
     except Exception as e:
-        logger.error(f"Error getting user payments: {str(e)}")
+        logger.error(f"❌❌❌ ERROR GETTING USER PAYMENTS: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail="Failed to get payment history"
@@ -826,6 +831,7 @@ async def get_payment_stats(
 ):
     """
     ADMIN ONLY: Comprehensive payment statistics
+    PRODUCTION LIVE MODE
     """
     try:
         query = db.query(Payment).filter(Payment.status == "success")
@@ -837,18 +843,17 @@ async def get_payment_stats(
         
         all_payments = query.all()
         
-        # Separate live and test payments
-        live_payments = [p for p in all_payments if not p.is_test_payment]
-        test_payments = [p for p in all_payments if p.is_test_payment]
+        # PRODUCTION LIVE MODE - No test payments
+        live_payments = all_payments
         
         stats = {
             "overall": {
                 "total_payments": len(all_payments),
                 "live_payments": len(live_payments),
-                "test_payments": len(test_payments),
+                "test_payments": 0,  # Always 0 in production
                 "total_amount": sum(p.amount for p in all_payments),
                 "live_amount": sum(p.amount for p in live_payments),
-                "test_amount": sum(p.amount for p in test_payments),
+                "test_amount": 0,  # Always 0 in production
                 "total_director_general": sum(p.director_general_share for p in all_payments),
                 "total_estech_system": sum(p.estech_system_share for p in all_payments),
                 "total_marshal_net": sum(p.marshal_net_amount or 0 for p in all_payments),
@@ -859,7 +864,7 @@ async def get_payment_stats(
                 "regular": {
                     "count": len([p for p in all_payments if p.payment_type == "regular"]),
                     "live_count": len([p for p in live_payments if p.payment_type == "regular"]),
-                    "test_count": len([p for p in test_payments if p.payment_type == "regular"]),
+                    "test_count": 0,
                     "total": sum(p.amount for p in all_payments if p.payment_type == "regular"),
                     "director_general": sum(p.director_general_share for p in all_payments if p.payment_type == "regular"),
                     "estech_system": sum(p.estech_system_share for p in all_payments if p.payment_type == "regular"),
@@ -868,7 +873,7 @@ async def get_payment_stats(
                 "vip": {
                     "count": len([p for p in all_payments if p.payment_type == "vip"]),
                     "live_count": len([p for p in live_payments if p.payment_type == "vip"]),
-                    "test_count": len([p for p in test_payments if p.payment_type == "vip"]),
+                    "test_count": 0,
                     "total": sum(p.amount for p in all_payments if p.payment_type == "vip"),
                     "director_general": sum(p.director_general_share for p in all_payments if p.payment_type == "vip"),
                     "estech_system": sum(p.estech_system_share for p in all_payments if p.payment_type == "vip"),
@@ -895,16 +900,15 @@ async def get_payment_stats(
             day_key = day.strftime("%Y-%m-%d")
             
             day_payments = [p for p in daily_payments if p.paid_at and p.paid_at.date() == day.date()]
-            live_day_payments = [p for p in day_payments if not p.is_test_payment]
-            test_day_payments = [p for p in day_payments if p.is_test_payment]
+            live_day_payments = day_payments
             
             stats["daily_trend"][day_key] = {
                 "count": len(day_payments),
                 "live_count": len(live_day_payments),
-                "test_count": len(test_day_payments),
+                "test_count": 0,
                 "total": sum(p.amount for p in day_payments),
                 "live_total": sum(p.amount for p in live_day_payments),
-                "test_total": sum(p.amount for p in test_day_payments),
+                "test_total": 0,
                 "director_general": sum(p.director_general_share for p in day_payments),
                 "estech_system": sum(p.estech_system_share for p in day_payments),
                 "marshal_net": sum(p.marshal_net_amount or 0 for p in day_payments)
@@ -933,12 +937,9 @@ async def get_payment_stats(
                 stats["monthly_summary"][month_key]["estech_system"] += payment.estech_system_share
                 stats["monthly_summary"][month_key]["marshal_net"] += (payment.marshal_net_amount or 0)
                 
-                if payment.is_test_payment:
-                    stats["monthly_summary"][month_key]["test_count"] += 1
-                    stats["monthly_summary"][month_key]["test_total"] += payment.amount
-                else:
-                    stats["monthly_summary"][month_key]["live_count"] += 1
-                    stats["monthly_summary"][month_key]["live_total"] += payment.amount
+                # PRODUCTION - Always live
+                stats["monthly_summary"][month_key]["live_count"] += 1
+                stats["monthly_summary"][month_key]["live_total"] += payment.amount
         
         # Format currency
         def format_currency(amount):
@@ -949,22 +950,23 @@ async def get_payment_stats(
             "period": period,
             "start_date": start_date,
             "end_date": end_date,
-            "environment": settings.ENVIRONMENT,
-            "paystack_mode": "LIVE" if not settings.PAYSTACK_TEST_MODE else "TEST",
+            "environment": "PRODUCTION LIVE",
+            "paystack_mode": "LIVE",
             "immediate_transfers_enabled": settings.ENABLE_IMMEDIATE_TRANSFERS,
             "stats": stats,
             "notes": [
-                f"Environment: {settings.ENVIRONMENT}",
-                f"Paystack Mode: {'LIVE' if not settings.PAYSTACK_TEST_MODE else 'TEST'}",
-                f"Immediate Transfers: {'Enabled' if settings.ENABLE_IMMEDIATE_TRANSFERS else 'Disabled'}",
-                f"DG Share: {settings.DG_SHARE_PERCENTAGE}%",
-                f"eSTech Share: {settings.ESTECH_COMMISSION_PERCENTAGE}%",
-                f"Marshal Core Share: {settings.MARSHAL_SHARE_PERCENTAGE}%"
+                "🚀 PRODUCTION LIVE MODE - REAL MONEY ONLY",
+                f"💰 Regular Application Fee: ₦{settings.REGULAR_APPLICATION_FEE:,}",
+                f"💰 VIP Application Fee: ₦{settings.VIP_APPLICATION_FEE:,}",
+                f"🎯 DG Share: {settings.DG_SHARE_PERCENTAGE}%",
+                f"🎯 eSTech Share: {settings.ESTECH_COMMISSION_PERCENTAGE}%",
+                f"🎯 Marshal Core Share: {settings.MARSHAL_SHARE_PERCENTAGE}%",
+                f"⚡ Immediate Transfers: {'ENABLED' if settings.ENABLE_IMMEDIATE_TRANSFERS else 'DISABLED'}"
             ]
         }
         
     except Exception as e:
-        logger.error(f"Error getting payment stats: {str(e)}", exc_info=True)
+        logger.error(f"❌❌❌ ERROR GETTING PAYMENT STATS: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail="Failed to get payment statistics"
@@ -978,6 +980,7 @@ async def retry_transfer(
 ):
     """
     ADMIN ONLY: Retry failed transfers for a payment
+    PRODUCTION LIVE MODE
     """
     try:
         from app.services.immediate_transfer import ImmediateTransferService
@@ -1009,13 +1012,14 @@ async def retry_transfer(
         return {
             "status": "success",
             "message": "Transfer retry queued",
-            "payment_reference": payment_reference
+            "payment_reference": payment_reference,
+            "environment": "PRODUCTION LIVE"
         }
         
     except HTTPException as he:
         raise he
     except Exception as e:
-        logger.error(f"Error queuing transfer retry: {str(e)}")
+        logger.error(f"❌❌❌ ERROR QUEUING TRANSFER RETRY: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail="Failed to queue transfer retry"
@@ -1025,8 +1029,11 @@ async def retry_transfer(
 async def get_payment_types():
     """
     Get available payment types
+    PRODUCTION LIVE MODE
     """
     return {
+        "environment": "PRODUCTION LIVE",
+        "paystack_mode": "LIVE",
         "payment_types": {
             "regular": {
                 "amount": settings.REGULAR_APPLICATION_FEE,
@@ -1037,7 +1044,12 @@ async def get_payment_types():
                     "Standard application processing",
                     "Normal processing timeline",
                     "Basic support"
-                ]
+                ],
+                "split_config": {
+                    "dg_share": f"{settings.DG_SHARE_PERCENTAGE}%",
+                    "estech_share": f"{settings.ESTECH_COMMISSION_PERCENTAGE}%",
+                    "marshal_share": f"{settings.MARSHAL_SHARE_PERCENTAGE}%"
+                }
             },
             "vip": {
                 "amount": settings.VIP_APPLICATION_FEE,
@@ -1049,12 +1061,15 @@ async def get_payment_types():
                     "Dedicated support",
                     "Expedited timeline",
                     "Additional benefits"
-                ]
+                ],
+                "split_config": {
+                    "dg_share": f"{settings.DG_SHARE_PERCENTAGE}%",
+                    "estech_share": f"{settings.ESTECH_COMMISSION_PERCENTAGE}%",
+                    "marshal_share": f"{settings.MARSHAL_SHARE_PERCENTAGE}%"
+                }
             }
         },
-        "environment": settings.ENVIRONMENT,
-        "paystack_mode": "LIVE" if not settings.PAYSTACK_TEST_MODE else "TEST",
-        "notes": f"All payments are processed securely via Paystack {'LIVE' if not settings.PAYSTACK_TEST_MODE else 'TEST'} with immediate fund distribution"
+        "notes": "🚀 PRODUCTION LIVE MODE - All payments are processed securely via Paystack LIVE with immediate fund distribution"
     }
 
 @router.get("/check/{email}")
@@ -1065,6 +1080,7 @@ async def check_payment_status(
 ):
     """
     Check payment status for a user
+    PRODUCTION LIVE MODE
     """
     try:
         query = db.query(Payment).filter(
@@ -1080,7 +1096,8 @@ async def check_payment_status(
         if not payment:
             return {
                 "status": "no_payment",
-                "message": "No payment found for this user"
+                "message": "No payment found for this user",
+                "environment": "PRODUCTION LIVE"
             }
         
         response = {
@@ -1089,8 +1106,8 @@ async def check_payment_status(
             "amount": f"₦{payment.amount:,}",
             "payment_type": payment.payment_type,
             "created_at": payment.created_at.isoformat() if payment.created_at else None,
-            "is_test_payment": payment.is_test_payment,
-            "environment": "LIVE" if not payment.is_test_payment else "TEST"
+            "is_test_payment": False,  # Always false in production
+            "environment": "PRODUCTION LIVE"
         }
         
         if payment.status == "pending" and payment.authorization_url:
@@ -1104,7 +1121,7 @@ async def check_payment_status(
         return response
         
     except Exception as e:
-        logger.error(f"Error checking payment status: {str(e)}")
+        logger.error(f"❌❌❌ ERROR CHECKING PAYMENT STATUS: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail="Failed to check payment status"
@@ -1114,6 +1131,7 @@ async def check_payment_status(
 async def get_payment_system_status():
     """
     Get payment system status and configuration
+    PRODUCTION LIVE MODE
     """
     try:
         payment_service = PaymentService()
@@ -1126,10 +1144,10 @@ async def get_payment_system_status():
         return {
             "status": "success",
             "system": {
-                "environment": settings.ENVIRONMENT,
-                "paystack_mode": "LIVE" if not settings.PAYSTACK_TEST_MODE else "TEST",
-                "paystack_public_key": f"{settings.PAYSTACK_PUBLIC_KEY[:10]}...",
-                "paystack_secret_key": f"{settings.PAYSTACK_SECRET_KEY[:10]}...",
+                "environment": "PRODUCTION LIVE",
+                "paystack_mode": "LIVE",
+                "paystack_public_key": f"{settings.PAYSTACK_PUBLIC_KEY[:15]}...",
+                "paystack_secret_key": f"{settings.PAYSTACK_SECRET_KEY[:15]}...",
                 "frontend_url": settings.FRONTEND_URL,
                 "immediate_transfers_enabled": settings.ENABLE_IMMEDIATE_TRANSFERS,
                 "transfer_retry_attempts": settings.TRANSFER_RETRY_ATTEMPTS,
@@ -1146,12 +1164,19 @@ async def get_payment_system_status():
                 "paystack": balance_check,
                 "transfer_balance": transfer_balance
             },
-            "status_message": "Payment system is operational" if not settings.PAYSTACK_TEST_MODE else "Payment system is in TEST mode"
+            "status_message": "✅✅✅ PAYMENT SYSTEM IS OPERATIONAL - PRODUCTION LIVE MODE",
+            "notes": [
+                "🚀 REAL MONEY TRANSACTIONS ONLY",
+                "💰 Immediate transfers active",
+                "🔒 Secured with Paystack LIVE API",
+                "⚡ Ready for production traffic"
+            ]
         }
         
     except Exception as e:
-        logger.error(f"Error getting system status: {str(e)}")
+        logger.error(f"❌❌❌ ERROR GETTING SYSTEM STATUS: {str(e)}")
         return {
             "status": "error",
-            "message": str(e)
+            "message": str(e),
+            "environment": "PRODUCTION LIVE"
         }

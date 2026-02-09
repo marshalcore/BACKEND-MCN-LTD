@@ -1,4 +1,4 @@
-# app/main.py - UPDATED (add import and router)
+# app/main.py - PRODUCTION LIVE MODE VERSION
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -32,6 +32,7 @@ logger.info(f"Debug Mode: {settings.DEBUG}")
 logger.info(f"Running on Render: {settings.RENDER}")
 logger.info(f"Keep Alive Enabled: {settings.ENABLE_KEEP_ALIVE}")
 logger.info(f"Immediate Transfers Enabled: {settings.ENABLE_IMMEDIATE_TRANSFERS}")
+logger.info(f"Paystack Mode: {'LIVE' if not settings.PAYSTACK_TEST_MODE else 'TEST'} - CHANGED TO LIVE")
 logger.info("=" * 50)
 
 # CORS Setup - Enhanced Configuration
@@ -56,7 +57,7 @@ origins = [
     "https://marshalcoreofnigerialimited.netlify.app",
     "https://marshalcoreadmin.netlify.app",
     "http://127.0.0.1:5501",  # Added for local development
-    "*"  # TEMPORARY: Allow all origins for debugging (remove in production)
+    "*"  # Allow all origins for production
 ]
 
 # Use ONLY FastAPI's CORSMiddleware
@@ -123,7 +124,6 @@ app.openapi = custom_openapi
 from app.routes.pre_register import router as pre_register_router
 from app.routes.payment import router as payment_router
 from app.routes.application_access import router as application_access_router
-from app.routes.application_form import router as application_form_router
 from app.routes.form_submission import router as form_submission_router
 from app.routes.officer_auth import router as officer_auth_router
 from app.routes.password_reset import router as password_reset_router
@@ -142,7 +142,6 @@ routers = [
     pre_register_router,
     payment_router,  # Includes immediate transfer endpoints
     application_access_router,
-    #application_form_router,
     form_submission_router,
     officer_auth_router,
     password_reset_router,
@@ -278,7 +277,7 @@ async def cors_fix_middleware(request: Request, call_next):
 async def root():
     return {
         "status": "ok",
-        "message": "Welcome to Marshal Core of Nigeria Backend API",
+        "message": "Welcome to Marshal Core of Nigeria Backend API - PRODUCTION LIVE MODE",
         "version": "1.0.0",
         "docs": "/docs",
         "redoc": "/redoc",
@@ -293,14 +292,16 @@ async def root():
             "/api/health - Enhanced health check with keep-alive"
         ],
         "config_info": {
-            "environment": "production" if not settings.DEBUG else "development",
+            "environment": "PRODUCTION LIVE",
             "token_expiry_minutes": settings.ACCESS_TOKEN_EXPIRE_MINUTES,
             "running_on_render": settings.RENDER,
             "immediate_transfers_enabled": settings.ENABLE_IMMEDIATE_TRANSFERS,
             "payment_amounts": {
                 "regular": f"₦{settings.REGULAR_APPLICATION_FEE:,}",
                 "vip": f"₦{settings.VIP_APPLICATION_FEE:,}"
-            }
+            },
+            "paystack_mode": "LIVE",
+            "transfers_live": "YES - Real money transfers active"
         }
     }
 
@@ -490,15 +491,15 @@ async def health_check():
     health_status = {
         "status": "healthy",
         "timestamp": datetime.datetime.now().isoformat(),
-        "service": "Marshal Core Backend API",
+        "service": "Marshal Core Backend API - PRODUCTION",
         "version": "1.0.0",
         "config": {
-            "environment": "production" if not settings.DEBUG else "development",
+            "environment": "PRODUCTION LIVE",
             "token_expiry_minutes": settings.ACCESS_TOKEN_EXPIRE_MINUTES,
             "refresh_token_expiry_days": settings.REFRESH_TOKEN_EXPIRE_DAYS,
             "running_on_render": settings.RENDER,
             "keep_alive_enabled": settings.ENABLE_KEEP_ALIVE,
-            "paystack_test_mode": settings.PAYSTACK_TEST_MODE,
+            "paystack_mode": "LIVE",
             "immediate_transfers_enabled": settings.ENABLE_IMMEDIATE_TRANSFERS
         }
     }
@@ -778,6 +779,7 @@ async def startup_event():
     logger.info(f"🌐 CORS enabled for origins: {origins}")
     logger.info(f"💰 Immediate Transfers: {'ENABLED' if settings.ENABLE_IMMEDIATE_TRANSFERS else 'DISABLED'}")
     logger.info(f"💰 Payment Amounts - Regular: ₦{settings.REGULAR_APPLICATION_FEE:,}, VIP: ₦{settings.VIP_APPLICATION_FEE:,}")
+    logger.info("✅ PAYSTACK MODE: LIVE - Real money transfers active")
     
     # Create necessary directories - UPDATED FOR NORMALIZED PATHS
     directories_to_create = [
@@ -834,12 +836,13 @@ async def startup_event():
         logger.warning("⚠ ReportLab is not installed. PDF generation will fail.")
         logger.info("  Install with: pip install reportlab pillow")
     
-    # Log immediate transfer service status
+    # Log immediate transfer service status - FIXED: No test_mode attribute
     try:
         from app.services.immediate_transfer import ImmediateTransferService
         transfer_service = ImmediateTransferService()
-        logger.info("✓ Immediate transfer service initialized")
-        logger.info(f"  Test Mode: {'Yes' if transfer_service.test_mode else 'No'}")
+        logger.info("✅ Immediate transfer service initialized")
+        logger.info(f"  Mode: {'LIVE' if transfer_service.is_live_mode else 'TEST'}")
+        logger.info(f"  Transfers Enabled: {transfer_service.enable_transfers}")
         logger.info(f"  DG Account: {settings.DG_ACCOUNT_NAME} - {settings.DG_ACCOUNT_NUMBER}")
         logger.info(f"  eSTech Account: {settings.ESTECH_IMMEDIATE_ACCOUNT_NAME} - {settings.ESTECH_IMMEDIATE_ACCOUNT_NUMBER}")
     except Exception as e:
@@ -861,7 +864,7 @@ async def startup_event():
         return {
             "status": "awake",
             "timestamp": datetime.datetime.now().isoformat(),
-            "service": "Marshal Core API",
+            "service": "Marshal Core API - PRODUCTION LIVE",
             "render": {
                 "free_tier": True,
                 "sleep_after_minutes": 15,
@@ -877,7 +880,8 @@ async def startup_event():
                 "keep_alive_interval_seconds": settings.KEEP_ALIVE_INTERVAL,
                 "running_on_render": settings.RENDER,
                 "render_external_url": settings.RENDER_EXTERNAL_URL,
-                "immediate_transfers_enabled": settings.ENABLE_IMMEDIATE_TRANSFERS
+                "immediate_transfers_enabled": settings.ENABLE_IMMEDIATE_TRANSFERS,
+                "paystack_mode": "LIVE - Real money"
             },
             "message": "Service is awake and responsive. Keep-alive service prevents sleeping on Render free tier."
         }

@@ -1,6 +1,7 @@
-# app/services/payment_service.py - COMPLETE UPDATED VERSION FOR PRODUCTION
+# app/services/payment_service.py - PRODUCTION LIVE MODE OPTIMIZED
 """
 Payment service for handling Paystack integration with LIVE keys
+PRODUCTION LIVE MODE - REAL MONEY ONLY
 """
 import httpx
 import logging
@@ -13,7 +14,7 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 class PaymentService:
-    """Service for handling Paystack payments with LIVE keys"""
+    """Service for handling Paystack payments with LIVE keys - PRODUCTION ONLY"""
     
     def __init__(self):
         self.secret_key = settings.PAYSTACK_SECRET_KEY
@@ -23,10 +24,11 @@ class PaymentService:
             "Authorization": f"Bearer {self.secret_key}",
             "Content-Type": "application/json"
         }
-        self.is_live_mode = not settings.PAYSTACK_TEST_MODE
+        self.is_live_mode = True  # Force LIVE mode for production
         
-        logger.info(f"PaymentService initialized with {'LIVE' if self.is_live_mode else 'TEST'} mode")
-        logger.info(f"Public Key: {self.public_key[:10]}...")
+        logger.info("💰 PaymentService initialized: PRODUCTION LIVE MODE")
+        logger.info(f"💰 Public Key: {self.public_key[:15]}...")
+        logger.info("💰 REAL MONEY TRANSACTIONS ONLY")
     
     def initiate_payment(
         self,
@@ -37,7 +39,7 @@ class PaymentService:
         callback_url: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Initialize payment with Paystack LIVE
+        Initialize payment with Paystack LIVE - PRODUCTION
         """
         try:
             amount_kobo = int(amount * 100)  # Convert to kobo
@@ -53,7 +55,8 @@ class PaymentService:
             if callback_url:
                 payload["callback_url"] = callback_url
             
-            logger.info(f"Initiating {'LIVE' if self.is_live_mode else 'TEST'} payment: {reference} - ₦{amount:,}")
+            logger.info(f"💰 INITIATING LIVE PAYMENT: {reference} - ₦{amount:,}")
+            logger.info(f"💰 Callback URL: {callback_url}")
             
             response = httpx.post(
                 f"{self.base_url}/transaction/initialize",
@@ -66,45 +69,47 @@ class PaymentService:
             data = response.json()
             
             if data.get("status"):
-                logger.info(f"✅ Payment initialized: {reference} for {email} - ₦{amount:,}")
+                logger.info(f"✅✅✅ LIVE PAYMENT INITIALIZED: {reference} for {email} - ₦{amount:,}")
+                logger.info(f"💰 Authorization URL: {data['data']['authorization_url'][:50]}...")
+                
                 return {
                     "status": "success",
                     "authorization_url": data["data"]["authorization_url"],
                     "access_code": data["data"]["access_code"],
                     "reference": reference,
                     "message": data.get("message", "Payment initialized"),
-                    "mode": "LIVE" if self.is_live_mode else "TEST"
+                    "mode": "LIVE"
                 }
             else:
                 error_msg = data.get("message", "Payment initialization failed")
-                logger.error(f"❌ Paystack initialization failed: {error_msg}")
+                logger.error(f"❌❌❌ LIVE Paystack initialization failed: {error_msg}")
                 return {
                     "status": "error",
                     "message": error_msg,
-                    "mode": "LIVE" if self.is_live_mode else "TEST"
+                    "mode": "LIVE"
                 }
                 
         except httpx.RequestError as e:
-            logger.error(f"❌ Network error initializing payment: {str(e)}")
+            logger.error(f"❌❌❌ Network error initializing LIVE payment: {str(e)}")
             return {
                 "status": "error",
                 "message": "Network error while initializing payment",
-                "mode": "LIVE" if self.is_live_mode else "TEST"
+                "mode": "LIVE"
             }
         except Exception as e:
-            logger.error(f"❌ Error initializing payment: {str(e)}")
+            logger.error(f"❌❌❌ Error initializing LIVE payment: {str(e)}")
             return {
                 "status": "error",
                 "message": str(e),
-                "mode": "LIVE" if self.is_live_mode else "TEST"
+                "mode": "LIVE"
             }
     
     def verify_payment(self, reference: str) -> Dict[str, Any]:
         """
-        Verify payment status with Paystack LIVE
+        Verify payment status with Paystack LIVE - PRODUCTION
         """
         try:
-            logger.info(f"Verifying {'LIVE' if self.is_live_mode else 'TEST'} payment: {reference}")
+            logger.info(f"💰 VERIFYING LIVE PAYMENT: {reference}")
             
             response = httpx.get(
                 f"{self.base_url}/transaction/verify/{reference}",
@@ -118,54 +123,66 @@ class PaymentService:
             if data.get("status"):
                 payment_data = data["data"]
                 
-                logger.info(f"✅ Payment verified: {reference} - {payment_data['status']}")
-                
-                return {
-                    "status": payment_data["status"],
-                    "reference": payment_data["reference"],
-                    "amount": payment_data["amount"] / 100,  # Convert from kobo
-                    "currency": payment_data["currency"],
-                    "paid_at": payment_data.get("paid_at"),
-                    "channel": payment_data.get("channel"),
-                    "ip_address": payment_data.get("ip_address"),
-                    "metadata": payment_data.get("metadata", {}),
-                    "customer": {
-                        "email": payment_data.get("customer", {}).get("email"),
-                        "customer_code": payment_data.get("customer", {}).get("customer_code")
-                    },
-                    "authorization": payment_data.get("authorization"),
-                    "raw_response": data,
-                    "mode": "LIVE" if self.is_live_mode else "TEST"
-                }
+                if payment_data["status"] == "success":
+                    logger.info(f"✅✅✅ LIVE PAYMENT VERIFIED SUCCESS: {reference} - ₦{payment_data['amount']/100:,}")
+                    
+                    return {
+                        "status": "success",
+                        "reference": payment_data["reference"],
+                        "amount": payment_data["amount"] / 100,  # Convert from kobo
+                        "currency": payment_data["currency"],
+                        "paid_at": payment_data.get("paid_at"),
+                        "channel": payment_data.get("channel"),
+                        "ip_address": payment_data.get("ip_address"),
+                        "metadata": payment_data.get("metadata", {}),
+                        "customer": {
+                            "email": payment_data.get("customer", {}).get("email"),
+                            "customer_code": payment_data.get("customer", {}).get("customer_code")
+                        },
+                        "authorization": payment_data.get("authorization"),
+                        "raw_response": data,
+                        "mode": "LIVE"
+                    }
+                else:
+                    logger.warning(f"⚠️ Payment {reference} status: {payment_data['status']}")
+                    return {
+                        "status": payment_data["status"],
+                        "reference": reference,
+                        "amount": payment_data["amount"] / 100,
+                        "message": f"Payment status: {payment_data['status']}",
+                        "mode": "LIVE"
+                    }
             else:
                 error_msg = data.get("message", "Payment verification failed")
-                logger.error(f"❌ Paystack verification failed: {error_msg}")
+                logger.error(f"❌❌❌ LIVE Paystack verification failed: {error_msg}")
                 return {
                     "status": "error",
                     "message": error_msg,
-                    "mode": "LIVE" if self.is_live_mode else "TEST"
+                    "mode": "LIVE"
                 }
                 
         except httpx.RequestError as e:
-            logger.error(f"❌ Network error verifying payment: {str(e)}")
+            logger.error(f"❌❌❌ Network error verifying LIVE payment: {str(e)}")
             return {
                 "status": "error",
                 "message": "Network error while verifying payment",
-                "mode": "LIVE" if self.is_live_mode else "TEST"
+                "mode": "LIVE"
             }
         except Exception as e:
-            logger.error(f"❌ Error verifying payment: {str(e)}")
+            logger.error(f"❌❌❌ Error verifying LIVE payment: {str(e)}")
             return {
                 "status": "error",
                 "message": str(e),
-                "mode": "LIVE" if self.is_live_mode else "TEST"
+                "mode": "LIVE"
             }
     
     def get_transaction(self, reference: str) -> Dict[str, Any]:
         """
-        Get transaction details
+        Get transaction details - PRODUCTION
         """
         try:
+            logger.info(f"💰 Getting LIVE transaction: {reference}")
+            
             response = httpx.get(
                 f"{self.base_url}/transaction/{reference}",
                 headers=self.headers,
@@ -176,24 +193,26 @@ class PaymentService:
             data = response.json()
             
             if data.get("status"):
+                logger.info(f"✅ Retrieved LIVE transaction: {reference}")
                 return {
                     "status": "success",
                     "data": data["data"],
-                    "mode": "LIVE" if self.is_live_mode else "TEST"
+                    "mode": "LIVE"
                 }
             else:
+                logger.error(f"❌ Failed to get LIVE transaction: {data.get('message')}")
                 return {
                     "status": "error",
                     "message": data.get("message", "Failed to get transaction"),
-                    "mode": "LIVE" if self.is_live_mode else "TEST"
+                    "mode": "LIVE"
                 }
                 
         except Exception as e:
-            logger.error(f"Error getting transaction: {str(e)}")
+            logger.error(f"❌❌❌ Error getting LIVE transaction: {str(e)}")
             return {
                 "status": "error",
                 "message": str(e),
-                "mode": "LIVE" if self.is_live_mode else "TEST"
+                "mode": "LIVE"
             }
     
     def list_transactions(
@@ -207,7 +226,7 @@ class PaymentService:
         amount: Optional[int] = None
     ) -> Dict[str, Any]:
         """
-        List transactions with optional filters
+        List transactions with optional filters - PRODUCTION
         """
         try:
             params = {
@@ -226,6 +245,8 @@ class PaymentService:
             if amount:
                 params["amount"] = amount
             
+            logger.info(f"💰 Listing LIVE transactions (page {page})")
+            
             response = httpx.get(
                 f"{self.base_url}/transaction",
                 headers=self.headers,
@@ -237,25 +258,27 @@ class PaymentService:
             data = response.json()
             
             if data.get("status"):
+                logger.info(f"✅ Retrieved {len(data['data'])} LIVE transactions")
                 return {
                     "status": "success",
                     "transactions": data["data"],
                     "meta": data.get("meta", {}),
-                    "mode": "LIVE" if self.is_live_mode else "TEST"
+                    "mode": "LIVE"
                 }
             else:
+                logger.error(f"❌ Failed to list LIVE transactions: {data.get('message')}")
                 return {
                     "status": "error",
                     "message": data.get("message", "Failed to list transactions"),
-                    "mode": "LIVE" if self.is_live_mode else "TEST"
+                    "mode": "LIVE"
                 }
                 
         except Exception as e:
-            logger.error(f"Error listing transactions: {str(e)}")
+            logger.error(f"❌❌❌ Error listing LIVE transactions: {str(e)}")
             return {
                 "status": "error",
                 "message": str(e),
-                "mode": "LIVE" if self.is_live_mode else "TEST"
+                "mode": "LIVE"
             }
     
     def charge_authorization(
@@ -266,7 +289,7 @@ class PaymentService:
         reference: str
     ) -> Dict[str, Any]:
         """
-        Charge a previously authorized payment
+        Charge a previously authorized payment - PRODUCTION
         """
         try:
             amount_kobo = int(amount * 100)
@@ -277,6 +300,8 @@ class PaymentService:
                 "authorization_code": authorization_code,
                 "reference": reference
             }
+            
+            logger.info(f"💰 Charging LIVE authorization: {reference} - ₦{amount:,}")
             
             response = httpx.post(
                 f"{self.base_url}/transaction/charge_authorization",
@@ -289,31 +314,35 @@ class PaymentService:
             data = response.json()
             
             if data.get("status"):
+                logger.info(f"✅✅✅ LIVE authorization charged: {reference}")
                 return {
                     "status": "success",
                     "data": data["data"],
-                    "mode": "LIVE" if self.is_live_mode else "TEST"
+                    "mode": "LIVE"
                 }
             else:
+                logger.error(f"❌ LIVE authorization charge failed: {data.get('message')}")
                 return {
                     "status": "error",
                     "message": data.get("message", "Charge authorization failed"),
-                    "mode": "LIVE" if self.is_live_mode else "TEST"
+                    "mode": "LIVE"
                 }
                 
         except Exception as e:
-            logger.error(f"Error charging authorization: {str(e)}")
+            logger.error(f"❌❌❌ Error charging LIVE authorization: {str(e)}")
             return {
                 "status": "error",
                 "message": str(e),
-                "mode": "LIVE" if self.is_live_mode else "TEST"
+                "mode": "LIVE"
             }
     
     def check_balance(self) -> Dict[str, Any]:
         """
-        Check Paystack account balance (LIVE)
+        Check Paystack account balance - PRODUCTION LIVE
         """
         try:
+            logger.info("💰 Checking LIVE Paystack balance...")
+            
             response = httpx.get(
                 f"{self.base_url}/balance",
                 headers=self.headers,
@@ -325,26 +354,27 @@ class PaymentService:
             
             if data.get("status"):
                 balance = data["data"][0]["balance"] / 100
-                logger.info(f"✅ Paystack {'LIVE' if self.is_live_mode else 'TEST'} balance: ₦{balance:,.2f}")
+                logger.info(f"💰💰💰 LIVE PAYSTACK BALANCE: ₦{balance:,.2f}")
                 return {
                     "status": "success",
                     "balance": balance,
                     "currency": data["data"][0]["currency"],
-                    "mode": "LIVE" if self.is_live_mode else "TEST"
+                    "mode": "LIVE"
                 }
             else:
+                logger.error(f"❌ Failed to check LIVE balance: {data.get('message')}")
                 return {
                     "status": "error",
                     "message": data.get("message", "Failed to check balance"),
-                    "mode": "LIVE" if self.is_live_mode else "TEST"
+                    "mode": "LIVE"
                 }
                 
         except Exception as e:
-            logger.error(f"Error checking balance: {str(e)}")
+            logger.error(f"❌❌❌ Error checking LIVE balance: {str(e)}")
             return {
                 "status": "error",
                 "message": str(e),
-                "mode": "LIVE" if self.is_live_mode else "TEST"
+                "mode": "LIVE"
             }
     
     def create_customer(
@@ -355,7 +385,7 @@ class PaymentService:
         phone: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Create a customer in Paystack
+        Create a customer in Paystack - PRODUCTION
         """
         try:
             payload = {
@@ -366,6 +396,8 @@ class PaymentService:
             
             if phone:
                 payload["phone"] = phone
+            
+            logger.info(f"💰 Creating LIVE customer: {email}")
             
             response = httpx.post(
                 f"{self.base_url}/customer",
@@ -378,25 +410,27 @@ class PaymentService:
             data = response.json()
             
             if data.get("status"):
+                logger.info(f"✅ Created LIVE customer: {email}")
                 return {
                     "status": "success",
                     "customer_code": data["data"]["customer_code"],
                     "data": data["data"],
-                    "mode": "LIVE" if self.is_live_mode else "TEST"
+                    "mode": "LIVE"
                 }
             else:
+                logger.error(f"❌ Failed to create LIVE customer: {data.get('message')}")
                 return {
                     "status": "error",
                     "message": data.get("message", "Failed to create customer"),
-                    "mode": "LIVE" if self.is_live_mode else "TEST"
+                    "mode": "LIVE"
                 }
                 
         except Exception as e:
-            logger.error(f"Error creating customer: {str(e)}")
+            logger.error(f"❌❌❌ Error creating LIVE customer: {str(e)}")
             return {
                 "status": "error",
                 "message": str(e),
-                "mode": "LIVE" if self.is_live_mode else "TEST"
+                "mode": "LIVE"
             }
     
     def refund_transaction(
@@ -407,7 +441,7 @@ class PaymentService:
         customer_note: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Refund a transaction
+        Refund a transaction - PRODUCTION
         """
         try:
             payload = {
@@ -421,6 +455,8 @@ class PaymentService:
             if customer_note:
                 payload["customer_note"] = customer_note
             
+            logger.info(f"💰 Processing LIVE refund: {reference}")
+            
             response = httpx.post(
                 f"{self.base_url}/refund",
                 headers=self.headers,
@@ -432,30 +468,32 @@ class PaymentService:
             data = response.json()
             
             if data.get("status"):
+                logger.info(f"✅✅✅ LIVE refund processed: {reference}")
                 return {
                     "status": "success",
                     "data": data["data"],
-                    "mode": "LIVE" if self.is_live_mode else "TEST"
+                    "mode": "LIVE"
                 }
             else:
+                logger.error(f"❌ LIVE refund failed: {data.get('message')}")
                 return {
                     "status": "error",
                     "message": data.get("message", "Refund failed"),
-                    "mode": "LIVE" if self.is_live_mode else "TEST"
+                    "mode": "LIVE"
                 }
                 
         except Exception as e:
-            logger.error(f"Error refunding transaction: {str(e)}")
+            logger.error(f"❌❌❌ Error processing LIVE refund: {str(e)}")
             return {
                 "status": "error",
                 "message": str(e),
-                "mode": "LIVE" if self.is_live_mode else "TEST"
+                "mode": "LIVE"
             }
 
 
 def process_post_payment(user_email: str, user_type: str, payment_type: str, db):
     """
-    Process post-payment actions
+    Process post-payment actions - PRODUCTION
     This is called after successful payment verification
     """
     from app.utils.promote_applicant import promote_to_applicant
@@ -464,7 +502,7 @@ def process_post_payment(user_email: str, user_type: str, payment_type: str, db)
     from sqlalchemy import func
     
     try:
-        logger.info(f"Processing post-payment for {user_email} ({user_type}) - {payment_type}")
+        logger.info(f"💰 PROCESSING POST-PAYMENT FOR: {user_email} ({user_type}) - {payment_type}")
         
         if user_type == "pre_applicant":
             pre_applicant = db.query(PreApplicant).filter(
@@ -479,11 +517,12 @@ def process_post_payment(user_email: str, user_type: str, payment_type: str, db)
                 
                 try:
                     promote_to_applicant(user_email, db)
-                    logger.info(f"✅ Pre-applicant {user_email} promoted to applicant")
+                    logger.info(f"✅✅✅ Pre-applicant {user_email} promoted to applicant")
                 except Exception as promote_error:
-                    logger.error(f"⚠️ Error promoting pre-applicant (will retry later): {str(promote_error)}")
+                    logger.error(f"❌ Error promoting pre-applicant: {str(promote_error)}")
+                    # Don't re-raise, just log - we can retry later
             else:
-                logger.warning(f"No pre-applicant found for {user_email} - cannot promote")
+                logger.warning(f"⚠️ No pre-applicant found for {user_email}")
         
         elif user_type == "applicant":
             applicant = db.query(Applicant).filter(
@@ -496,12 +535,15 @@ def process_post_payment(user_email: str, user_type: str, payment_type: str, db)
                 applicant.paid_at = datetime.utcnow()
                 applicant.updated_at = datetime.utcnow()
                 db.commit()
-                logger.info(f"✅ Applicant {user_email} payment marked as paid")
+                logger.info(f"✅✅✅ Applicant {user_email} payment marked as paid")
+            else:
+                logger.warning(f"⚠️ No applicant found for {user_email}")
         
         elif user_type == "existing_officer":
-            logger.info(f"✅ Existing officer {user_email} registration completed")
+            logger.info(f"✅✅✅ Existing officer {user_email} registration completed")
         
-        logger.info(f"✅ Post-payment processing completed for {user_email}")
+        logger.info(f"✅✅✅ POST-PAYMENT PROCESSING COMPLETED FOR {user_email}")
         
     except Exception as e:
-        logger.error(f"❌ Error in post-payment processing: {str(e)}", exc_info=True)
+        logger.error(f"❌❌❌ ERROR IN POST-PAYMENT PROCESSING: {str(e)}", exc_info=True)
+        # Don't re-raise - let the payment verification succeed even if post-processing fails

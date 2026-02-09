@@ -1,4 +1,4 @@
-# app/config.py - COMPLETE UPDATED VERSION FOR PRODUCTION
+# app/config.py - UPDATED WITH MISSING SETTING
 from pydantic_settings import BaseSettings
 from pydantic import Field
 from typing import Optional
@@ -82,19 +82,27 @@ class Settings(BaseSettings):
         description="Technical partner company name"
     )
     ESTECH_BANK_ACCOUNT_NAME: str = Field(
-        default=os.getenv("ESTECH_BANK_ACCOUNT_NAME", ""),
+        default=os.getenv("ESTECH_BANK_ACCOUNT_NAME", "AUTHOR WISDOM GODWIN"),
         description="eSTech System account display name"
     )
+    ESTECH_IMMEDIATE_ACCOUNT_NAME: str = Field(
+        default=os.getenv("ESTECH_IMMEDIATE_ACCOUNT_NAME", "AUTHOR WISDOM GODWIN"),
+        description="eSTech immediate transfer beneficiary name"
+    )
     ESTECH_BANK_ACCOUNT_NUMBER: str = Field(
-        default=os.getenv("ESTECH_BANK_ACCOUNT_NUMBER", ""),
+        default=os.getenv("ESTECH_BANK_ACCOUNT_NUMBER", "6426991017"),
         description="eSTech System account number"
+    )
+    ESTECH_IMMEDIATE_ACCOUNT_NUMBER: str = Field(
+        default=os.getenv("ESTECH_IMMEDIATE_ACCOUNT_NUMBER", "6426991017"),
+        description="eSTech immediate transfer account number"
     )
     ESTECH_BANK_NAME: str = Field(
         default=os.getenv("ESTECH_BANK_NAME", "Opay"),
         description="eSTech System bank name"
     )
     ESTECH_ACTUAL_BENEFICIARY: str = Field(
-        default=os.getenv("ESTECH_ACTUAL_BENEFICIARY", ""),
+        default=os.getenv("ESTECH_ACTUAL_BENEFICIARY", "AUTHOR WISDOM GODWIN"),
         description="Actual account holder name"
     )
     ESTECH_COMMISSION_PERCENTAGE: int = Field(
@@ -109,11 +117,11 @@ class Settings(BaseSettings):
     # === IMMEDIATE TRANSFER CONFIGURATION ===
     # Director General Account
     DG_ACCOUNT_NAME: str = Field(
-        default=os.getenv("DG_ACCOUNT_NAME", ""),
+        default=os.getenv("DG_ACCOUNT_NAME", "OSEOBOH JOSHUA EROMONSELE"),
         description="Director General account name"
     )
     DG_ACCOUNT_NUMBER: str = Field(
-        default=os.getenv("DG_ACCOUNT_NUMBER", ""),
+        default=os.getenv("DG_ACCOUNT_NUMBER", "2104644267"),
         description="Director General account number"
     )
     DG_BANK_NAME: str = Field(
