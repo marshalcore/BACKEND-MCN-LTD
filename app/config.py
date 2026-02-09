@@ -1,4 +1,4 @@
-# app/config.py - COMPLETE UPDATED VERSION
+# app/config.py - COMPLETE UPDATED VERSION FOR PRODUCTION
 from pydantic_settings import BaseSettings
 from pydantic import Field
 from typing import Optional
@@ -41,14 +41,14 @@ class Settings(BaseSettings):
         description="Resend sender display name"
     )
 
-    # === PAYMENT GATEWAY ===
+    # === PAYMENT GATEWAY (LIVE KEYS) ===
     PAYSTACK_PUBLIC_KEY: str = Field(
-        default=os.getenv("PAYSTACK_PUBLIC_KEY", "pk_test_48410250265efe44b910fb32c90df054a80f7d85"),
-        description="Paystack public key"
+        default=os.getenv("PAYSTACK_PUBLIC_KEY", "pk_live_f5c8f4811d213107200c089f061699694ae6c94f"),
+        description="Paystack LIVE public key"
     )
     PAYSTACK_SECRET_KEY: str = Field(
-        default=os.getenv("PAYSTACK_SECRET_KEY", "sk_test_48410250265efe44b910fb32c90df054a80f7d85"),
-        description="Paystack secret key"
+        default=os.getenv("PAYSTACK_SECRET_KEY", "sk_live_3d532a7215ffdb0166b8fffc49b3ebca5085e6df"),
+        description="Paystack LIVE secret key"
     )
     FLUTTERWAVE_SECRET_KEY: str = Field(
         default=os.getenv("FLUTTERWAVE_SECRET_KEY", "flw_test_xxxxx"),
@@ -85,24 +85,6 @@ class Settings(BaseSettings):
         description="Purpose of commission payments"
     )
 
-    # === eSTech immediate-transfer (optional, fallback to existing fields) ===
-    ESTECH_IMMEDIATE_ACCOUNT_NAME: str = Field(
-        default=os.getenv("ESTECH_IMMEDIATE_ACCOUNT_NAME", os.getenv("ESTECH_BANK_ACCOUNT_NAME", "eSTech System")),
-        description="eSTech immediate transfer account name (fallback to ESTECH_BANK_ACCOUNT_NAME)"
-    )
-    ESTECH_IMMEDIATE_ACCOUNT_NUMBER: str = Field(
-        default=os.getenv("ESTECH_IMMEDIATE_ACCOUNT_NUMBER", os.getenv("ESTECH_BANK_ACCOUNT_NUMBER", "6426991017")),
-        description="eSTech immediate transfer account number (fallback to ESTECH_BANK_ACCOUNT_NUMBER)"
-    )
-    ESTECH_IMMEDIATE_BANK_NAME: str = Field(
-        default=os.getenv("ESTECH_IMMEDIATE_BANK_NAME", os.getenv("ESTECH_BANK_NAME", "Opay")),
-        description="eSTech immediate transfer bank name"
-    )
-    ESTECH_IMMEDIATE_BANK_CODE: Optional[str] = Field(
-        default=os.getenv("ESTECH_IMMEDIATE_BANK_CODE", os.getenv("ESTECH_BANK_CODE", None)),
-        description="Optional bank code for eSTech immediate transfers"
-    )
-    
     # === IMMEDIATE TRANSFER CONFIGURATION ===
     # Director General Account
     DG_ACCOUNT_NAME: str = Field(
@@ -144,8 +126,8 @@ class Settings(BaseSettings):
 
     # === FRONTEND URLS ===
     FRONTEND_URL: str = Field(
-        default=os.getenv("FRONTEND_URL", "http://marshalcoreofnigeria.ng/"),
-        description="Frontend URL for payment callbacks"
+        default=os.getenv("FRONTEND_URL", "https://marshalcoreofnigeria.ng"),
+        description="Production Frontend URL for payment callbacks"
     )
     PAYMENT_SUCCESS_URL: str = Field(
         default=os.getenv("PAYMENT_SUCCESS_URL", "/payment/success"),
@@ -157,7 +139,7 @@ class Settings(BaseSettings):
     )
 
     # === DEBUG MODE ===
-    DEBUG: bool = Field(default=os.getenv("DEBUG", "True").lower() == "true", description="Debug mode")
+    DEBUG: bool = Field(default=os.getenv("DEBUG", "false").lower() == "true", description="Debug mode")
     
     # === RENDER.COM DETECTION ===
     RENDER: Optional[bool] = Field(
@@ -181,7 +163,7 @@ class Settings(BaseSettings):
 
     # === KEEP ALIVE ===
     KEEP_ALIVE_INTERVAL: int = Field(
-        default=int(os.getenv("KEEP_ALIVE_INTERVAL", "240")),
+        default=int(os.getenv("KEEP_ALIVE_INTERVAL", "300")),
         description="Interval for keep-alive pings in seconds"
     )
     ENABLE_KEEP_ALIVE: bool = Field(
@@ -193,10 +175,10 @@ class Settings(BaseSettings):
         description="External URL for keep-alive pings (auto-detected on Render)"
     )
     
-    # === PAYSTACK TEST MODE ===
+    # === PAYSTACK MODE (SET TO FALSE FOR PRODUCTION) ===
     PAYSTACK_TEST_MODE: bool = Field(
-        default=os.getenv("PAYSTACK_TEST_MODE", "true").lower() == "true",
-        description="Enable Paystack test mode"
+        default=os.getenv("PAYSTACK_TEST_MODE", "false").lower() == "true",
+        description="Enable Paystack test mode (FALSE for production)"
     )
     
     # === IMMEDIATE TRANSFER SETTINGS ===
@@ -205,18 +187,24 @@ class Settings(BaseSettings):
         description="Enable immediate transfers after payment"
     )
     TRANSFER_RETRY_ATTEMPTS: int = Field(
-        default=int(os.getenv("TRANSFER_RETRY_ATTEMPTS", "3")),
+        default=int(os.getenv("TRANSFER_RETRY_ATTEMPTS", "5")),
         description="Number of retry attempts for failed transfers"
     )
     TRANSFER_RETRY_DELAY: int = Field(
-        default=int(os.getenv("TRANSFER_RETRY_DELAY", "300")),
+        default=int(os.getenv("TRANSFER_RETRY_DELAY", "60")),
         description="Delay between retry attempts in seconds"
     )
     
     # === ENVIRONMENT ===
     ENVIRONMENT: str = Field(
-        default=os.getenv("ENVIRONMENT", "development"),
+        default=os.getenv("ENVIRONMENT", "production"),
         description="Application environment: development, testing, or production"
+    )
+    
+    # === CORS SETTINGS ===
+    CORS_ORIGINS: list = Field(
+        default=os.getenv("CORS_ORIGINS", "https://marshalcoreofnigeria.ng,http://localhost:3000").split(","),
+        description="Allowed CORS origins"
     )
 
     class Config:

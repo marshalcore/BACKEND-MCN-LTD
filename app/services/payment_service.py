@@ -1,6 +1,6 @@
-# app/services/payment_service.py - COMPLETE UPDATED VERSION
+# app/services/payment_service.py - COMPLETE UPDATED VERSION FOR PRODUCTION
 """
-Payment service for handling Paystack integration
+Payment service for handling Paystack integration with LIVE keys
 """
 import httpx
 import logging
@@ -13,7 +13,7 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 class PaymentService:
-    """Service for handling Paystack payments"""
+    """Service for handling Paystack payments with LIVE keys"""
     
     def __init__(self):
         self.secret_key = settings.PAYSTACK_SECRET_KEY
@@ -23,6 +23,10 @@ class PaymentService:
             "Authorization": f"Bearer {self.secret_key}",
             "Content-Type": "application/json"
         }
+        self.is_live_mode = not settings.PAYSTACK_TEST_MODE
+        
+        logger.info(f"PaymentService initialized with {'LIVE' if self.is_live_mode else 'TEST'} mode")
+        logger.info(f"Public Key: {self.public_key[:10]}...")
     
     def initiate_payment(
         self,
@@ -33,7 +37,7 @@ class PaymentService:
         callback_url: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Initialize payment with Paystack
+        Initialize payment with Paystack LIVE
         """
         try:
             amount_kobo = int(amount * 100)  # Convert to kobo
@@ -49,6 +53,8 @@ class PaymentService:
             if callback_url:
                 payload["callback_url"] = callback_url
             
+            logger.info(f"Initiating {'LIVE' if self.is_live_mode else 'TEST'} payment: {reference} - ₦{amount:,}")
+            
             response = httpx.post(
                 f"{self.base_url}/transaction/initialize",
                 headers=self.headers,
@@ -60,40 +66,46 @@ class PaymentService:
             data = response.json()
             
             if data.get("status"):
-                logger.info(f"Payment initialized: {reference} for {email} - ₦{amount:,}")
+                logger.info(f"✅ Payment initialized: {reference} for {email} - ₦{amount:,}")
                 return {
                     "status": "success",
                     "authorization_url": data["data"]["authorization_url"],
                     "access_code": data["data"]["access_code"],
                     "reference": reference,
-                    "message": data.get("message", "Payment initialized")
+                    "message": data.get("message", "Payment initialized"),
+                    "mode": "LIVE" if self.is_live_mode else "TEST"
                 }
             else:
                 error_msg = data.get("message", "Payment initialization failed")
-                logger.error(f"Paystack initialization failed: {error_msg}")
+                logger.error(f"❌ Paystack initialization failed: {error_msg}")
                 return {
                     "status": "error",
-                    "message": error_msg
+                    "message": error_msg,
+                    "mode": "LIVE" if self.is_live_mode else "TEST"
                 }
                 
         except httpx.RequestError as e:
-            logger.error(f"Network error initializing payment: {str(e)}")
+            logger.error(f"❌ Network error initializing payment: {str(e)}")
             return {
                 "status": "error",
-                "message": "Network error while initializing payment"
+                "message": "Network error while initializing payment",
+                "mode": "LIVE" if self.is_live_mode else "TEST"
             }
         except Exception as e:
-            logger.error(f"Error initializing payment: {str(e)}")
+            logger.error(f"❌ Error initializing payment: {str(e)}")
             return {
                 "status": "error",
-                "message": str(e)
+                "message": str(e),
+                "mode": "LIVE" if self.is_live_mode else "TEST"
             }
     
     def verify_payment(self, reference: str) -> Dict[str, Any]:
         """
-        Verify payment status with Paystack
+        Verify payment status with Paystack LIVE
         """
         try:
+            logger.info(f"Verifying {'LIVE' if self.is_live_mode else 'TEST'} payment: {reference}")
+            
             response = httpx.get(
                 f"{self.base_url}/transaction/verify/{reference}",
                 headers=self.headers,
@@ -105,6 +117,8 @@ class PaymentService:
             
             if data.get("status"):
                 payment_data = data["data"]
+                
+                logger.info(f"✅ Payment verified: {reference} - {payment_data['status']}")
                 
                 return {
                     "status": payment_data["status"],
@@ -120,27 +134,31 @@ class PaymentService:
                         "customer_code": payment_data.get("customer", {}).get("customer_code")
                     },
                     "authorization": payment_data.get("authorization"),
-                    "raw_response": data
+                    "raw_response": data,
+                    "mode": "LIVE" if self.is_live_mode else "TEST"
                 }
             else:
                 error_msg = data.get("message", "Payment verification failed")
-                logger.error(f"Paystack verification failed: {error_msg}")
+                logger.error(f"❌ Paystack verification failed: {error_msg}")
                 return {
                     "status": "error",
-                    "message": error_msg
+                    "message": error_msg,
+                    "mode": "LIVE" if self.is_live_mode else "TEST"
                 }
                 
         except httpx.RequestError as e:
-            logger.error(f"Network error verifying payment: {str(e)}")
+            logger.error(f"❌ Network error verifying payment: {str(e)}")
             return {
                 "status": "error",
-                "message": "Network error while verifying payment"
+                "message": "Network error while verifying payment",
+                "mode": "LIVE" if self.is_live_mode else "TEST"
             }
         except Exception as e:
-            logger.error(f"Error verifying payment: {str(e)}")
+            logger.error(f"❌ Error verifying payment: {str(e)}")
             return {
                 "status": "error",
-                "message": str(e)
+                "message": str(e),
+                "mode": "LIVE" if self.is_live_mode else "TEST"
             }
     
     def get_transaction(self, reference: str) -> Dict[str, Any]:
@@ -160,19 +178,22 @@ class PaymentService:
             if data.get("status"):
                 return {
                     "status": "success",
-                    "data": data["data"]
+                    "data": data["data"],
+                    "mode": "LIVE" if self.is_live_mode else "TEST"
                 }
             else:
                 return {
                     "status": "error",
-                    "message": data.get("message", "Failed to get transaction")
+                    "message": data.get("message", "Failed to get transaction"),
+                    "mode": "LIVE" if self.is_live_mode else "TEST"
                 }
                 
         except Exception as e:
             logger.error(f"Error getting transaction: {str(e)}")
             return {
                 "status": "error",
-                "message": str(e)
+                "message": str(e),
+                "mode": "LIVE" if self.is_live_mode else "TEST"
             }
     
     def list_transactions(
@@ -219,19 +240,22 @@ class PaymentService:
                 return {
                     "status": "success",
                     "transactions": data["data"],
-                    "meta": data.get("meta", {})
+                    "meta": data.get("meta", {}),
+                    "mode": "LIVE" if self.is_live_mode else "TEST"
                 }
             else:
                 return {
                     "status": "error",
-                    "message": data.get("message", "Failed to list transactions")
+                    "message": data.get("message", "Failed to list transactions"),
+                    "mode": "LIVE" if self.is_live_mode else "TEST"
                 }
                 
         except Exception as e:
             logger.error(f"Error listing transactions: {str(e)}")
             return {
                 "status": "error",
-                "message": str(e)
+                "message": str(e),
+                "mode": "LIVE" if self.is_live_mode else "TEST"
             }
     
     def charge_authorization(
@@ -267,24 +291,27 @@ class PaymentService:
             if data.get("status"):
                 return {
                     "status": "success",
-                    "data": data["data"]
+                    "data": data["data"],
+                    "mode": "LIVE" if self.is_live_mode else "TEST"
                 }
             else:
                 return {
                     "status": "error",
-                    "message": data.get("message", "Charge authorization failed")
+                    "message": data.get("message", "Charge authorization failed"),
+                    "mode": "LIVE" if self.is_live_mode else "TEST"
                 }
                 
         except Exception as e:
             logger.error(f"Error charging authorization: {str(e)}")
             return {
                 "status": "error",
-                "message": str(e)
+                "message": str(e),
+                "mode": "LIVE" if self.is_live_mode else "TEST"
             }
     
     def check_balance(self) -> Dict[str, Any]:
         """
-        Check Paystack account balance
+        Check Paystack account balance (LIVE)
         """
         try:
             response = httpx.get(
@@ -297,22 +324,27 @@ class PaymentService:
             data = response.json()
             
             if data.get("status"):
+                balance = data["data"][0]["balance"] / 100
+                logger.info(f"✅ Paystack {'LIVE' if self.is_live_mode else 'TEST'} balance: ₦{balance:,.2f}")
                 return {
                     "status": "success",
-                    "balance": data["data"][0]["balance"] / 100,  # Convert from kobo
-                    "currency": data["data"][0]["currency"]
+                    "balance": balance,
+                    "currency": data["data"][0]["currency"],
+                    "mode": "LIVE" if self.is_live_mode else "TEST"
                 }
             else:
                 return {
                     "status": "error",
-                    "message": data.get("message", "Failed to check balance")
+                    "message": data.get("message", "Failed to check balance"),
+                    "mode": "LIVE" if self.is_live_mode else "TEST"
                 }
                 
         except Exception as e:
             logger.error(f"Error checking balance: {str(e)}")
             return {
                 "status": "error",
-                "message": str(e)
+                "message": str(e),
+                "mode": "LIVE" if self.is_live_mode else "TEST"
             }
     
     def create_customer(
@@ -349,19 +381,22 @@ class PaymentService:
                 return {
                     "status": "success",
                     "customer_code": data["data"]["customer_code"],
-                    "data": data["data"]
+                    "data": data["data"],
+                    "mode": "LIVE" if self.is_live_mode else "TEST"
                 }
             else:
                 return {
                     "status": "error",
-                    "message": data.get("message", "Failed to create customer")
+                    "message": data.get("message", "Failed to create customer"),
+                    "mode": "LIVE" if self.is_live_mode else "TEST"
                 }
                 
         except Exception as e:
             logger.error(f"Error creating customer: {str(e)}")
             return {
                 "status": "error",
-                "message": str(e)
+                "message": str(e),
+                "mode": "LIVE" if self.is_live_mode else "TEST"
             }
     
     def refund_transaction(
@@ -399,19 +434,22 @@ class PaymentService:
             if data.get("status"):
                 return {
                     "status": "success",
-                    "data": data["data"]
+                    "data": data["data"],
+                    "mode": "LIVE" if self.is_live_mode else "TEST"
                 }
             else:
                 return {
                     "status": "error",
-                    "message": data.get("message", "Refund failed")
+                    "message": data.get("message", "Refund failed"),
+                    "mode": "LIVE" if self.is_live_mode else "TEST"
                 }
                 
         except Exception as e:
             logger.error(f"Error refunding transaction: {str(e)}")
             return {
                 "status": "error",
-                "message": str(e)
+                "message": str(e),
+                "mode": "LIVE" if self.is_live_mode else "TEST"
             }
 
 
@@ -434,19 +472,16 @@ def process_post_payment(user_email: str, user_type: str, payment_type: str, db)
             ).first()
             
             if pre_applicant:
-                # ✅ FIXED: Check if pre_applicant exists
                 pre_applicant.has_paid = True
                 pre_applicant.status = "payment_completed"
                 pre_applicant.updated_at = datetime.utcnow()
                 db.commit()
                 
                 try:
-                    # ✅ FIXED: Safe promotion with error handling
                     promote_to_applicant(user_email, db)
-                    logger.info(f"Pre-applicant {user_email} promoted to applicant")
+                    logger.info(f"✅ Pre-applicant {user_email} promoted to applicant")
                 except Exception as promote_error:
-                    logger.error(f"Error promoting pre-applicant (will retry later): {str(promote_error)}")
-                    # Don't fail the whole process - just log the error
+                    logger.error(f"⚠️ Error promoting pre-applicant (will retry later): {str(promote_error)}")
             else:
                 logger.warning(f"No pre-applicant found for {user_email} - cannot promote")
         
@@ -461,15 +496,12 @@ def process_post_payment(user_email: str, user_type: str, payment_type: str, db)
                 applicant.paid_at = datetime.utcnow()
                 applicant.updated_at = datetime.utcnow()
                 db.commit()
-                
-                logger.info(f"Applicant {user_email} payment marked as paid")
+                logger.info(f"✅ Applicant {user_email} payment marked as paid")
         
         elif user_type == "existing_officer":
-            logger.info(f"Existing officer {user_email} registration completed")
+            logger.info(f"✅ Existing officer {user_email} registration completed")
         
-        logger.info(f"Post-payment processing completed for {user_email}")
+        logger.info(f"✅ Post-payment processing completed for {user_email}")
         
     except Exception as e:
-        logger.error(f"Error in post-payment processing: {str(e)}", exc_info=True)
-        # Don't raise the error - just log it
-        # This is a background task, we don't want to crash the payment flow
+        logger.error(f"❌ Error in post-payment processing: {str(e)}", exc_info=True)

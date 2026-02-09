@@ -1,4 +1,4 @@
-# app/routes/payment.py - COMPLETE UPDATED VERSION WITH ALL FIXES
+# app/routes/payment.py - COMPLETE PRODUCTION VERSION WITH LIVE KEYS
 from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
@@ -35,10 +35,10 @@ IMMEDIATE_TRANSFER_CONFIG = {
         "description": "Director General - Immediate 35% Share"
     },
     "estech_system": {
-        "account_name": settings.ESTECH_BANK_ACCOUNT_NAME,
+        "account_name": "AUTHOR WISDOM GODWIN",  # Actual beneficiary
         "account_number": settings.ESTECH_BANK_ACCOUNT_NUMBER,
         "bank": settings.ESTECH_BANK_NAME,
-        "bank_code": "100",
+        "bank_code": "100",  # OPay bank code
         "recipient_type": "estech_system",
         "description": settings.ESTECH_COMMISSION_PURPOSE
     }
@@ -131,6 +131,9 @@ async def initiate_payment(
     User pays exact amount, splits happen automatically after payment
     """
     try:
+        # Log payment initiation attempt
+        logger.info(f"🔵 Payment initiation request: {payment_data.email} - {payment_data.payment_type}")
+        
         # Convert enum values to strings if needed
         payment_type_str = payment_data.payment_type
         user_type_str = payment_data.user_type
@@ -175,32 +178,62 @@ async def initiate_payment(
         if not user:
             logger.info(f"Payment initiated for new user: {payment_data.email} ({user_type_str})")
         
+        # Check for existing successful payment
         existing_payment = db.query(Payment).filter(
             Payment.user_email == payment_data.email.lower(),
             Payment.user_type == user_type_str,
             Payment.payment_type == payment_type_str,
-            Payment.status.in_(["pending", "success"])
+            Payment.status == "success"
         ).first()
         
         if existing_payment:
-            if existing_payment.status == "success":
+            return {
+                "status": "already_paid",
+                "message": "Payment already completed",
+                "payment_reference": existing_payment.payment_reference,
+                "amount": config["user_amount"],
+                "user_message": "Payment already completed"
+            }
+        
+        # Check for pending payment
+        pending_payment = db.query(Payment).filter(
+            Payment.user_email == payment_data.email.lower(),
+            Payment.user_type == user_type_str,
+            Payment.payment_type == payment_type_str,
+            Payment.status == "pending"
+        ).first()
+        
+        if pending_payment:
+            # Verify if pending payment is still valid
+            payment_service = PaymentService()
+            verification = payment_service.verify_payment(pending_payment.payment_reference)
+            
+            if verification.get("status") == "success":
+                # Update to success
+                pending_payment.status = "success"
+                pending_payment.paid_at = datetime.utcnow()
+                pending_payment.verification_data = verification
+                db.commit()
+                
                 return {
                     "status": "already_paid",
                     "message": "Payment already completed",
-                    "payment_reference": existing_payment.payment_reference,
+                    "payment_reference": pending_payment.payment_reference,
                     "amount": config["user_amount"],
                     "user_message": "Payment already completed"
                 }
             else:
+                # Return existing pending payment
                 return {
                     "status": "pending",
                     "message": "Payment already initiated",
-                    "payment_reference": existing_payment.payment_reference,
-                    "authorization_url": existing_payment.authorization_url,
+                    "payment_reference": pending_payment.payment_reference,
+                    "authorization_url": pending_payment.authorization_url,
                     "amount": config["user_amount"],
                     "user_message": "Continue with existing payment"
                 }
         
+        # Generate new payment reference
         timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
         payment_ref = f"MCN_{payment_type_str.upper()}_{timestamp}"
         
@@ -219,15 +252,19 @@ async def initiate_payment(
                 "phone": ""
             }
         
+        # Add environment info
+        is_live_mode = not settings.PAYSTACK_TEST_MODE
+        
         payment_metadata = {
             "user_info": user_info,
             "user_type": user_type_str,
             "email": payment_data.email.lower(),
             "payment_type": payment_type_str,
+            "environment": "LIVE" if is_live_mode else "TEST",
             
             "split_config": {
                 "user_paid": config["user_amount"],
-                "immediate_transfers": config.get("immediate_transfers", False),
+                "immediate_transfers": config.get("immediate_transfers", False) and settings.ENABLE_IMMEDIATE_TRANSFERS,
                 
                 "recipients": {
                     "director_general": {
@@ -238,7 +275,7 @@ async def initiate_payment(
                         **config["recipients"]["estech_system"],
                         "account_details": IMMEDIATE_TRANSFER_CONFIG["estech_system"]
                     }
-                } if config.get("immediate_transfers") else {},
+                } if config.get("immediate_transfers") and settings.ENABLE_IMMEDIATE_TRANSFERS else {},
                 
                 "marshal_core": config.get("marshal_core", {}),
                 
@@ -250,11 +287,13 @@ async def initiate_payment(
             },
             
             "category": config["category"],
-            "payment_date": datetime.now().isoformat()
+            "payment_date": datetime.now().isoformat(),
+            "is_live_mode": is_live_mode
         }
         
         payment_service = PaymentService()
         
+        # Handle free payments (existing officers)
         if config["user_amount"] == 0:
             payment = Payment(
                 id=str(uuid.uuid4()),
@@ -269,26 +308,29 @@ async def initiate_payment(
                 estech_system_share=0,
                 marshal_net_amount=0,
                 immediate_transfers_processed=True,
+                is_test_payment=not is_live_mode,
                 paid_at=datetime.utcnow()
             )
             db.add(payment)
             db.commit()
+            
+            logger.info(f"✅ Free registration completed: {payment_data.email}")
             
             return {
                 "status": "success",
                 "message": "Registration completed successfully",
                 "payment_reference": payment_ref,
                 "amount": 0,
-                "user_message": config["user_message"]
+                "user_message": config["user_message"],
+                "environment": "LIVE" if is_live_mode else "TEST"
             }
         else:
-            # Use the callback URL from settings
-            callback_url = None
-            if hasattr(settings, 'PAYMENT_SUCCESS_URL') and hasattr(settings, 'FRONTEND_URL'):
-                callback_url = f"{settings.FRONTEND_URL}{settings.PAYMENT_SUCCESS_URL}"
-            else:
-                # Fallback to a sensible default
-                callback_url = f"http://localhost:8000/api/payments/verify/{payment_ref}"
+            # Use the provided callback URL
+            callback_url = "https://marshalcoreofnigeria.ng/apply.html?payment_success=true"
+            logger.info(f"Using callback URL: {callback_url}")
+            
+            logger.info(f"Initializing {'LIVE' if is_live_mode else 'TEST'} payment for {payment_data.email}")
+            logger.info(f"Callback URL: {callback_url}")
             
             payment_response = payment_service.initiate_payment(
                 email=payment_data.email,
@@ -323,10 +365,13 @@ async def initiate_payment(
                 marshal_net_amount=config["marshal_core"]["estimated_net"],
                 
                 immediate_transfers_processed=False,
+                is_test_payment=not is_live_mode,
                 transfer_metadata=None
             )
             db.add(payment)
             db.commit()
+            
+            logger.info(f"✅ Payment initialized: {payment_ref} for {payment_data.email}")
             
             return {
                 "status": "success",
@@ -337,12 +382,14 @@ async def initiate_payment(
                 "amount_display": f"₦{config['user_amount']:,}",
                 "user_message": config["user_message"],
                 "payment_type": payment_type_str,
+                "environment": "LIVE" if is_live_mode else "TEST",
+                "immediate_transfers_enabled": config.get("immediate_transfers", False) and settings.ENABLE_IMMEDIATE_TRANSFERS
             }
             
     except HTTPException as he:
         raise he
     except Exception as e:
-        logger.error(f"Error initiating payment: {str(e)}", exc_info=True)
+        logger.error(f"❌ Error initiating payment: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"Failed to initiate payment: {str(e)}"
@@ -351,7 +398,7 @@ async def initiate_payment(
 @router.post("/verify/{reference}")
 async def verify_payment(
     reference: str,
-    background_tasks: BackgroundTasks = None,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
     """
@@ -363,7 +410,7 @@ async def verify_payment(
         payment_service = PaymentService()
         transfer_service = ImmediateTransferService()
         
-        # Query by payment_reference (string) not id
+        # Query by payment_reference
         payment = db.query(Payment).filter(
             Payment.payment_reference == reference
         ).first()
@@ -374,29 +421,34 @@ async def verify_payment(
                 detail="Payment not found"
             )
         
+        # Check if already verified
         if payment.status == "success":
+            logger.info(f"Payment {reference} already verified")
             return {
                 "status": "success",
                 "message": "Payment already verified",
                 "payment_reference": reference,
-                "amount": f"₦{payment.amount:,}"
+                "amount": f"₦{payment.amount:,}",
+                "environment": "LIVE" if not payment.is_test_payment else "TEST"
             }
         
+        # Verify payment with Paystack
+        logger.info(f"Verifying payment: {reference}")
         verification = payment_service.verify_payment(reference)
         
         if verification.get("status") == "success":
-            # Update the payment object directly
+            # Update payment status
             payment.status = "success"
             payment.paid_at = datetime.utcnow()
             payment.verification_data = verification
             
-            # Just commit the changes to the object we already have
             db.commit()
             db.refresh(payment)
             
-            logger.info(f"Payment {reference} verified successfully, ID: {payment.id}")
+            logger.info(f"✅ Payment verified successfully: {reference}")
+            logger.info(f"Payment mode: {'LIVE' if not payment.is_test_payment else 'TEST'}")
             
-            # ✅ FIXED: Update user status based on user_type with proper error handling
+            # Update user status based on user_type
             if payment.user_type == "pre_applicant":
                 pre_applicant = db.query(PreApplicant).filter(
                     func.lower(PreApplicant.email) == payment.user_email
@@ -408,16 +460,13 @@ async def verify_payment(
                     pre_applicant.payment_reference = reference
                     db.commit()
                     
-                    # ✅ FIXED: Use proper error handling for promote_to_applicant
                     try:
-                        # Pass the db session explicitly
+                        # Promote to applicant
                         await promote_to_applicant(payment.user_email, db)
                         logger.info(f"✅ Successfully promoted pre-applicant: {payment.user_email}")
                     except Exception as e:
                         logger.error(f"⚠️ Error promoting pre-applicant (non-critical): {e}")
-                        # Don't raise error - continue with payment verification
-                        # The applicant can be promoted later
-                        # Store error in payment metadata for debugging
+                        # Store error in payment metadata
                         payment_metadata = payment.payment_metadata or {}
                         payment_metadata["promotion_error"] = str(e)
                         payment.payment_metadata = payment_metadata
@@ -435,40 +484,34 @@ async def verify_payment(
                     applicant.amount_paid = payment.amount
                     applicant.paid_at = datetime.utcnow()
                     db.commit()
+                    logger.info(f"✅ Applicant payment marked as paid: {payment.user_email}")
             
-            # Process immediate transfers if applicable
-            if payment.amount > 0:
+            # Process immediate transfers if enabled and amount > 0
+            if payment.amount > 0 and settings.ENABLE_IMMEDIATE_TRANSFERS:
                 try:
                     config = PAYMENT_CONFIGS.get(payment.payment_type, {})
                     
                     if config.get("immediate_transfers", False):
-                        if background_tasks:
-                            background_tasks.add_task(
-                                transfer_service.process_immediate_splits,
-                                payment_reference=reference,
-                                payment_amount=payment.amount,
-                                db=db
-                            )
-                            logger.info(f"Immediate transfers queued for {reference}")
-                        else:
-                            # Run synchronously if no background tasks
-                            await transfer_service.process_immediate_splits(
-                                payment_reference=reference,
-                                payment_amount=payment.amount,
-                                db=db
-                            )
+                        logger.info(f"Queuing immediate transfers for {reference}")
+                        background_tasks.add_task(
+                            transfer_service.process_immediate_splits,
+                            payment_reference=reference,
+                            payment_amount=payment.amount,
+                            db=db
+                        )
+                        logger.info(f"✅ Immediate transfers queued for {reference}")
                 except Exception as transfer_error:
-                    logger.error(f"Failed to queue immediate transfers: {str(transfer_error)}")
+                    logger.error(f"❌ Failed to queue immediate transfers: {str(transfer_error)}")
             
             # Process post-payment tasks
-            if background_tasks:
-                background_tasks.add_task(
-                    process_post_payment,
-                    user_email=payment.user_email,
-                    user_type=payment.user_type,
-                    payment_type=payment.payment_type,
-                    db=db
-                )
+            logger.info(f"Queuing post-payment tasks for {payment.user_email}")
+            background_tasks.add_task(
+                process_post_payment,
+                user_email=payment.user_email,
+                user_type=payment.user_type,
+                payment_type=payment.payment_type,
+                db=db
+            )
             
             return {
                 "status": "success",
@@ -476,20 +519,27 @@ async def verify_payment(
                 "payment_reference": reference,
                 "amount": f"₦{payment.amount:,}",
                 "payment_date": payment.paid_at.isoformat() if payment.paid_at else None,
+                "environment": "LIVE" if not payment.is_test_payment else "TEST",
+                "immediate_transfers_queued": settings.ENABLE_IMMEDIATE_TRANSFERS
             }
         else:
+            # Payment verification failed
             payment.status = "failed"
+            payment.verification_data = verification
             db.commit()
+            
+            error_msg = verification.get("message", "Payment verification failed")
+            logger.error(f"❌ Payment verification failed: {error_msg}")
             
             raise HTTPException(
                 status_code=400,
-                detail="Payment verification failed"
+                detail=error_msg
             )
             
     except HTTPException as he:
         raise he
     except Exception as e:
-        logger.error(f"Error verifying payment: {str(e)}", exc_info=True)
+        logger.error(f"❌ Error verifying payment: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"Payment verification failed: {str(e)}"
@@ -503,15 +553,24 @@ async def paystack_callback(
 ):
     """
     Paystack webhook callback - triggers immediate transfers
+    IMPORTANT: This is called by Paystack, not the frontend
     """
     try:
         from app.services.immediate_transfer import ImmediateTransferService
         
+        # Get the payload
         payload = await request.json()
-        logger.info(f"Paystack callback received: {payload.get('event')}")
-        
         event = payload.get("event")
         data = payload.get("data", {})
+        
+        logger.info(f"🔵 Paystack webhook received: {event}")
+        logger.info(f"Webhook data: {data.get('reference')}")
+        
+        # Verify webhook signature (recommended for production)
+        # signature = request.headers.get('x-paystack-signature')
+        # if not verify_signature(payload, signature):
+        #     logger.error("Invalid webhook signature")
+        #     return {"status": "error", "message": "Invalid signature"}
         
         if event == "charge.success":
             reference = data.get("reference")
@@ -525,17 +584,22 @@ async def paystack_callback(
                     ).first()
                     
                     if payment and payment.status != "success":
+                        # Update payment
                         payment.status = "success"
                         payment.paid_at = datetime.utcnow()
                         payment.verification_data = verification
                         db.commit()
                         
-                        if payment.amount > 0:
+                        logger.info(f"✅ Payment processed via webhook: {reference}")
+                        
+                        # Process immediate transfers
+                        if payment.amount > 0 and settings.ENABLE_IMMEDIATE_TRANSFERS:
                             try:
                                 transfer_service = ImmediateTransferService()
                                 config = PAYMENT_CONFIGS.get(payment.payment_type, {})
                                 
                                 if config.get("immediate_transfers", False):
+                                    logger.info(f"Processing immediate transfers via webhook: {reference}")
                                     background_tasks.add_task(
                                         transfer_service.process_immediate_splits,
                                         payment_reference=reference,
@@ -543,21 +607,31 @@ async def paystack_callback(
                                         db=db
                                     )
                             except Exception as transfer_error:
-                                logger.error(f"Failed to queue transfers in webhook: {str(transfer_error)}")
+                                logger.error(f"❌ Webhook transfer error: {str(transfer_error)}")
                         
-                        await process_post_payment(
+                        # Process post-payment
+                        background_tasks.add_task(
+                            process_post_payment,
                             user_email=payment.user_email,
                             user_type=payment.user_type,
                             payment_type=payment.payment_type,
                             db=db
                         )
                         
-                        logger.info(f"Payment {reference} processed via webhook with immediate transfers")
+                        logger.info(f"✅ Webhook processing complete for {reference}")
         
-        return {"status": "success", "message": "Callback processed"}
+        elif event == "transfer.success":
+            logger.info(f"Transfer successful: {data.get('reference')}")
+            # You can update transfer status here if needed
+        
+        elif event == "transfer.failed":
+            logger.error(f"Transfer failed: {data.get('reference')}")
+            # Handle failed transfers
+        
+        return {"status": "success", "message": "Webhook processed"}
         
     except Exception as e:
-        logger.error(f"Error processing callback: {str(e)}")
+        logger.error(f"❌ Error processing webhook: {str(e)}")
         return {"status": "error", "message": str(e)}
 
 @router.get("/admin/transfers")
@@ -578,15 +652,19 @@ async def get_transfer_history(
         if status:
             query = query.filter(ImmediateTransfer.status == status)
         if start_date:
-            query = query.filter(ImmediateTransfer.transferred_at >= start_date)
+            query = query.filter(ImmediateTransfer.created_at >= start_date)
         if end_date:
-            query = query.filter(ImmediateTransfer.transferred_at <= end_date)
+            query = query.filter(ImmediateTransfer.created_at <= end_date)
         
-        transfers = query.order_by(desc(ImmediateTransfer.transferred_at)).all()
+        transfers = query.order_by(desc(ImmediateTransfer.created_at)).all()
         
         total_amount = sum(t.amount for t in transfers)
         total_dg = sum(t.amount for t in transfers if t.recipient_type == "director_general")
         total_estech = sum(t.amount for t in transfers if t.recipient_type == "estech_system")
+        
+        # Count live vs test transfers
+        live_transfers = [t for t in transfers if not getattr(t, 'is_test_mode', True)]
+        test_transfers = [t for t in transfers if getattr(t, 'is_test_mode', False)]
         
         return {
             "status": "success",
@@ -600,12 +678,15 @@ async def get_transfer_history(
                     "status": t.status,
                     "transfer_reference": t.transfer_reference,
                     "transferred_at": t.transferred_at.isoformat() if t.transferred_at else None,
-                    "bank": t.recipient_bank
+                    "bank": t.recipient_bank,
+                    "is_test_mode": getattr(t, 'is_test_mode', False)
                 }
                 for t in transfers
             ],
             "summary": {
                 "total_transfers": len(transfers),
+                "live_transfers": len(live_transfers),
+                "test_transfers": len(test_transfers),
                 "total_amount": f"₦{total_amount:,}",
                 "director_general_total": f"₦{total_dg:,}",
                 "estech_system_total": f"₦{total_estech:,}",
@@ -669,7 +750,9 @@ async def get_transfer_status(
                 "amount": f"₦{payment.amount:,}",
                 "type": payment.payment_type,
                 "status": payment.status,
-                "immediate_transfers_processed": payment.immediate_transfers_processed
+                "is_test_payment": payment.is_test_payment,
+                "immediate_transfers_processed": payment.immediate_transfers_processed,
+                "paid_at": payment.paid_at.isoformat() if payment.paid_at else None
             },
             "expected_transfers": expected_transfers,
             "actual_transfers": [
@@ -678,7 +761,8 @@ async def get_transfer_status(
                     "amount": f"₦{t.amount:,}",
                     "status": t.status,
                     "transfer_reference": t.transfer_reference,
-                    "transferred_at": t.transferred_at.isoformat() if t.transferred_at else None
+                    "transferred_at": t.transferred_at.isoformat() if t.transferred_at else None,
+                    "is_test_mode": getattr(t, 'is_test_mode', False)
                 }
                 for t in transfers
             ],
@@ -694,21 +778,6 @@ async def get_transfer_status(
             detail="Failed to get transfer status"
         )
 
-@router.post("/manual/confirm")
-async def manual_payment(data: ManualPaymentRequest, db: Session = Depends(get_db)):
-    """Legacy endpoint - forward to new payment system"""
-    payment_data = PaymentCreate(
-        email=data.email,
-        payment_type="regular",
-        user_type="pre_applicant"
-    )
-    return await initiate_payment(payment_data, db)
-
-@router.post("/paystack/verify")
-async def paystack_verify(data: GatewayCallback, db: Session = Depends(get_db)):
-    """Legacy endpoint"""
-    return await verify_payment(data.reference, db)
-
 @router.get("/user/{email}")
 async def get_user_payments(
     email: str,
@@ -716,7 +785,6 @@ async def get_user_payments(
 ):
     """
     Get payment history for a user
-    Returns SIMPLE info (no split details)
     """
     try:
         payments = db.query(Payment).filter(
@@ -731,7 +799,8 @@ async def get_user_payments(
                 "status": payment.status,
                 "payment_type": payment.payment_type,
                 "date": payment.paid_at.isoformat() if payment.paid_at else payment.created_at.isoformat(),
-                "description": "Application Fee" if payment.payment_type in ["regular", "vip"] else "Registration"
+                "description": "Application Fee" if payment.payment_type in ["regular", "vip"] else "Registration",
+                "is_test_payment": payment.is_test_payment
             })
         
         return {
@@ -748,127 +817,6 @@ async def get_user_payments(
             detail="Failed to get payment history"
         )
 
-@router.get("/admin/estech-balance")
-async def get_estech_balance(
-    db: Session = Depends(get_db),
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-    month: Optional[str] = None
-):
-    """
-    ADMIN ONLY: Get eSTech System accumulated commission
-    This is INTERNAL and NOT exposed to users
-    """
-    try:
-        query = db.query(Payment).filter(
-            Payment.status == "success",
-            Payment.estech_system_share > 0
-        )
-        
-        if month:
-            query = query.filter(
-                db.func.strftime('%Y-%m', Payment.paid_at) == month
-            )
-        elif start_date:
-            query = query.filter(Payment.paid_at >= start_date)
-            if end_date:
-                query = query.filter(Payment.paid_at <= end_date)
-        
-        payments = query.order_by(desc(Payment.paid_at)).all()
-        
-        total_estech = sum(p.estech_system_share for p in payments)
-        total_dg = sum(p.director_general_share for p in payments)
-        total_amount = sum(p.amount for p in payments)
-        
-        monthly_data = {}
-        for payment in payments:
-            if payment.paid_at:
-                month_key = payment.paid_at.strftime("%Y-%m")
-                if month_key not in monthly_data:
-                    monthly_data[month_key] = {
-                        "estech_total": 0,
-                        "dg_total": 0,
-                        "payment_count": 0,
-                        "payments": []
-                    }
-                
-                monthly_data[month_key]["estech_total"] += payment.estech_system_share
-                monthly_data[month_key]["dg_total"] += payment.director_general_share
-                monthly_data[month_key]["payment_count"] += 1
-                monthly_data[month_key]["payments"].append({
-                    "reference": payment.payment_reference,
-                    "date": payment.paid_at.isoformat(),
-                    "applicant": payment.user_email,
-                    "type": payment.payment_type,
-                    "total": f"₦{payment.amount:,}",
-                    "estech_share": f"₦{payment.estech_system_share:,}",
-                    "dg_share": f"₦{payment.director_general_share:,}"
-                })
-        
-        current_month = datetime.now().strftime("%Y-%m")
-        current_month_estech = monthly_data.get(current_month, {"estech_total": 0})["estech_total"]
-        current_month_dg = monthly_data.get(current_month, {"dg_total": 0})["dg_total"]
-        
-        return {
-            "status": "success",
-            "company": settings.ESTECH_COMPANY_NAME,
-            "bank_details": {
-                "account_name": settings.ESTECH_BANK_ACCOUNT_NAME,
-                "account_number": settings.ESTECH_BANK_ACCOUNT_NUMBER,
-                "bank": settings.ESTECH_BANK_NAME,
-                "beneficiary": settings.ESTECH_ACTUAL_BENEFICIARY
-            },
-            "commission_rate": f"{settings.ESTECH_COMMISSION_PERCENTAGE}% of all application fees",
-            "purpose": settings.ESTECH_COMMISSION_PURPOSE,
-            
-            "totals": {
-                "all_time": {
-                    "estech_balance": f"₦{total_estech:,}",
-                    "director_general_balance": f"₦{total_dg:,}",
-                    "total_processed": f"₦{total_amount:,}",
-                    "payment_count": len(payments)
-                },
-                "current_month": {
-                    "month": current_month,
-                    "estech_balance": f"₦{current_month_estech:,}",
-                    "dg_balance": f"₦{current_month_dg:,}",
-                    "payment_count": monthly_data.get(current_month, {"payment_count": 0})["payment_count"]
-                }
-            },
-            
-            "monthly_breakdown": {
-                month: {
-                    "estech_total": f"₦{data['estech_total']:,}",
-                    "dg_total": f"₦{data['dg_total']:,}",
-                    "payment_count": data["payment_count"],
-                    "status": "immediate_transfer"
-                }
-                for month, data in monthly_data.items()
-            },
-            
-            "recent_payments": [
-                {
-                    "date": p.paid_at.strftime("%Y-%m-%d %H:%M") if p.paid_at else "N/A",
-                    "applicant": p.user_email,
-                    "type": p.payment_type.upper(),
-                    "total": f"₦{p.amount:,}",
-                    "estech_commission": f"₦{p.estech_system_share:,}",
-                    "dg_share": f"₦{p.director_general_share:,}",
-                    "purpose": settings.ESTECH_COMMISSION_PURPOSE,
-                    "reference": p.payment_reference,
-                    "immediate_transfer": p.immediate_transfers_processed
-                }
-                for p in payments[:10]
-            ]
-        }
-        
-    except Exception as e:
-        logger.error(f"Error getting eSTech balance: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail="Failed to get eSTech System balance"
-        )
-
 @router.get("/admin/stats")
 async def get_payment_stats(
     db: Session = Depends(get_db),
@@ -878,7 +826,6 @@ async def get_payment_stats(
 ):
     """
     ADMIN ONLY: Comprehensive payment statistics
-    Shows split between recipients
     """
     try:
         query = db.query(Payment).filter(Payment.status == "success")
@@ -890,10 +837,18 @@ async def get_payment_stats(
         
         all_payments = query.all()
         
+        # Separate live and test payments
+        live_payments = [p for p in all_payments if not p.is_test_payment]
+        test_payments = [p for p in all_payments if p.is_test_payment]
+        
         stats = {
             "overall": {
                 "total_payments": len(all_payments),
+                "live_payments": len(live_payments),
+                "test_payments": len(test_payments),
                 "total_amount": sum(p.amount for p in all_payments),
+                "live_amount": sum(p.amount for p in live_payments),
+                "test_amount": sum(p.amount for p in test_payments),
                 "total_director_general": sum(p.director_general_share for p in all_payments),
                 "total_estech_system": sum(p.estech_system_share for p in all_payments),
                 "total_marshal_net": sum(p.marshal_net_amount or 0 for p in all_payments),
@@ -903,6 +858,8 @@ async def get_payment_stats(
             "by_type": {
                 "regular": {
                     "count": len([p for p in all_payments if p.payment_type == "regular"]),
+                    "live_count": len([p for p in live_payments if p.payment_type == "regular"]),
+                    "test_count": len([p for p in test_payments if p.payment_type == "regular"]),
                     "total": sum(p.amount for p in all_payments if p.payment_type == "regular"),
                     "director_general": sum(p.director_general_share for p in all_payments if p.payment_type == "regular"),
                     "estech_system": sum(p.estech_system_share for p in all_payments if p.payment_type == "regular"),
@@ -910,6 +867,8 @@ async def get_payment_stats(
                 },
                 "vip": {
                     "count": len([p for p in all_payments if p.payment_type == "vip"]),
+                    "live_count": len([p for p in live_payments if p.payment_type == "vip"]),
+                    "test_count": len([p for p in test_payments if p.payment_type == "vip"]),
                     "total": sum(p.amount for p in all_payments if p.payment_type == "vip"),
                     "director_general": sum(p.director_general_share for p in all_payments if p.payment_type == "vip"),
                     "estech_system": sum(p.estech_system_share for p in all_payments if p.payment_type == "vip"),
@@ -921,6 +880,7 @@ async def get_payment_stats(
             "monthly_summary": {}
         }
         
+        # Daily trend for last 30 days
         end_date_obj = datetime.now()
         start_date_obj = end_date_obj - timedelta(days=30)
         
@@ -935,22 +895,33 @@ async def get_payment_stats(
             day_key = day.strftime("%Y-%m-%d")
             
             day_payments = [p for p in daily_payments if p.paid_at and p.paid_at.date() == day.date()]
+            live_day_payments = [p for p in day_payments if not p.is_test_payment]
+            test_day_payments = [p for p in day_payments if p.is_test_payment]
             
             stats["daily_trend"][day_key] = {
                 "count": len(day_payments),
+                "live_count": len(live_day_payments),
+                "test_count": len(test_day_payments),
                 "total": sum(p.amount for p in day_payments),
+                "live_total": sum(p.amount for p in live_day_payments),
+                "test_total": sum(p.amount for p in test_day_payments),
                 "director_general": sum(p.director_general_share for p in day_payments),
                 "estech_system": sum(p.estech_system_share for p in day_payments),
                 "marshal_net": sum(p.marshal_net_amount or 0 for p in day_payments)
             }
         
+        # Monthly summary
         for payment in all_payments:
             if payment.paid_at:
                 month_key = payment.paid_at.strftime("%Y-%m")
                 if month_key not in stats["monthly_summary"]:
                     stats["monthly_summary"][month_key] = {
                         "count": 0,
+                        "live_count": 0,
+                        "test_count": 0,
                         "total": 0,
+                        "live_total": 0,
+                        "test_total": 0,
                         "director_general": 0,
                         "estech_system": 0,
                         "marshal_net": 0
@@ -961,34 +932,34 @@ async def get_payment_stats(
                 stats["monthly_summary"][month_key]["director_general"] += payment.director_general_share
                 stats["monthly_summary"][month_key]["estech_system"] += payment.estech_system_share
                 stats["monthly_summary"][month_key]["marshal_net"] += (payment.marshal_net_amount or 0)
+                
+                if payment.is_test_payment:
+                    stats["monthly_summary"][month_key]["test_count"] += 1
+                    stats["monthly_summary"][month_key]["test_total"] += payment.amount
+                else:
+                    stats["monthly_summary"][month_key]["live_count"] += 1
+                    stats["monthly_summary"][month_key]["live_total"] += payment.amount
         
+        # Format currency
         def format_currency(amount):
             return f"₦{amount:,.2f}" if isinstance(amount, (int, float)) else amount
-        
-        for key in ["overall", "by_type"]:
-            if key == "overall":
-                for subkey in ["total_amount", "total_director_general", "total_estech_system", "total_marshal_net", "average_payment"]:
-                    if subkey in stats[key]:
-                        stats[key][subkey + "_formatted"] = format_currency(stats[key][subkey])
-            elif key == "by_type":
-                for type_key in ["regular", "vip"]:
-                    if type_key in stats[key]:
-                        for subkey in ["total", "director_general", "estech_system", "marshal_net"]:
-                            if subkey in stats[key][type_key]:
-                                stats[key][type_key][subkey + "_formatted"] = format_currency(stats[key][type_key][subkey])
         
         return {
             "status": "success",
             "period": period,
             "start_date": start_date,
             "end_date": end_date,
+            "environment": settings.ENVIRONMENT,
+            "paystack_mode": "LIVE" if not settings.PAYSTACK_TEST_MODE else "TEST",
+            "immediate_transfers_enabled": settings.ENABLE_IMMEDIATE_TRANSFERS,
             "stats": stats,
-            "immediate_transfer_config": IMMEDIATE_TRANSFER_CONFIG,
             "notes": [
-                f"Immediate transfers enabled: {settings.DG_SHARE_PERCENTAGE}% to Director General, {settings.ESTECH_COMMISSION_PERCENTAGE}% to eSTech System",
-                "Marshal Core bears all transaction fees and receives remainder",
-                "All transfers happen automatically after successful payment",
-                "All amounts are in Nigerian Naira (₦)"
+                f"Environment: {settings.ENVIRONMENT}",
+                f"Paystack Mode: {'LIVE' if not settings.PAYSTACK_TEST_MODE else 'TEST'}",
+                f"Immediate Transfers: {'Enabled' if settings.ENABLE_IMMEDIATE_TRANSFERS else 'Disabled'}",
+                f"DG Share: {settings.DG_SHARE_PERCENTAGE}%",
+                f"eSTech Share: {settings.ESTECH_COMMISSION_PERCENTAGE}%",
+                f"Marshal Core Share: {settings.MARSHAL_SHARE_PERCENTAGE}%"
             ]
         }
         
@@ -1054,7 +1025,6 @@ async def retry_transfer(
 async def get_payment_types():
     """
     Get available payment types
-    Returns SIMPLE info for frontend display
     """
     return {
         "payment_types": {
@@ -1082,7 +1052,9 @@ async def get_payment_types():
                 ]
             }
         },
-        "notes": "All payments are processed securely via Paystack with immediate fund distribution"
+        "environment": settings.ENVIRONMENT,
+        "paystack_mode": "LIVE" if not settings.PAYSTACK_TEST_MODE else "TEST",
+        "notes": f"All payments are processed securely via Paystack {'LIVE' if not settings.PAYSTACK_TEST_MODE else 'TEST'} with immediate fund distribution"
     }
 
 @router.get("/check/{email}")
@@ -1116,7 +1088,9 @@ async def check_payment_status(
             "payment_reference": payment.payment_reference,
             "amount": f"₦{payment.amount:,}",
             "payment_type": payment.payment_type,
-            "created_at": payment.created_at.isoformat() if payment.created_at else None
+            "created_at": payment.created_at.isoformat() if payment.created_at else None,
+            "is_test_payment": payment.is_test_payment,
+            "environment": "LIVE" if not payment.is_test_payment else "TEST"
         }
         
         if payment.status == "pending" and payment.authorization_url:
@@ -1135,3 +1109,49 @@ async def check_payment_status(
             status_code=500,
             detail="Failed to check payment status"
         )
+
+@router.get("/status")
+async def get_payment_system_status():
+    """
+    Get payment system status and configuration
+    """
+    try:
+        payment_service = PaymentService()
+        balance_check = payment_service.check_balance()
+        
+        from app.services.immediate_transfer import ImmediateTransferService
+        transfer_service = ImmediateTransferService()
+        transfer_balance = await transfer_service.check_transfer_balance()
+        
+        return {
+            "status": "success",
+            "system": {
+                "environment": settings.ENVIRONMENT,
+                "paystack_mode": "LIVE" if not settings.PAYSTACK_TEST_MODE else "TEST",
+                "paystack_public_key": f"{settings.PAYSTACK_PUBLIC_KEY[:10]}...",
+                "paystack_secret_key": f"{settings.PAYSTACK_SECRET_KEY[:10]}...",
+                "frontend_url": settings.FRONTEND_URL,
+                "immediate_transfers_enabled": settings.ENABLE_IMMEDIATE_TRANSFERS,
+                "transfer_retry_attempts": settings.TRANSFER_RETRY_ATTEMPTS,
+                "transfer_retry_delay": settings.TRANSFER_RETRY_DELAY
+            },
+            "payment_config": {
+                "regular_fee": settings.REGULAR_APPLICATION_FEE,
+                "vip_fee": settings.VIP_APPLICATION_FEE,
+                "dg_share_percentage": settings.DG_SHARE_PERCENTAGE,
+                "estech_share_percentage": settings.ESTECH_COMMISSION_PERCENTAGE,
+                "marshal_share_percentage": settings.MARSHAL_SHARE_PERCENTAGE
+            },
+            "balance": {
+                "paystack": balance_check,
+                "transfer_balance": transfer_balance
+            },
+            "status_message": "Payment system is operational" if not settings.PAYSTACK_TEST_MODE else "Payment system is in TEST mode"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting system status: {str(e)}")
+        return {
+            "status": "error",
+            "message": str(e)
+        }
