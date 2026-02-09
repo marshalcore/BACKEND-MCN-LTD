@@ -1,4 +1,4 @@
-# app/routes/payment.py - PRODUCTION LIVE MODE VERSION
+# app/routes/payment.py - PRODUCTION LIVE MODE VERSION - FIXED
 from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
@@ -312,7 +312,7 @@ async def initiate_payment(
                 estech_system_share=0,
                 marshal_net_amount=0,
                 immediate_transfers_processed=True,
-                is_test_payment=False,  # Always false in production
+                # REMOVED: is_test_payment=False,  # This field doesn't exist in the model
                 paid_at=datetime.utcnow()
             )
             db.add(payment)
@@ -368,7 +368,7 @@ async def initiate_payment(
                 marshal_net_amount=config["marshal_core"]["estimated_net"],
                 
                 immediate_transfers_processed=False,
-                is_test_payment=False,  # Always false in production
+                # REMOVED: is_test_payment=False,  # This field doesn't exist in the model
                 transfer_metadata=None
             )
             db.add(payment)
@@ -752,7 +752,6 @@ async def get_transfer_status(
                 "amount": f"₦{payment.amount:,}",
                 "type": payment.payment_type,
                 "status": payment.status,
-                "is_test_payment": False,  # Always false in production
                 "immediate_transfers_processed": payment.immediate_transfers_processed,
                 "paid_at": payment.paid_at.isoformat() if payment.paid_at else None
             },
@@ -763,8 +762,7 @@ async def get_transfer_status(
                     "amount": f"₦{t.amount:,}",
                     "status": t.status,
                     "transfer_reference": t.transfer_reference,
-                    "transferred_at": t.transferred_at.isoformat() if t.transferred_at else None,
-                    "is_test_mode": False  # Always false in production
+                    "transferred_at": t.transferred_at.isoformat() if t.transferred_at else None
                 }
                 for t in transfers
             ],
@@ -803,7 +801,6 @@ async def get_user_payments(
                 "payment_type": payment.payment_type,
                 "date": payment.paid_at.isoformat() if payment.paid_at else payment.created_at.isoformat(),
                 "description": "Application Fee" if payment.payment_type in ["regular", "vip"] else "Registration",
-                "is_test_payment": False,  # Always false in production
                 "environment": "PRODUCTION LIVE"
             })
         
@@ -843,17 +840,15 @@ async def get_payment_stats(
         
         all_payments = query.all()
         
-        # PRODUCTION LIVE MODE - No test payments
+        # PRODUCTION LIVE MODE - All payments are live
         live_payments = all_payments
         
         stats = {
             "overall": {
                 "total_payments": len(all_payments),
                 "live_payments": len(live_payments),
-                "test_payments": 0,  # Always 0 in production
                 "total_amount": sum(p.amount for p in all_payments),
                 "live_amount": sum(p.amount for p in live_payments),
-                "test_amount": 0,  # Always 0 in production
                 "total_director_general": sum(p.director_general_share for p in all_payments),
                 "total_estech_system": sum(p.estech_system_share for p in all_payments),
                 "total_marshal_net": sum(p.marshal_net_amount or 0 for p in all_payments),
@@ -864,7 +859,6 @@ async def get_payment_stats(
                 "regular": {
                     "count": len([p for p in all_payments if p.payment_type == "regular"]),
                     "live_count": len([p for p in live_payments if p.payment_type == "regular"]),
-                    "test_count": 0,
                     "total": sum(p.amount for p in all_payments if p.payment_type == "regular"),
                     "director_general": sum(p.director_general_share for p in all_payments if p.payment_type == "regular"),
                     "estech_system": sum(p.estech_system_share for p in all_payments if p.payment_type == "regular"),
@@ -873,7 +867,6 @@ async def get_payment_stats(
                 "vip": {
                     "count": len([p for p in all_payments if p.payment_type == "vip"]),
                     "live_count": len([p for p in live_payments if p.payment_type == "vip"]),
-                    "test_count": 0,
                     "total": sum(p.amount for p in all_payments if p.payment_type == "vip"),
                     "director_general": sum(p.director_general_share for p in all_payments if p.payment_type == "vip"),
                     "estech_system": sum(p.estech_system_share for p in all_payments if p.payment_type == "vip"),
@@ -900,15 +893,13 @@ async def get_payment_stats(
             day_key = day.strftime("%Y-%m-%d")
             
             day_payments = [p for p in daily_payments if p.paid_at and p.paid_at.date() == day.date()]
-            live_day_payments = day_payments
+            live_day_payments = day_payments  # All payments are live in production
             
             stats["daily_trend"][day_key] = {
                 "count": len(day_payments),
                 "live_count": len(live_day_payments),
-                "test_count": 0,
                 "total": sum(p.amount for p in day_payments),
                 "live_total": sum(p.amount for p in live_day_payments),
-                "test_total": 0,
                 "director_general": sum(p.director_general_share for p in day_payments),
                 "estech_system": sum(p.estech_system_share for p in day_payments),
                 "marshal_net": sum(p.marshal_net_amount or 0 for p in day_payments)
@@ -922,10 +913,8 @@ async def get_payment_stats(
                     stats["monthly_summary"][month_key] = {
                         "count": 0,
                         "live_count": 0,
-                        "test_count": 0,
                         "total": 0,
                         "live_total": 0,
-                        "test_total": 0,
                         "director_general": 0,
                         "estech_system": 0,
                         "marshal_net": 0
@@ -1106,7 +1095,6 @@ async def check_payment_status(
             "amount": f"₦{payment.amount:,}",
             "payment_type": payment.payment_type,
             "created_at": payment.created_at.isoformat() if payment.created_at else None,
-            "is_test_payment": False,  # Always false in production
             "environment": "PRODUCTION LIVE"
         }
         
