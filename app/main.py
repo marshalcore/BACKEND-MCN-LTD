@@ -35,35 +35,39 @@ logger.info(f"Immediate Transfers Enabled: {settings.ENABLE_IMMEDIATE_TRANSFERS}
 logger.info(f"Paystack Mode: {'LIVE' if not settings.PAYSTACK_TEST_MODE else 'TEST'} - CHANGED TO LIVE")
 logger.info("=" * 50)
 
-# CORS Setup - Enhanced Configuration
-origins = [
-    "http://localhost",
-    "http://localhost:5500",
-    "http://localhost:5501",
-    "http://localhost:5502",
-    "http://127.0.0.1",
-    "http://127.0.0.1:5500",
-    "http://127.0.0.1:5501",
-    "http://127.0.0.1:5502",
-    "http://localhost:8000",
-    "http://127.0.0.1:8000",
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://marshalcoreofnigeria.ng",
+# ==================== FIXED CORS CONFIGURATION ====================
+# Define specific allowed origins
+allowed_origins = [
     "https://marshalcoreofnigeria.ng",
-    "https://backend-mcn-ltd.onrender.com",  
+    "http://marshalcoreofnigeria.ng",
+    "https://backend-mcn-ltd.onrender.com",
     "https://marshalcoreofficer.netlify.app",
     "https://mcn-org.netlify.app",
     "https://marshalcoreofnigerialimited.netlify.app",
     "https://marshalcoreadmin.netlify.app",
-    "http://127.0.0.1:5501",  # Added for local development
-    "*"  # Allow all origins for production
 ]
 
-# Use ONLY FastAPI's CORSMiddleware
+# For local development
+if settings.DEBUG:
+    allowed_origins.extend([
+        "http://localhost",
+        "http://localhost:5500",
+        "http://localhost:5501",
+        "http://localhost:5502",
+        "http://127.0.0.1",
+        "http://127.0.0.1:5500",
+        "http://127.0.0.1:5501",
+        "http://127.0.0.1:5502",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ])
+
+# Use ONLY FastAPI's CORSMiddleware with specific origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=allowed_origins,  # Specific origins instead of wildcard
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
     allow_headers=["*"],
@@ -218,7 +222,8 @@ async def normalize_static_paths(request: Request, call_next):
                             normalized_full_path,
                             media_type=media_type,
                             headers={
-                                'Access-Control-Allow-Origin': '*',
+                                'Access-Control-Allow-Origin': 'https://marshalcoreofnigeria.ng',
+                                'Access-Control-Allow-Credentials': 'true',
                                 'Cache-Control': 'public, max-age=3600'
                             }
                         )
@@ -246,6 +251,20 @@ async def normalize_static_paths(request: Request, call_next):
     
     # Continue with normal request processing
     response = await call_next(request)
+    
+    # Add proper CORS headers to all responses
+    origin = request.headers.get("origin")
+    if origin in allowed_origins:
+        response.headers["Access-Control-Allow-Origin"] = origin
+    else:
+        # Fallback to the main domain if origin not in list
+        response.headers["Access-Control-Allow-Origin"] = "https://marshalcoreofnigeria.ng"
+    
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    response.headers["Access-Control-Expose-Headers"] = "*"
+    
     return response
 
 # ==================== CORS FIX MIDDLEWARE FOR FORM SUBMISSIONS ====================
@@ -257,11 +276,19 @@ async def cors_fix_middleware(request: Request, call_next):
     """
     response = await call_next(request)
     
-    # Add CORS headers for all responses
-    response.headers["Access-Control-Allow-Origin"] = "*"
+    # Check if origin is in allowed list
+    origin = request.headers.get("origin")
+    
+    if origin in allowed_origins:
+        response.headers["Access-Control-Allow-Origin"] = origin
+    else:
+        # Default to main domain
+        response.headers["Access-Control-Allow-Origin"] = "https://marshalcoreofnigeria.ng"
+    
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, PATCH, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "*"
     response.headers["Access-Control-Allow-Credentials"] = "true"
+    response.headers["Access-Control-Expose-Headers"] = "*"
     
     # Special handling for OPTIONS requests
     if request.method == "OPTIONS":
@@ -400,11 +427,15 @@ async def download_pdf(filename: str, request: Request):
                         pass
             
             logger.error(f"PDF file not found: {filename}")
-            logger.error(f"Available PDFs: {available_pdfs}")
+            logger.error(f"Available PDFs: {available_pdfs[:10]}...")
             raise HTTPException(
                 status_code=404, 
                 detail=f"PDF file '{filename}' not found. Available files: {available_pdfs[:10]}..."
             )
+    
+    # Get the origin from request
+    origin = request.headers.get("origin")
+    allowed_origin = origin if origin in allowed_origins else "https://marshalcoreofnigeria.ng"
     
     response = FileResponse(
         pdf_path,
@@ -412,7 +443,8 @@ async def download_pdf(filename: str, request: Request):
         media_type="application/pdf",
         headers={
             "Content-Disposition": f"attachment; filename=\"{filename}\"",
-            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Origin": allowed_origin,
+            "Access-Control-Allow-Credentials": "true",
             "Access-Control-Expose-Headers": "Content-Disposition"
         }
     )
@@ -464,13 +496,18 @@ async def preview_pdf(filename: str, request: Request):
     if not pdf_path:
         raise HTTPException(status_code=404, detail="PDF file not found")
     
+    # Get the origin from request
+    origin = request.headers.get("origin")
+    allowed_origin = origin if origin in allowed_origins else "https://marshalcoreofnigeria.ng"
+    
     response = FileResponse(
         pdf_path,
         filename=filename,
         media_type="application/pdf",
         headers={
             "Content-Disposition": f"inline; filename=\"{filename}\"",
-            "Access-Control-Allow-Origin": "*"
+            "Access-Control-Allow-Origin": allowed_origin,
+            "Access-Control-Allow-Credentials": "true"
         }
     )
     
@@ -776,7 +813,7 @@ async def startup_event():
     """
     logger.info("🚀 Marshal Core Backend starting up...")
     logger.info(f"📁 Static directory: {STATIC_DIR}")
-    logger.info(f"🌐 CORS enabled for origins: {origins}")
+    logger.info(f"🌐 CORS enabled for origins: {allowed_origins}")
     logger.info(f"💰 Immediate Transfers: {'ENABLED' if settings.ENABLE_IMMEDIATE_TRANSFERS else 'DISABLED'}")
     logger.info(f"💰 Payment Amounts - Regular: ₦{settings.REGULAR_APPLICATION_FEE:,}, VIP: ₦{settings.VIP_APPLICATION_FEE:,}")
     logger.info("✅ PAYSTACK MODE: LIVE - Real money transfers active")
