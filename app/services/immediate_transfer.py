@@ -257,6 +257,7 @@ class ImmediateTransferService:
         """
         Process immediate transfers to DG and eSTech after payment - PRODUCTION LIVE MODE
         """
+        payment = None  # Define payment at the beginning for error handling
         try:
             if not self.enable_transfers:
                 logger.info(f"💰 Immediate transfers disabled for {payment_reference}")
@@ -324,8 +325,7 @@ class ImmediateTransferService:
                             status="initiated",
                             transferred_at=datetime.utcnow(),
                             paystack_transfer_code=transfer_result.get("transfer_code"),
-                            paystack_response=transfer_result,
-                            is_test_mode=False  # Always false in production
+                            paystack_response=transfer_result
                         )
                         db.add(transfer)
                         
@@ -350,8 +350,7 @@ class ImmediateTransferService:
                             transfer_reference=None,
                             status="failed",
                             transferred_at=datetime.utcnow(),
-                            paystack_response=transfer_result,
-                            is_test_mode=False
+                            paystack_response=transfer_result
                         )
                         db.add(transfer)
                         
@@ -401,8 +400,7 @@ class ImmediateTransferService:
                             status="initiated",
                             transferred_at=datetime.utcnow(),
                             paystack_transfer_code=transfer_result.get("transfer_code"),
-                            paystack_response=transfer_result,
-                            is_test_mode=False
+                            paystack_response=transfer_result
                         )
                         db.add(transfer)
                         
@@ -427,8 +425,7 @@ class ImmediateTransferService:
                             transfer_reference=None,
                             status="failed",
                             transferred_at=datetime.utcnow(),
-                            paystack_response=transfer_result,
-                            is_test_mode=False
+                            paystack_response=transfer_result
                         )
                         db.add(transfer)
                         
@@ -565,7 +562,6 @@ class ImmediateTransferService:
                         transfer.last_retry_at = datetime.utcnow()
                         transfer.paystack_transfer_code = transfer_result.get("transfer_code")
                         transfer.paystack_response = transfer_result
-                        transfer.is_test_mode = False
                         
                         retry_results.append({
                             "recipient_type": recipient_type,
