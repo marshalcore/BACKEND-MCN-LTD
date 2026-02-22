@@ -10,6 +10,7 @@ from enum import Enum
 from pydantic import BaseModel, EmailStr
 import logging
 import uuid
+import random  # Added for OTP generation
 
 from app.database import get_db
 from app.models.admin import Admin
@@ -253,14 +254,14 @@ async def admin_login(
             )
         
         # Generate 6-digit OTP
-        import random
         otp = str(random.randint(100000, 999999))
+        logger.info(f"Generated OTP: {otp} for {admin.email}")  # Debug log
         
-        # Store OTP in database - FIXED PARAMETER NAME
+        # Store OTP in database - FIXED: Use 'code' parameter name
         store_verification_code(
             db=db,
             email=admin.email.lower(),
-            code=otp,  # CHANGE FROM otp_code to code
+            code=otp,  # CHANGED: from otp_code to code
             purpose="admin_login"
         )
         
@@ -573,14 +574,13 @@ async def request_password_reset(
             )
         
         # Generate OTP
-        import random
         otp = str(random.randint(100000, 999999))
         
         # Store OTP - FIXED PARAMETER NAME
         store_verification_code(
             db=db,
             email=normalized_email,
-            code=otp,
+            code=otp,  # CHANGED: from otp to code
             purpose="password_reset"
         )
         
@@ -627,7 +627,7 @@ async def verify_password_reset(
         is_valid = verify_otp(
             db=db,
             email=normalized_email,
-            code=otp,
+            code=otp,  # CHANGED: from otp to code
             purpose="password_reset"
         )
         
@@ -1375,14 +1375,13 @@ async def resend_admin_otp(
             )
         
         # Generate new OTP
-        import random
         otp = str(random.randint(100000, 999999))
         
         # Store OTP - FIXED PARAMETER NAME
         store_verification_code(
             db=db,
             email=normalized_email,
-            code=otp,
+            code=otp,  # CHANGED: from otp to code
             purpose=purpose
         )
         
