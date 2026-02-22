@@ -45,6 +45,7 @@ allowed_origins = [
     "https://mcn-org.netlify.app",
     "https://marshalcoreofnigerialimited.netlify.app",
     "https://marshalcoreadmin.netlify.app",
+    "https://directoradmin.netlify.app",
 ]
 
 # For local development
