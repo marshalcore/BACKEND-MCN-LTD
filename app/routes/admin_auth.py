@@ -10,7 +10,7 @@ from enum import Enum
 from pydantic import BaseModel, EmailStr
 import logging
 import uuid
-import random  # Added for OTP generation
+import random
 
 from app.database import get_db
 from app.models.admin import Admin
@@ -47,6 +47,7 @@ class OTPPurpose(str, Enum):
     password_reset = "password_reset"
     officer_signup = "officer_signup"
     admin_login = "admin_login"
+    admin_signup = "admin_signup"
 
 class Token(BaseModel):
     access_token: str
@@ -163,7 +164,7 @@ async def admin_signup(
     background_tasks: BackgroundTasks = None
 ):
     """
-    Create a new admin account
+    Create a new admin account and send verification OTP
     """
     try:
         # Check if admin already exists
@@ -177,31 +178,43 @@ async def admin_signup(
         # Hash password and store in hashed_password field
         hashed_password = hash_password(admin_data.password)
         
-        # Create new admin
+        # Create new admin (not verified yet)
         new_admin = Admin(
             email=admin_data.email.lower(),
             hashed_password=hashed_password,
             full_name=admin_data.full_name,
             is_active=True,
             is_superuser=False,
-            is_verified=False
+            is_verified=False  # Will be verified after OTP
         )
         
         db.add(new_admin)
         db.commit()
         db.refresh(new_admin)
         
-        # Send welcome email if background tasks available
+        # Generate a REAL 6-digit OTP for verification
+        otp = str(random.randint(100000, 999999))
+        logger.info(f"🔐 Generated signup OTP: {otp} for {new_admin.email}")
+        
+        # STORE the OTP in database
+        store_verification_code(
+            db=db,
+            email=new_admin.email.lower(),
+            code=otp,
+            purpose="admin_signup"
+        )
+        
+        # Send OTP via email
         if background_tasks:
             background_tasks.add_task(
                 send_otp_email,
                 new_admin.email,
                 new_admin.full_name,
-                "000000",
-                "admin_welcome"
+                otp,
+                "admin_signup"
             )
         
-        logger.info(f"New admin created: {new_admin.email}")
+        logger.info(f"✅ New admin created and OTP sent: {new_admin.email}")
         
         return AdminResponse(
             id=str(new_admin.id),
@@ -215,7 +228,7 @@ async def admin_signup(
     except HTTPException as he:
         raise he
     except Exception as e:
-        logger.error(f"Error creating admin: {str(e)}")
+        logger.error(f"❌ Error creating admin: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create admin account"
@@ -255,13 +268,13 @@ async def admin_login(
         
         # Generate 6-digit OTP
         otp = str(random.randint(100000, 999999))
-        logger.info(f"Generated OTP: {otp} for {admin.email}")  # Debug log
+        logger.info(f"🔐 Generated login OTP: {otp} for {admin.email}")
         
-        # Store OTP in database - FIXED: Use 'code' parameter name
+        # Store OTP in database
         store_verification_code(
             db=db,
             email=admin.email.lower(),
-            code=otp,  # CHANGED: from otp_code to code
+            code=otp,
             purpose="admin_login"
         )
         
@@ -274,7 +287,7 @@ async def admin_login(
             "admin_login"
         )
         
-        logger.info(f"OTP sent successfully to {admin.email}")
+        logger.info(f"✅ OTP sent successfully to {admin.email}")
         
         return {
             "status": "success",
@@ -286,7 +299,7 @@ async def admin_login(
     except HTTPException as he:
         raise he
     except Exception as e:
-        logger.error(f"Error in admin login: {str(e)}")
+        logger.error(f"❌ Error in admin login: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error"
@@ -299,16 +312,17 @@ async def verify_otp_login(
 ):
     """
     Verify OTP and return JWT tokens
+    Supports both admin_login and admin_signup purposes
     """
     try:
         normalized_email = otp_data.email.strip().lower()
-        logger.info(f"OTP verification for: {normalized_email} | Purpose: {otp_data.purpose}")
+        logger.info(f"🔍 OTP verification for: {normalized_email} | Purpose: {otp_data.purpose}")
         
-        # Verify OTP - FIXED: using otp_data.code
+        # Verify OTP
         is_valid = verify_otp(
             db=db,
             email=normalized_email,
-            code=otp_data.code,  # USE code NOT otp or otp_code
+            code=otp_data.code,
             purpose=otp_data.purpose
         )
         
@@ -325,6 +339,12 @@ async def verify_otp_login(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Admin not found"
             )
+        
+        # If this is signup verification, mark admin as verified
+        if otp_data.purpose == "admin_signup" and not admin.is_verified:
+            admin.is_verified = True
+            db.commit()
+            logger.info(f"✅ Admin {admin.email} verified successfully")
         
         # Create access token (24 hours)
         access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -354,7 +374,7 @@ async def verify_otp_login(
             admin.last_login = datetime.utcnow()
             db.commit()
         
-        logger.info(f"Admin logged in: {admin.email}")
+        logger.info(f"✅ Admin logged in: {admin.email}")
         
         # Return admin data without password - SAFE ACCESS to last_login
         last_login_value = None
@@ -384,7 +404,7 @@ async def verify_otp_login(
     except HTTPException as he:
         raise he
     except Exception as e:
-        logger.error(f"Error in OTP verification: {str(e)}")
+        logger.error(f"❌ Error in OTP verification: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error"
@@ -453,7 +473,7 @@ async def refresh_token(
                 expires_delta=access_token_expires
             )
             
-            logger.info(f"Token refreshed for admin: {admin.email}")
+            logger.info(f"✅ Token refreshed for admin: {admin.email}")
             
             return {
                 "access_token": access_token,
@@ -477,7 +497,7 @@ async def refresh_token(
     except HTTPException as he:
         raise he
     except Exception as e:
-        logger.error(f"Error refreshing token: {str(e)}")
+        logger.error(f"❌ Error refreshing token: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error"
@@ -498,7 +518,7 @@ async def admin_dashboard(
         total_existing_officers = db.query(func.count(ExistingOfficer.id)).scalar() or 0
         total_admins = db.query(func.count(Admin.id)).scalar() or 0
         
-        # Get pending verifications - FIXED: Check both statuses
+        # Get pending verifications
         pending_existing_officers = db.query(func.count(ExistingOfficer.id)).filter(
             ExistingOfficer.status.in_(['pending_verification', 'pending'])
         ).scalar() or 0
@@ -520,7 +540,7 @@ async def admin_dashboard(
                 "created_at": officer.created_at.isoformat() if officer.created_at else None
             })
         
-        logger.info(f"Admin dashboard accessed by: {current_admin.email}")
+        logger.info(f"📊 Admin dashboard accessed by: {current_admin.email}")
         
         # SAFE ACCESS to last_login (handle missing database column)
         last_login_value = None
@@ -549,7 +569,7 @@ async def admin_dashboard(
         }
         
     except Exception as e:
-        logger.error(f"Error loading dashboard: {str(e)}")
+        logger.error(f"❌ Error loading dashboard: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to load dashboard"
@@ -575,12 +595,13 @@ async def request_password_reset(
         
         # Generate OTP
         otp = str(random.randint(100000, 999999))
+        logger.info(f"🔐 Generated password reset OTP: {otp} for {normalized_email}")
         
-        # Store OTP - FIXED PARAMETER NAME
+        # Store OTP
         store_verification_code(
             db=db,
             email=normalized_email,
-            code=otp,  # CHANGED: from otp to code
+            code=otp,
             purpose="password_reset"
         )
         
@@ -593,7 +614,7 @@ async def request_password_reset(
                 otp
             )
         
-        logger.info(f"Password reset OTP sent to: {normalized_email}")
+        logger.info(f"✅ Password reset OTP sent to: {normalized_email}")
         
         return {
             "status": "success",
@@ -604,7 +625,7 @@ async def request_password_reset(
     except HTTPException as he:
         raise he
     except Exception as e:
-        logger.error(f"Error requesting password reset: {str(e)}")
+        logger.error(f"❌ Error requesting password reset: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to request password reset"
@@ -623,11 +644,11 @@ async def verify_password_reset(
     try:
         normalized_email = email.strip().lower()
         
-        # Verify OTP - FIXED PARAMETER NAME
+        # Verify OTP
         is_valid = verify_otp(
             db=db,
             email=normalized_email,
-            code=otp,  # CHANGED: from otp to code
+            code=otp,
             purpose="password_reset"
         )
         
@@ -649,7 +670,7 @@ async def verify_password_reset(
         admin.hashed_password = hash_password(new_password)
         db.commit()
         
-        logger.info(f"Password reset successful for: {normalized_email}")
+        logger.info(f"✅ Password reset successful for: {normalized_email}")
         
         return {
             "status": "success",
@@ -660,7 +681,7 @@ async def verify_password_reset(
     except HTTPException as he:
         raise he
     except Exception as e:
-        logger.error(f"Error resetting password: {str(e)}")
+        logger.error(f"❌ Error resetting password: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to reset password"
@@ -701,7 +722,7 @@ async def update_admin_profile(
         db.commit()
         db.refresh(current_admin)
         
-        logger.info(f"Admin profile updated: {current_admin.email}")
+        logger.info(f"✅ Admin profile updated: {current_admin.email}")
         
         return AdminResponse(
             id=str(current_admin.id),
@@ -713,7 +734,7 @@ async def update_admin_profile(
         )
         
     except Exception as e:
-        logger.error(f"Error updating admin profile: {str(e)}")
+        logger.error(f"❌ Error updating admin profile: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update profile"
@@ -726,7 +747,7 @@ async def admin_logout(
     """
     Admin logout endpoint
     """
-    logger.info(f"Admin logged out: {current_admin.email}")
+    logger.info(f"👋 Admin logged out: {current_admin.email}")
     
     return {
         "status": "success",
@@ -783,7 +804,7 @@ async def get_all_existing_officers(
         } for officer in officers]
         
     except Exception as e:
-        logger.error(f"Error getting existing officers: {str(e)}")
+        logger.error(f"❌ Error getting existing officers: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to load existing officers"
@@ -863,7 +884,7 @@ async def get_existing_officer(
     except HTTPException as he:
         raise he
     except Exception as e:
-        logger.error(f"Error getting existing officer {officer_id}: {str(e)}")
+        logger.error(f"❌ Error getting existing officer {officer_id}: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to load officer details for {officer_id}"
@@ -906,7 +927,7 @@ async def approve_existing_officer(
         db.commit()
         db.refresh(officer)
         
-        logger.info(f"Officer {officer_id} approved by admin: {current_admin.email}")
+        logger.info(f"✅ Officer {officer_id} approved by admin: {current_admin.email}")
         
         return {
             "status": "success",
@@ -920,7 +941,7 @@ async def approve_existing_officer(
     except HTTPException as he:
         raise he
     except Exception as e:
-        logger.error(f"Error approving officer {officer_id}: {str(e)}")
+        logger.error(f"❌ Error approving officer {officer_id}: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to approve officer {officer_id}"
@@ -961,7 +982,7 @@ async def reject_existing_officer(
         db.commit()
         db.refresh(officer)
         
-        logger.info(f"Officer {officer_id} rejected by admin: {current_admin.email}")
+        logger.info(f"✅ Officer {officer_id} rejected by admin: {current_admin.email}")
         
         return {
             "status": "success",
@@ -974,7 +995,7 @@ async def reject_existing_officer(
     except HTTPException as he:
         raise he
     except Exception as e:
-        logger.error(f"Error rejecting officer {officer_id}: {str(e)}")
+        logger.error(f"❌ Error rejecting officer {officer_id}: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to reject officer {officer_id}"
@@ -1017,7 +1038,7 @@ async def verify_existing_officer(
         db.commit()
         db.refresh(officer)
         
-        logger.info(f"Officer {officer_id} verified by admin: {current_admin.email}")
+        logger.info(f"✅ Officer {officer_id} verified by admin: {current_admin.email}")
         
         return {
             "status": "success",
@@ -1032,7 +1053,7 @@ async def verify_existing_officer(
     except HTTPException as he:
         raise he
     except Exception as e:
-        logger.error(f"Error verifying officer {officer_id}: {str(e)}")
+        logger.error(f"❌ Error verifying officer {officer_id}: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to verify officer {officer_id}"
@@ -1095,7 +1116,7 @@ async def update_officer_status(
         db.commit()
         db.refresh(officer)
         
-        logger.info(f"Officer {officer_id} status updated from {old_status} to {update_data.status} by admin: {current_admin.email}")
+        logger.info(f"✅ Officer {officer_id} status updated from {old_status} to {update_data.status} by admin: {current_admin.email}")
         
         return {
             "status": "success",
@@ -1111,7 +1132,7 @@ async def update_officer_status(
     except HTTPException as he:
         raise he
     except Exception as e:
-        logger.error(f"Error updating officer {officer_id} status: {str(e)}")
+        logger.error(f"❌ Error updating officer {officer_id} status: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update officer {officer_id} status"
@@ -1145,7 +1166,7 @@ async def get_pending_existing_officers(
         } for officer in officers]
         
     except Exception as e:
-        logger.error(f"Error getting pending officers: {str(e)}")
+        logger.error(f"❌ Error getting pending officers: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to load pending officers"
@@ -1178,7 +1199,7 @@ async def get_all_officers(
         } for officer in officers]
         
     except Exception as e:
-        logger.error(f"Error getting officers: {str(e)}")
+        logger.error(f"❌ Error getting officers: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to load officers"
@@ -1210,7 +1231,7 @@ async def get_all_applicants(
         } for applicant in applicants]
         
     except Exception as e:
-        logger.error(f"Error getting applicants: {str(e)}")
+        logger.error(f"❌ Error getting applicants: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to load applicants"
@@ -1245,7 +1266,7 @@ async def get_all_admins(
         ) for admin in admins]
         
     except Exception as e:
-        logger.error(f"Error getting admins: {str(e)}")
+        logger.error(f"❌ Error getting admins: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to load admins"
@@ -1277,7 +1298,7 @@ async def get_all_applicants_admin(
         } for applicant in applicants]
         
     except Exception as e:
-        logger.error(f"Error getting applicants: {str(e)}")
+        logger.error(f"❌ Error getting applicants: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to load applicants"
@@ -1308,7 +1329,7 @@ async def get_all_officers_admin(
         } for officer in officers]
         
     except Exception as e:
-        logger.error(f"Error getting officers: {str(e)}")
+        logger.error(f"❌ Error getting officers: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to load officers"
@@ -1347,7 +1368,7 @@ async def get_all_admins_admin(
         return result
         
     except Exception as e:
-        logger.error(f"Error getting admins: {str(e)}")
+        logger.error(f"❌ Error getting admins: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to load admins"
@@ -1376,12 +1397,13 @@ async def resend_admin_otp(
         
         # Generate new OTP
         otp = str(random.randint(100000, 999999))
+        logger.info(f"🔐 Generated resend OTP: {otp} for {normalized_email} with purpose {purpose}")
         
-        # Store OTP - FIXED PARAMETER NAME
+        # Store OTP
         store_verification_code(
             db=db,
             email=normalized_email,
-            code=otp,  # CHANGED: from otp to code
+            code=otp,
             purpose=purpose
         )
         
@@ -1395,7 +1417,7 @@ async def resend_admin_otp(
                 purpose
             )
         
-        logger.info(f"OTP resent to: {normalized_email}")
+        logger.info(f"✅ OTP resent to: {normalized_email}")
         
         return {
             "status": "success",
@@ -1406,7 +1428,7 @@ async def resend_admin_otp(
     except HTTPException as he:
         raise he
     except Exception as e:
-        logger.error(f"Error resending OTP: {str(e)}")
+        logger.error(f"❌ Error resending OTP: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to resend OTP"
