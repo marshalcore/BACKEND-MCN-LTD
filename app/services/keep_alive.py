@@ -31,7 +31,7 @@ class KeepAliveService:
             
             if is_render:
                 # Use Render's external URL
-                self.base_url = os.getenv("RENDER_EXTERNAL_URL", "https://backend-mcn-ltd.onrender.com")
+                self.base_url = os.getenv("RENDER_EXTERNAL_URL", "https://api.marshalcoreofnigeria.ng")
                 logger.info(f"🌐 Render.com deployment detected: {self.base_url}")
             else:
                 # Local development

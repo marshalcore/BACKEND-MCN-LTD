@@ -121,7 +121,7 @@ async def generate_existing_officer_pdfs_and_email(officer_id: str, email: str, 
         app_pdf_path = pdf_gen.generate_application_form(officer_data, str(officer.id))
         
         # ✅ CREATE PUBLIC DOWNLOAD URLs
-        base_url = "https://backend-mcn-ltd.onrender.com"
+        base_url = "https://api.marshalcoreofnigeria.ng"
         terms_filename = os.path.basename(terms_pdf_path)
         registration_filename = os.path.basename(app_pdf_path)
         

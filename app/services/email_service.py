@@ -454,7 +454,7 @@ class EmailService:
                         <p>You can now login to your dashboard to get started:</p>
                         
                         <div style="text-align: center;">
-                            <a href="https://marshal-core-frontend.onrender.com/officer-login.html" class="button">Go to Dashboard</a>
+                            <a href="https://api.marshalcoreofnigeria.ng/portal.marshalcoreofnigeria.ng" class="button">Go to Dashboard</a>
                         </div>
                     </div>
                     
@@ -865,7 +865,7 @@ async def send_pdfs_email(
         logger.info(f"📨 Queueing PDFs email to: {to_email}")
         
         # ✅ CREATE PUBLIC DOWNLOAD URLs
-        base_url = "https://backend-mcn-ltd.onrender.com"
+        base_url = "https://api.marshalcoreofnigeria.ng"
         
         terms_filename = os.path.basename(terms_pdf_path) if terms_pdf_path else ""
         app_filename = os.path.basename(application_pdf_path) if application_pdf_path else ""
@@ -939,8 +939,8 @@ async def send_pdfs_email(
                     <p>If you have any questions or need assistance, please contact our support team.</p>
                     
                     <div style="text-align: center; margin: 30px 0;">
-                        <a href="https://marshal-core-frontend.onrender.com/existing-officer-login.html" class="button">Login to Dashboard</a>
-                        <a href="https://marshal-core-frontend.onrender.com/contact.html" class="button" style="background-color: #4CAF50;">Contact Support</a>
+                        <a href="https://api.marshalcoreofnigeria.ng/officer.marshalcoreofnigeria.ng" class="button">Login to Dashboard</a>
+                        <a href="https://marshalcoreofnigeria.ng/contact.html" class="button" style="background-color: #4CAF50;">Contact Support</a>
                     </div>
                     
                     <p>Best regards,<br>
@@ -1007,7 +1007,7 @@ async def send_existing_officer_pdfs_email(
         logger.info(f"📨 Queueing PDFs email for existing officer: {to_email} (ID: {officer_id})")
         
         # ✅ CREATE PUBLIC DOWNLOAD URLs
-        base_url = "https://backend-mcn-ltd.onrender.com"
+        base_url = "https://api.marshalcoreofnigeria.ng"
         
         terms_pdf_filename = os.path.basename(terms_pdf_path) if terms_pdf_path else ""
         registration_pdf_filename = os.path.basename(registration_pdf_path) if registration_pdf_path else ""
@@ -1197,7 +1197,7 @@ async def send_existing_officer_welcome_email(
                 <p>You can now login to your dashboard using your Officer ID:</p>
                 
                 <div style="text-align: center;">
-                    <a href="https://marshal-core-frontend.onrender.com/existing-officer-login.html" class="button">Go to Dashboard</a>
+                    <a href="https://api.marshalcoreofnigeria.ng/portal.marshalcoreofnigeria.ng" class="button">Go to Dashboard</a>
                 </div>
             </div>
             
@@ -1372,7 +1372,7 @@ async def send_applicant_documents_email(
         logger.info(f"📨 Queueing applicant documents email to: {to_email} (Tier: {tier})")
         
         # ✅ CREATE PUBLIC DOWNLOAD URLs
-        base_url = "https://backend-mcn-ltd.onrender.com"
+        base_url = "https://api.marshalcoreofnigeria.ng"
         
         terms_filename = os.path.basename(terms_pdf_path) if terms_pdf_path else ""
         app_filename = os.path.basename(application_pdf_path) if application_pdf_path else ""

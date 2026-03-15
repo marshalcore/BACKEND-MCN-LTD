@@ -41,10 +41,11 @@ allowed_origins = [
     "https://marshalcoreofnigeria.ng",
     "http://marshalcoreofnigeria.ng",
     "https://backend-mcn-ltd.onrender.com",
-    "https://marshalcoreofficer.netlify.app",
-    "https://mcn-org.netlify.app",
-    "https://marshalcoreofnigerialimited.netlify.app",
+    "https://officer.marshalcoreofnigeria.ng",
+    "https://portal.marshalcoreofnigeria.ng",
+    "https://verify.marshalcoreofnigeria.ng",
     "https://marshalcoreadmin.netlify.app",
+    "https://recruitment.marshalcoreofnigeria.ng",
     "https://directoradmin.netlify.app",
 ]
 
