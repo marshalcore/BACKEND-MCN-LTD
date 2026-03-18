@@ -120,8 +120,8 @@ async def register_existing_officer(
     1. Date of Enlistment (Required)
     2. Date of Promotion (Optional)
     
-    ✅ NEW: Automatically generates PDFs and sends email after registration
-    ✅ NEW: Uses simplified 2-upload document system
+    ✅ UPDATED: PDFs are generated AFTER all documents are uploaded
+    ✅ Uses simplified 2-upload document system
     """
     try:
         logger.info(f"Registering officer with NEW fields: {register_data.officer_id}")
@@ -137,19 +137,7 @@ async def register_existing_officer(
         
         logger.info(f"Officer registered successfully with enlistment date: {register_data.date_of_enlistment}")
         
-        # ✅ CRITICAL FIX: AUTO-GENERATE PDFs AND SEND EMAIL IN BACKGROUND
-        # Import the function here to avoid circular imports
-        from app.utils.pdf import generate_existing_officer_pdfs_and_email
-        
-        background_tasks.add_task(
-            generate_existing_officer_pdfs_and_email,
-            officer_id=officer.officer_id,
-            email=officer.email,
-            full_name=officer.full_name,
-            db=db
-        )
-        
-        logger.info(f"✅ PDF auto-generation scheduled for officer: {officer.officer_id}")
+        # ✅ FIXED: REMOVED PDF GENERATION FROM HERE - MOVED TO UPLOAD ENDPOINT
         
         # Send welcome email
         background_tasks.add_task(
@@ -160,7 +148,7 @@ async def register_existing_officer(
         
         return RegisterResponse(
             status="success",
-            message="Officer registered successfully. PDFs are being generated and will be emailed to you.",
+            message="Officer registered successfully. Please upload your documents to complete registration. PDFs will be generated after all documents are uploaded.",
             officer_id=officer.officer_id,
             email=officer.email,
             date_of_enlistment=officer.date_of_enlistment,
@@ -170,7 +158,8 @@ async def register_existing_officer(
             next_steps=[
                 "Upload Passport Photo (JPG/PNG, 2MB max)",
                 "Upload Consolidated PDF with all 10 documents (10MB max)",
-                "PDFs will be auto-generated and emailed to you",
+                "After uploading BOTH documents, PDFs will be auto-generated",
+                "PDFs will be emailed to you with passport photo included",
                 "You can also download PDFs from your dashboard",
                 "Wait for admin verification",
                 "Login with your Officer ID and password"
@@ -195,10 +184,11 @@ async def register_existing_officer(
     status_code=status.HTTP_200_OK
 )
 async def upload_document(
+    background_tasks: BackgroundTasks,
     officer_id: str = Form(..., description="Officer ID in NEW format"),
     document_type: str = Form(..., description="Type of document: 'passport' or 'consolidated_pdf' only"),
-    description: Optional[str] = Form(None, description="Document description"),
     file: UploadFile = File(..., description="Document file"),
+    description: Optional[str] = Form(None, description="Document description"),
     db: Session = Depends(get_db)
 ):
     """
@@ -208,7 +198,8 @@ async def upload_document(
     1. 'passport' - Passport photo (JPG/PNG, 2MB max)
     2. 'consolidated_pdf' - Consolidated PDF with all 10 documents (PDF, 10MB max)
     
-    ❌ REMOVED: Old document types (nin_slip, ssce, birth_certificate, etc.)
+    ✅ FIXED: PDFs are automatically generated when BOTH documents are uploaded
+    ✅ FIXED: Passport is included in PDFs because generation happens AFTER upload
     """
     try:
         logger.info(f"📤 Uploading document {document_type} for officer {officer_id}")
@@ -276,6 +267,10 @@ async def upload_document(
         subfolder = f"existing_officers/{normalized_officer_id}/{document_type}"
         file_path = save_upload(file, subfolder)
         
+        # Store previous upload status
+        was_passport_uploaded = officer.passport_uploaded
+        was_consolidated_uploaded = officer.consolidated_pdf_uploaded
+        
         # Update officer record
         if document_type == 'passport':
             officer.passport_path = file_path
@@ -292,6 +287,28 @@ async def upload_document(
         consolidated_uploaded = officer.consolidated_pdf_uploaded
         all_uploaded = passport_uploaded and consolidated_uploaded
         
+        # ✅ FIXED: Generate PDFs ONLY when BOTH documents are uploaded
+        if all_uploaded:
+            # Check if PDFs already exist to avoid unnecessary regeneration
+            pdfs_already_exist = officer.terms_pdf_path and officer.registration_pdf_path
+            
+            if not pdfs_already_exist:
+                logger.info(f"📄 All documents uploaded for {officer_id}. Triggering PDF generation with passport included...")
+                from app.utils.pdf import generate_existing_officer_pdfs_and_email
+                background_tasks.add_task(
+                    generate_existing_officer_pdfs_and_email,
+                    officer_id=officer_id,
+                    email=officer.email,
+                    full_name=officer.full_name,
+                    db=db
+                )
+                pdf_message = "PDF generation started - passport will be included in the documents."
+            else:
+                logger.info(f"📄 PDFs already exist for {officer_id}, skipping generation")
+                pdf_message = "PDFs already exist. If passport is missing, use the regenerate endpoint."
+        else:
+            pdf_message = f"Waiting for remaining documents: {', '.join(['passport' if not passport_uploaded else '', 'consolidated_pdf' if not consolidated_uploaded else ''])}"
+        
         # Determine remaining uploads
         remaining_uploads = []
         if not passport_uploaded:
@@ -306,7 +323,7 @@ async def upload_document(
         
         return DocumentUploadResponse(
             status="success",
-            message=f"Document uploaded successfully: {document_type}",
+            message=f"Document uploaded successfully: {document_type}. {pdf_message}",
             document_type=document_type,
             officer_id=officer_id,
             file_path=file_path,
@@ -868,10 +885,80 @@ async def generate_pdfs_for_officer(
     
     return PDFGenerationResponse(
         status="success",
-        message="PDF generation started. You will receive an email when completed.",
+        message="PDF generation started. You will receive an email when completed. Passport will be included.",
         officer_id=officer_id,
         email=officer.email,
         email_sent=False,  # Will be sent by background task
+        download_urls={
+            "dashboard_url": f"/api/existing-officers/{officer_id}/dashboard",
+            "pdf_download_url": f"/pdf/existing/{officer_id}"
+        }
+    )
+
+
+# ==================== NEW ENDPOINT: REGENERATE PDFS WITH PASSPORT ====================
+
+@router.post(
+    "/{officer_id}/regenerate-pdfs",
+    response_model=PDFGenerationResponse,
+    summary="Regenerate PDFs with passport included",
+    status_code=status.HTTP_202_ACCEPTED
+)
+async def regenerate_pdfs_with_passport(
+    officer_id: str,
+    background_tasks: BackgroundTasks,
+    current_officer: dict = Depends(get_current_existing_officer_dict),
+    db: Session = Depends(get_db)
+):
+    """
+    Regenerate PDFs to include passport photo.
+    Use this if your initial PDFs don't have the passport embedded.
+    """
+    # Verify the officer is accessing their own data
+    if current_officer.get("officer_id") != officer_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to generate PDFs for this officer"
+        )
+    
+    officer = ExistingOfficerService.get_officer_by_id(db, officer_id)
+    if not officer:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Officer not found"
+        )
+    
+    # Check if passport exists
+    if not officer.passport_path:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot regenerate PDFs. Passport photo not uploaded yet. Please upload passport first."
+        )
+    
+    # Check if consolidated PDF exists
+    if not officer.consolidated_pdf_path:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot regenerate PDFs. Consolidated PDF not uploaded yet."
+        )
+    
+    # Generate PDFs in background
+    from app.utils.pdf import generate_existing_officer_pdfs_and_email
+    
+    background_tasks.add_task(
+        generate_existing_officer_pdfs_and_email,
+        officer_id=officer_id,
+        email=officer.email,
+        full_name=officer.full_name,
+        db=db
+    )
+    
+    return PDFGenerationResponse(
+        status="success",
+        message="PDF regeneration started. New PDFs with passport will be emailed to you.",
+        officer_id=officer_id,
+        email=officer.email,
+        email_sent=False,
         download_urls={
             "dashboard_url": f"/api/existing-officers/{officer_id}/dashboard",
             "pdf_download_url": f"/pdf/existing/{officer_id}"
