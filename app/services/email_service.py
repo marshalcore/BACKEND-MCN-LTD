@@ -532,11 +532,21 @@ class EmailService:
         </html>
         """
     
-    # ✅ CREATE IMAGE-TO-PDF EMAIL TEMPLATE
-    def create_image_to_pdf_email_template(self, name: str, num_images: int, officer_id: str = None) -> str:
-        """Create HTML for image-to-PDF conversion email"""
+    # ✅ UPDATED: CREATE IMAGE-TO-PDF EMAIL TEMPLATE WITH DIRECT DOWNLOAD LINK
+    def create_image_to_pdf_email_template(self, name: str, num_images: int, officer_id: str = None, download_url: str = None) -> str:
+        """Create HTML for image-to-PDF conversion email with direct download link"""
         officer_text = f" for Officer ID: {officer_id}" if officer_id else ""
         date_str = datetime.now().strftime('%d %B, %Y')
+        
+        # Create download button HTML if URL is provided
+        download_button = ""
+        if download_url:
+            download_button = f"""
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="{download_url}" style="display: inline-block; background-color: #27ae60; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 18px;">📥 DOWNLOAD PDF NOW</a>
+                <p style="margin-top: 10px; font-size: 14px; color: #666;">Click above to download your converted document</p>
+            </div>
+            """
         
         return f"""
         <!DOCTYPE html>
@@ -549,8 +559,10 @@ class EmailService:
                 .content {{ padding: 30px; background-color: #f9f9f9; }}
                 .footer {{ text-align: center; padding: 20px; color: #666; font-size: 12px; border-top: 1px solid #eee; }}
                 .success-box {{ background-color: #e8f5e8; border-left: 4px solid #4CAF50; padding: 15px; margin: 20px 0; }}
+                .download-button {{ display: inline-block; background-color: #27ae60; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 18px; margin: 20px 0; }}
                 .button {{ display: inline-block; background-color: #1a237e; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; margin-top: 20px; }}
                 .officer-id {{ font-size: 18px; font-weight: bold; color: #1a237e; }}
+                .download-section {{ background-color: #e8f5e9; padding: 20px; border-radius: 8px; margin: 20px 0; border: 2px solid #27ae60; }}
             </style>
         </head>
         <body>
@@ -570,18 +582,20 @@ class EmailService:
                     <p><strong>✅ Conversion Summary:</strong></p>
                     <ul>
                         <li>Images converted: <b>{num_images}</b></li>
-                        <li>PDF generated: <b>Attached to this email</b></li>
+                        <li>PDF generated: <b>Ready for download</b></li>
                         <li>File size: <b>Optimized for email delivery</b></li>
                     </ul>
                     
                     {f'<p class="officer-id">Officer ID: {officer_id}</p>' if officer_id else ''}
                     <p><strong>Date:</strong> {date_str}</p>
                     
+                    {download_button}
+                    
                     <p><b>Next Steps:</b></p>
                     <ul>
-                        <li>Download the attached PDF for your records</li>
+                        <li><strong>Download the PDF using the button above</strong></li>
                         <li>Keep this document for future reference</li>
-                        <li>You can also access this document from your dashboard</li>
+                        <li>The PDF is also attached to this email</li>
                     </ul>
                     
                     <div style="text-align: center; margin: 30px 0;">
@@ -919,7 +933,7 @@ async def send_guarantor_confirmation_email(to_email: str, name: str):
     await email_queue.add_email(message, "Guarantor Confirmation", to_email)
     return True
 
-# ✅ NEW: IMAGE-TO-PDF EMAIL FUNCTION
+# ✅ UPDATED: IMAGE-TO-PDF EMAIL FUNCTION WITH DIRECT DOWNLOAD LINK
 async def send_image_to_pdf_email(
     to_email: str,
     name: str,
@@ -928,16 +942,24 @@ async def send_image_to_pdf_email(
     officer_id: Optional[str] = None
 ) -> bool:
     """
-    Send email with converted PDF from images
+    Send email with converted PDF from images - includes direct download link
     """
     try:
         logger.info(f"📨 Queueing image-to-PDF email to: {to_email}")
         
-        # Create HTML content using template
+        # ✅ CREATE PUBLIC DOWNLOAD URL
+        base_url = "https://api.marshalcoreofnigeria.ng"
+        pdf_filename = os.path.basename(pdf_path)
+        download_url = f"{base_url}/download/pdf/{pdf_filename}"
+        
+        logger.info(f"✅ Generated download URL: {download_url}")
+        
+        # Create HTML content using template with download URL
         html = email_service.create_image_to_pdf_email_template(
             name=name,
             num_images=num_images,
-            officer_id=officer_id
+            officer_id=officer_id,
+            download_url=download_url
         )
         
         # Prepare recipients
