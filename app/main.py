@@ -1,4 +1,4 @@
-# app/main.py - PRODUCTION LIVE MODE VERSION
+# app/main.py - PRODUCTION LIVE MODE VERSION - UPDATED
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -142,6 +142,7 @@ from app.routes.pdf_download import router as pdf_download_router
 from app.routes.health import router as health_router
 from app.routes.privacy import router as privacy_router
 from app.routes.email_verification import router as email_verification_router
+from app.routes.image_upload import router as image_upload_router  # NEW
 
 # Include all routers
 routers = [
@@ -160,6 +161,7 @@ routers = [
     health_router,
     privacy_router, 
     email_verification_router,
+    image_upload_router,  # NEW
 ]
 
 for router in routers:
@@ -317,6 +319,7 @@ async def root():
             "/applicant/* - Applicant routes",
             "/api/payments/* - Payment processing with immediate transfers",
             "/pdf/* - PDF document download and management",
+            "/api/admin/image-to-pdf/* - Admin image to PDF conversion (NEW)",
             "/health - System health check",
             "/api/health - Enhanced health check with keep-alive"
         ],
@@ -350,6 +353,7 @@ async def download_pdf(filename: str, request: Request):
         os.path.join(STATIC_DIR, "pdfs", "terms", filename),
         os.path.join(STATIC_DIR, "pdfs", "applications", filename),
         os.path.join(STATIC_DIR, "pdfs", "guarantor_form", filename),
+        os.path.join(STATIC_DIR, "image_to_pdf", filename),  # NEW
     ]
     
     pdf_path = None
@@ -362,6 +366,8 @@ async def download_pdf(filename: str, request: Request):
                 file_category = "terms"
             elif "applications" in path:
                 file_category = "applications"
+            elif "image_to_pdf" in path:
+                file_category = "image_to_pdf"
             else:
                 file_category = "general"
             break
@@ -375,6 +381,7 @@ async def download_pdf(filename: str, request: Request):
                 os.path.join(STATIC_DIR, "pdfs", "terms", filename_with_pdf),
                 os.path.join(STATIC_DIR, "pdfs", "applications", filename_with_pdf),
                 os.path.join(STATIC_DIR, "pdfs", "guarantor_form", filename_with_pdf),
+                os.path.join(STATIC_DIR, "image_to_pdf", filename_with_pdf),  # NEW
             ]
             
             for path in possible_paths:
@@ -385,6 +392,8 @@ async def download_pdf(filename: str, request: Request):
                         file_category = "terms"
                     elif "applications" in path:
                         file_category = "applications"
+                    elif "image_to_pdf" in path:
+                        file_category = "image_to_pdf"
                     else:
                         file_category = "general"
                     break
@@ -402,6 +411,7 @@ async def download_pdf(filename: str, request: Request):
         os.makedirs(os.path.join(STATIC_DIR, "pdfs", "terms"), exist_ok=True)
         os.makedirs(os.path.join(STATIC_DIR, "pdfs", "applications"), exist_ok=True)
         os.makedirs(os.path.join(STATIC_DIR, "pdfs", "guarantor_form"), exist_ok=True)
+        os.makedirs(os.path.join(STATIC_DIR, "image_to_pdf"), exist_ok=True)  # NEW
         
         # Check one more time after creating directories
         possible_paths = [
@@ -409,6 +419,7 @@ async def download_pdf(filename: str, request: Request):
             os.path.join(STATIC_DIR, "pdfs", "terms", filename),
             os.path.join(STATIC_DIR, "pdfs", "applications", filename),
             os.path.join(STATIC_DIR, "pdfs", "guarantor_form", filename),
+            os.path.join(STATIC_DIR, "image_to_pdf", filename),  # NEW
         ]
         
         for path in possible_paths:
@@ -419,8 +430,8 @@ async def download_pdf(filename: str, request: Request):
         if not pdf_path:
             # List available PDFs for debugging
             available_pdfs = []
-            for category in ["", "terms", "applications"]:
-                category_dir = os.path.join(STATIC_DIR, "pdfs", category)
+            for category in ["", "terms", "applications", "image_to_pdf"]:
+                category_dir = os.path.join(STATIC_DIR, "pdfs", category) if category != "image_to_pdf" else os.path.join(STATIC_DIR, "image_to_pdf")
                 if os.path.exists(category_dir):
                     try:
                         files = [f for f in os.listdir(category_dir) if f.endswith('.pdf')]
@@ -470,6 +481,7 @@ async def preview_pdf(filename: str, request: Request):
         os.path.join(STATIC_DIR, "pdfs", "terms", filename),
         os.path.join(STATIC_DIR, "pdfs", "applications", filename),
         os.path.join(STATIC_DIR, "pdfs", "guarantor_form", filename),
+        os.path.join(STATIC_DIR, "image_to_pdf", filename),  # NEW
     ]
     
     pdf_path = None
@@ -487,6 +499,7 @@ async def preview_pdf(filename: str, request: Request):
                 os.path.join(STATIC_DIR, "pdfs", "terms", filename_with_pdf),
                 os.path.join(STATIC_DIR, "pdfs", "applications", filename_with_pdf),
                 os.path.join(STATIC_DIR, "pdfs", "guarantor_form", filename_with_pdf),
+                os.path.join(STATIC_DIR, "image_to_pdf", filename_with_pdf),  # NEW
             ]
             
             for path in possible_paths:
@@ -579,6 +592,7 @@ async def health_check():
             "static_pdfs": os.path.join(STATIC_DIR, "pdfs"),
             "static_pdfs_terms": os.path.join(STATIC_DIR, "pdfs", "terms"),
             "static_pdfs_applications": os.path.join(STATIC_DIR, "pdfs", "applications"),
+            "image_to_pdf": os.path.join(STATIC_DIR, "image_to_pdf"),  # NEW
             "templates_pdf": os.path.join(BASE_DIR, "templates", "pdf")
         }
         
@@ -668,7 +682,8 @@ async def pdf_system_status():
             ("pdfs_root", os.path.join(STATIC_DIR, "pdfs")),
             ("pdfs_terms", os.path.join(STATIC_DIR, "pdfs", "terms")),
             ("pdfs_applications", os.path.join(STATIC_DIR, "pdfs", "applications")),
-            ("pdfs_guarantor_form", os.path.join(STATIC_DIR, "pdfs", "guarantor_form"))
+            ("pdfs_guarantor_form", os.path.join(STATIC_DIR, "pdfs", "guarantor_form")),
+            ("image_to_pdf", os.path.join(STATIC_DIR, "image_to_pdf")),  # NEW
         ]
         
         dir_status = []
@@ -826,6 +841,7 @@ async def startup_event():
         os.path.join(STATIC_DIR, "pdfs"),
         os.path.join(STATIC_DIR, "pdfs", "terms"),
         os.path.join(STATIC_DIR, "pdfs", "applications"),
+        os.path.join(STATIC_DIR, "image_to_pdf"),  # NEW
         
         # Upload directories for existing officers (with normalized structure)
         os.path.join(STATIC_DIR, "uploads", "existing_officers"),
@@ -941,7 +957,7 @@ async def startup_event():
             
             # Check passport directories
             passport_path_pattern = os.path.join(STATIC_DIR, "uploads", "existing_officers", "*", "passport", "*")
-            all_passport_files = glob.glob(passport_path_pattern)
+            all_passport_files = glob.glob(passport_path_pattern, recursive=True)
             
             matching_passports = []
             for file_path in all_passport_files:
@@ -950,7 +966,7 @@ async def startup_event():
             
             # Check consolidated PDF directories
             pdf_path_pattern = os.path.join(STATIC_DIR, "uploads", "existing_officers", "*", "consolidated_pdf", "*")
-            all_pdf_files = glob.glob(pdf_path_pattern)
+            all_pdf_files = glob.glob(pdf_path_pattern, recursive=True)
             
             matching_pdfs = []
             for file_path in all_pdf_files:
@@ -970,6 +986,48 @@ async def startup_event():
             "static_dir": STATIC_DIR,
             "test_results": results,
             "message": "Normalized paths middleware handles officer IDs with slashes"
+        }
+    
+    # Add image-to-pdf test endpoint
+    @app.get("/api/debug/image-to-pdf", tags=["Debug"], include_in_schema=False)
+    async def debug_image_to_pdf():
+        """
+        Debug endpoint to check image-to-pdf service status
+        """
+        from app.services.image_to_pdf_service import image_to_pdf_service, IMAGE_TO_PDF_DIR
+        
+        # Check directory
+        dir_exists = IMAGE_TO_PDF_DIR.exists()
+        dir_writable = False
+        file_count = 0
+        
+        if dir_exists:
+            try:
+                test_file = IMAGE_TO_PDF_DIR / ".test_write"
+                test_file.touch()
+                test_file.unlink()
+                dir_writable = True
+                
+                # Count existing PDFs
+                file_count = len(list(IMAGE_TO_PDF_DIR.glob("*.pdf")))
+            except:
+                dir_writable = False
+        
+        return {
+            "service_initialized": True,
+            "image_to_pdf_dir": {
+                "path": str(IMAGE_TO_PDF_DIR),
+                "exists": dir_exists,
+                "writable": dir_writable,
+                "pdf_count": file_count
+            },
+            "max_pdf_size_mb": image_to_pdf_service.max_pdf_size_bytes / (1024 * 1024),
+            "endpoints": {
+                "upload": "/api/admin/image-to-pdf/upload",
+                "history": "/api/admin/image-to-pdf/history",
+                "download": "/api/admin/image-to-pdf/download/{record_id}"
+            },
+            "note": "This is an admin-only feature. Requires authentication."
         }
     
     # Log loaded routers
@@ -1042,7 +1100,7 @@ async def debug_pdf_files():
 
     return {
         "pdf_files_count": len(pdf_files),
-        "pdf_files": pdf_files,
+        "pdf_files": pdf_files[:50],  # Limit to 50 files
         "static_dir": STATIC_DIR
     }
 

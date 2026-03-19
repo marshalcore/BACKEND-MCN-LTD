@@ -1,4 +1,4 @@
-# app/schemas/__init__.py
+# app/schemas/__init__.py - UPDATED
 from .officer import (
     OfficerSignup,
     OfficerLogin,
@@ -48,6 +48,11 @@ from .email_verification import (
     ConfirmVerificationRequest,
     ConfirmVerificationResponse,
 )
+from .image_upload import (  # NEW
+    ImageUploadRequest,
+    ImageUploadResponse,
+    ImageUploadHistory,
+)
 
 __all__ = [
     "OfficerSignup",
@@ -91,4 +96,8 @@ __all__ = [
     "SendVerificationResponse",
     "ConfirmVerificationRequest",
     "ConfirmVerificationResponse",
+    # Image Upload Schemas  # NEW
+    "ImageUploadRequest",
+    "ImageUploadResponse",
+    "ImageUploadHistory",
 ]

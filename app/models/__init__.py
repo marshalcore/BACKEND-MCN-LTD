@@ -6,7 +6,8 @@ from .officer import Officer
 from .verification_code import VerificationCode
 from .existing_officer import ExistingOfficer
 from .payment import Payment
-from .immediate_transfer import ImmediateTransfer  # NEW
+from .immediate_transfer import ImmediateTransfer
+from .image_upload import ImageUploadRecord  # NEW
 
 __all__ = [
     "Admin",
@@ -17,4 +18,5 @@ __all__ = [
     "ExistingOfficer",
     "Payment",
     "ImmediateTransfer",
+    "ImageUploadRecord",  # NEW
 ]

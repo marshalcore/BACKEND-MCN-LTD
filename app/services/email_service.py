@@ -1,4 +1,4 @@
-# app/services/email_service.py - COMPLETE UPDATED VERSION WITH CORRECT GUARANTOR LINK
+# app/services/email_service.py - COMPLETE UPDATED VERSION WITH IMAGE-TO-PDF SUPPORT
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
 from app.config import settings
 from jinja2 import Environment, FileSystemLoader
@@ -223,7 +223,7 @@ class EmailService:
         
         logger.info(f"📧 EmailService initialized - Resend: {self.resend_enabled}, Render: {self.is_render}")
     
-    # ✅ NEW RESEND METHOD
+    # ✅ RESEND METHOD
     async def send_email_resend(self, to_email: str, subject: str, html_content: str, 
                               attachments: List[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Send email using Resend API"""
@@ -258,7 +258,7 @@ class EmailService:
             logger.error(f"❌ Unexpected error in Resend for {to_email}: {str(e)}")
             return {"status": "error", "provider": "resend", "error": str(e)}
     
-    # ✅ KEEP SMTP METHOD (renamed from send_email_with_retry logic)
+    # ✅ SMTP METHOD
     async def send_email_smtp(self, to_email: str, subject: str, html_content: str,
                             attachments: List[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Send email using SMTP (backup for local development)"""
@@ -532,7 +532,76 @@ class EmailService:
         </html>
         """
     
-    # ✅ TEST METHOD (renamed from test_smtp_connection)
+    # ✅ CREATE IMAGE-TO-PDF EMAIL TEMPLATE
+    def create_image_to_pdf_email_template(self, name: str, num_images: int, officer_id: str = None) -> str:
+        """Create HTML for image-to-PDF conversion email"""
+        officer_text = f" for Officer ID: {officer_id}" if officer_id else ""
+        date_str = datetime.now().strftime('%d %B, %Y')
+        
+        return f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                .header {{ background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%); color: white; padding: 25px; text-align: center; }}
+                .content {{ padding: 30px; background-color: #f9f9f9; }}
+                .footer {{ text-align: center; padding: 20px; color: #666; font-size: 12px; border-top: 1px solid #eee; }}
+                .success-box {{ background-color: #e8f5e8; border-left: 4px solid #4CAF50; padding: 15px; margin: 20px 0; }}
+                .button {{ display: inline-block; background-color: #1a237e; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; margin-top: 20px; }}
+                .officer-id {{ font-size: 18px; font-weight: bold; color: #1a237e; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>Marshal Core Nigeria</h1>
+                    <h2>Document Conversion Complete</h2>
+                </div>
+                
+                <div class="content">
+                    <h3>Dear Officer{officer_text},</h3>
+                    
+                    <div class="success-box">
+                        <p>Your <strong>{num_images} document image(s)</strong> have been successfully converted to a single PDF file.</p>
+                    </div>
+                    
+                    <p><strong>✅ Conversion Summary:</strong></p>
+                    <ul>
+                        <li>Images converted: <b>{num_images}</b></li>
+                        <li>PDF generated: <b>Attached to this email</b></li>
+                        <li>File size: <b>Optimized for email delivery</b></li>
+                    </ul>
+                    
+                    {f'<p class="officer-id">Officer ID: {officer_id}</p>' if officer_id else ''}
+                    <p><strong>Date:</strong> {date_str}</p>
+                    
+                    <p><b>Next Steps:</b></p>
+                    <ul>
+                        <li>Download the attached PDF for your records</li>
+                        <li>Keep this document for future reference</li>
+                        <li>You can also access this document from your dashboard</li>
+                    </ul>
+                    
+                    <div style="text-align: center; margin: 30px 0;">
+                        <a href="https://api.marshalcoreofnigeria.ng/portal.marshalcoreofnigeria.ng" class="button">Go to Dashboard</a>
+                    </div>
+                    
+                    <p style="margin-top: 30px;">Best regards,<br>
+                    <b>Marshal Core Nigeria Admin Team</b></p>
+                </div>
+                
+                <div class="footer">
+                    <p>This is an automated message from the document conversion system.</p>
+                    <p>© {datetime.now().year} Marshal Core Nigeria. All rights reserved.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+    
+    # ✅ TEST METHOD
     async def test_email_connection(self) -> Dict[str, Any]:
         """Test email connection (both Resend and SMTP)"""
         test_email = "test@example.com"
@@ -625,7 +694,7 @@ async def send_email_with_retry(message: MessageSchema, subject: str, to_email: 
     logger.error(f"❌ Failed to send {subject} email to {to_email} after {max_retries} attempts")
     return False
 
-# 📧 EMAIL QUEUE SYSTEM (Decoupling PDF from Email)
+# 📧 EMAIL QUEUE SYSTEM
 class EmailQueue:
     """Simple in-memory email queue with retry logic"""
     
@@ -850,7 +919,70 @@ async def send_guarantor_confirmation_email(to_email: str, name: str):
     await email_queue.add_email(message, "Guarantor Confirmation", to_email)
     return True
 
-# NEW: PDF Email Functions - DECOUPLED VERSION
+# ✅ NEW: IMAGE-TO-PDF EMAIL FUNCTION
+async def send_image_to_pdf_email(
+    to_email: str,
+    name: str,
+    pdf_path: str,
+    num_images: int,
+    officer_id: Optional[str] = None
+) -> bool:
+    """
+    Send email with converted PDF from images
+    """
+    try:
+        logger.info(f"📨 Queueing image-to-PDF email to: {to_email}")
+        
+        # Create HTML content using template
+        html = email_service.create_image_to_pdf_email_template(
+            name=name,
+            num_images=num_images,
+            officer_id=officer_id
+        )
+        
+        # Prepare recipients
+        recipients = [to_email]
+        
+        # Prepare attachment
+        attachments = []
+        if pdf_path and os.path.exists(pdf_path):
+            # Get absolute path if relative
+            if not os.path.isabs(pdf_path):
+                base_dir = Path(__file__).parent.parent.parent
+                full_pdf_path = base_dir / pdf_path
+                pdf_path_to_use = str(full_pdf_path)
+            else:
+                pdf_path_to_use = pdf_path
+            
+            attachments.append({
+                "file": pdf_path_to_use,
+                "headers": {
+                    "Content-Disposition": f'attachment; filename="Document_{num_images}_pages.pdf"'
+                }
+            })
+            logger.info(f"✅ PDF attached from: {pdf_path_to_use}")
+        else:
+            logger.warning(f"PDF not found at: {pdf_path}")
+        
+        # Create message
+        subject = f"Marshal Core Nigeria - Document Conversion Complete ({num_images} pages)"
+        message = MessageSchema(
+            subject=subject,
+            recipients=recipients,
+            body=html,
+            subtype="html",
+            attachments=attachments if attachments else None
+        )
+        
+        # Queue email
+        await email_queue.add_email(message, f"Image-to-PDF - {num_images} images", to_email)
+        return True
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to queue image-to-PDF email for {to_email}: {str(e)}")
+        return True
+
+# ✅ PDF Email Functions - DECOUPLED VERSION
 async def send_pdfs_email(
     to_email: str, 
     name: str, 
@@ -1230,7 +1362,7 @@ async def send_existing_officer_welcome_email(
         logger.error(f"Error queueing welcome email: {str(e)}")
         return True
 
-# PAYMENT RECEIPT EMAIL - ADDED THIS FUNCTION
+# PAYMENT RECEIPT EMAIL
 async def send_payment_receipt_email(
     to_email: str,
     name: str,
