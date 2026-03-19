@@ -40,7 +40,7 @@ async def upload_images_to_pdf(
     notes: str = Form(None, description="Optional notes about this upload"),
     files: List[UploadFile] = File(..., description="4-5 image files (JPG, PNG)"),
     db: Session = Depends(get_db),
-    admin: dict = Depends(get_current_admin)  # Admin only
+    admin = Depends(get_current_admin)  # Admin only - returns Admin object
 ):
     """
     📤 Upload 4-5 images, convert to single PDF (<1MB), and email to officer
@@ -109,7 +109,7 @@ async def upload_images_to_pdf(
                 detail=f"PDF conversion failed: {str(e)}"
             )
         
-        # Save record in database
+        # Save record in database - FIXED HERE
         upload_record = ImageUploadRecord(
             email=email,
             officer_id=officer_id,
@@ -117,7 +117,7 @@ async def upload_images_to_pdf(
             pdf_size_kb=pdf_size_kb,
             num_images=len(files),
             notes=notes,
-            uploaded_by=admin.get("email", "admin"),
+            uploaded_by=admin.email if admin else "system",  # ✅ FIXED: admin.email instead of admin.get()
             status="completed",
             email_sent=False
         )
@@ -169,7 +169,7 @@ async def get_upload_history(
     limit: int = 50,
     email: str = None,
     db: Session = Depends(get_db),
-    admin: dict = Depends(get_current_admin)
+    admin = Depends(get_current_admin)
 ):
     """
     📋 Get history of all image-to-PDF uploads
@@ -216,12 +216,14 @@ async def get_upload_history(
 )
 async def get_upload_stats(
     db: Session = Depends(get_db),
-    admin: dict = Depends(get_current_admin)
+    admin = Depends(get_current_admin)
 ):
     """
     📊 Get statistics about image-to-PDF uploads
     """
     try:
+        from sqlalchemy import func
+        
         total = db.query(ImageUploadRecord).count()
         successful = db.query(ImageUploadRecord).filter(
             ImageUploadRecord.status == "completed"
@@ -231,7 +233,6 @@ async def get_upload_stats(
         ).count()
         
         # Get total images converted
-        from sqlalchemy import func
         total_images = db.query(func.sum(ImageUploadRecord.num_images)).scalar() or 0
         
         # Get total PDF size
@@ -263,7 +264,7 @@ async def get_upload_stats(
 async def download_pdf(
     record_id: str,
     db: Session = Depends(get_db),
-    admin: dict = Depends(get_current_admin)
+    admin = Depends(get_current_admin)
 ):
     """
     📥 Download a previously generated PDF
