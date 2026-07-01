@@ -27,10 +27,10 @@
 
 | Category | Amount (₦) | Payment Type Key |
 |----------|------------|------------------|
-| **Foundation** | ₦5,180 | `foundation` |
-| **VIP** | ₦25,900 | `vip` |
+| **Regular Cadre** | ₦5,180 | `regular` |
+| **VIP Cadre** | ₦25,900 | `vip` |
 
-> **Note:** The frontend should use `payment_type` as `foundation` or `vip`, NOT `associate` or `full`.
+> **Note:** Use `payment_type` as `regular` or `vip`. Backend already accepts these values.
 
 ---
 
@@ -68,7 +68,7 @@ Base URL: `https://api.marshalcoreofnigeria.ng/pre-applicant`
 {
   "fullName": "John Doe",
   "email": "user@example.com",
-  "category": "foundation"  // "foundation" or "vip"
+  "category": "regular"  // "regular" or "vip"
 }
 
 // Success Response (201)
@@ -86,14 +86,14 @@ Base URL: `https://api.marshalcoreofnigeria.ng/pre-applicant`
 // Request
 {
   "email": "user@example.com",
-  "category": "foundation"  // "foundation" or "vip"
+  "category": "regular"  // "regular" or "vip"
 }
 
 // Success Response (200)
 {
   "success": true,
   "tier": {
-    "name": "foundation",
+    "name": "regular",
     "amount": 518000,  // Amount in KOBO (₦5,180)
     "description": "Foundation Membership"
   }
@@ -109,7 +109,7 @@ Base URL: `https://api.marshalcoreofnigeria.ng/pre-applicant`
   "preApplicantId": "string",
   "email": "user@example.com",
   "fullName": "John Doe",
-  "category": "foundation",
+  "category": "regular",
   "status": "pending_payment",
   "hasPassword": false,
   "applicationStatus": "pending_payment"
@@ -129,7 +129,7 @@ Base URL: `https://api.marshalcoreofnigeria.ng/api/payments`
 // Request
 {
   "email": "user@example.com",
-  "payment_type": "foundation",  // "foundation" or "vip"
+  "payment_type": "regular",  // "regular" or "vip"
   "user_type": "pre_applicant"   // "pre_applicant", "applicant", "officer", "existing_officer"
 }
 
@@ -176,7 +176,7 @@ This endpoint is called by Paystack after payment completion (configured in Pays
       "reference": "MCN_xxxxx",
       "amount": 518000,
       "status": "success",
-      "payment_type": "foundation",
+      "payment_type": "regular",
       "created_at": "2024-01-01T00:00:00Z"
     }
   ]
@@ -190,7 +190,7 @@ This endpoint is called by Paystack after payment completion (configured in Pays
 // Success Response (200)
 {
   "payment_types": {
-    "foundation": {
+    "regular": {
       "name": "Foundation Membership",
       "amount": 518000,
       "amount_display": "₦5,180"
@@ -453,7 +453,7 @@ Base URL: `https://api.marshalcoreofnigeria.ng/privacy`
 let userData = {
   fullName: '',              // From /pre-applicant/register
   email: '',                 // User's email
-  category: '',              // 'foundation' or 'vip'
+  category: '',              // 'regular' or 'vip'
   amount: 0,                 // In KOBO (518000 or 2590000)
   paymentReference: '',      // Paystack reference from /initiate
   preApplicantId: '',        // From /register
@@ -473,7 +473,7 @@ The following mentioned in frontend docs are **NOT** in the backend:
 
 1. ~~`/apply` (POST)~~ → Use `/apply` with multipart form data
 2. ~~`/save-progress`~~ → Use `/save-progress` POST
-3. ~~`associate`, `full`, `corporate` tiers~~ → Only `foundation` and `vip` exist
+3. ~~`associate`, `full`, `corporate` tiers~~ → Only `regular` and `vip` exist
 
 ---
 
