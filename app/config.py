@@ -95,12 +95,12 @@ class Settings(BaseSettings):
         description="eSTech Digital Systems Limited beneficiary name"
     )
     ESTECH_BANK_ACCOUNT_NUMBER: str = Field(
-        default=os.getenv("ESTECH_BANK_ACCOUNT_NUMBER", "6426991017"),
-        description="eSTech Digital Systems Limited account number"
+        default=os.getenv("ESTECH_BANK_ACCOUNT_NUMBER", "1047085433"),
+        description="eSTech Digital Systems Limited FCMB account number"
     )
     ESTECH_IMMEDIATE_ACCOUNT_NUMBER: str = Field(
-        default=os.getenv("ESTECH_IMMEDIATE_ACCOUNT_NUMBER", "6426991017"),
-        description="eSTech Digital Systems Limited account number"
+        default=os.getenv("ESTECH_IMMEDIATE_ACCOUNT_NUMBER", "1047085433"),
+        description="eSTech Digital Systems Limited FCMB account number"
     )
     ESTECH_BANK_NAME: str = Field(
         default=os.getenv("ESTECH_BANK_NAME", "FCMB"),

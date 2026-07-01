@@ -30,7 +30,6 @@ logger.info(f"Resend From Email: {settings.RESEND_FROM_EMAIL}")
 logger.info(f"Resend API Key Set: {'Yes' if settings.RESEND_API_KEY else 'No'}")
 logger.info(f"Debug Mode: {settings.DEBUG}")
 logger.info(f"Running on Render: {settings.RENDER}")
-logger.info(f"Keep Alive Enabled: {settings.ENABLE_KEEP_ALIVE}")
 logger.info(f"Immediate Transfers Enabled: {settings.ENABLE_IMMEDIATE_TRANSFERS}")
 logger.info(f"Paystack Mode: {'LIVE' if not settings.PAYSTACK_TEST_MODE else 'TEST'} - CHANGED TO LIVE")
 logger.info("=" * 50)
@@ -269,7 +268,7 @@ async def root():
             "/pdf/* - PDF document download and management",
             "/api/admin/image-to-pdf/* - Admin image to PDF conversion (NEW)",
             "/health - System health check",
-            "/api/health - Enhanced health check with keep-alive"
+            "/api/health - Health check endpoint"
         ],
         "config_info": {
             "environment": "PRODUCTION LIVE",
@@ -498,7 +497,6 @@ async def health_check():
             "token_expiry_minutes": settings.ACCESS_TOKEN_EXPIRE_MINUTES,
             "refresh_token_expiry_days": settings.REFRESH_TOKEN_EXPIRE_DAYS,
             "running_on_render": settings.RENDER,
-            "keep_alive_enabled": settings.ENABLE_KEEP_ALIVE,
             "paystack_mode": "LIVE",
             "immediate_transfers_enabled": settings.ENABLE_IMMEDIATE_TRANSFERS
         }
@@ -872,23 +870,14 @@ async def startup_event():
             "service": "Marshal Core API - PRODUCTION LIVE",
             "render": {
                 "free_tier": True,
-                "sleep_after_minutes": 15,
-                "wake_time_seconds": 30,
-                "keep_alive_active": True,
-                "last_activity": time.time(),
-                "recommended_ping_interval": "Every 10 minutes",
-                "safety_margin_minutes": 5,
-                "next_wake_check": "Continuous via keep-alive service"
+                "note": "Neon PostgreSQL auto-sleep enabled - database wakes automatically"
             },
             "config_info": {
-                "keep_alive_enabled": settings.ENABLE_KEEP_ALIVE,
-                "keep_alive_interval_seconds": settings.KEEP_ALIVE_INTERVAL,
                 "running_on_render": settings.RENDER,
-                "render_external_url": settings.RENDER_EXTERNAL_URL,
                 "immediate_transfers_enabled": settings.ENABLE_IMMEDIATE_TRANSFERS,
                 "paystack_mode": "LIVE - Real money"
             },
-            "message": "Service is awake and responsive. Keep-alive service prevents sleeping on Render free tier."
+            "message": "Service is running. Neon PostgreSQL handles auto-sleep automatically."
         }
     
     # Add normalized paths test endpoint
@@ -983,49 +972,8 @@ async def startup_event():
     # Log loaded routers
     logger.info("✅ Server is ready to handle requests")
 
-# Start keep-alive service AFTER server is fully started
-@app.on_event("startup")
-async def delayed_startup():
-    """
-    Start keep-alive service after a delay to ensure server is running
-    """
-    # Wait 5 seconds for server to fully start
-    await asyncio.sleep(5)
-    
-    try:
-        # ALWAYS start keep-alive on Render.com (check by URL or environment)
-        render_url = settings.RENDER_EXTERNAL_URL or ""
-        is_render = "render.com" in render_url or os.getenv("RENDER_EXTERNAL_URL", "").endswith(".onrender.com")
-        
-        if (settings.ENABLE_KEEP_ALIVE and is_render) or os.getenv("RENDER") == "true":
-            from app.services.keep_alive import start_keep_alive_service
-            await start_keep_alive_service()
-            logger.info("✅ Keep-alive service started for Render.com")
-            logger.info(f"⚠️  Render free tier: Services sleep after 15 minutes of inactivity")
-            logger.info(f"✅ This service will ping every {settings.KEEP_ALIVE_INTERVAL} seconds to stay awake")
-            logger.info(f"📊 External URL: {settings.RENDER_EXTERNAL_URL or 'https://backend-mcn-ltd.onrender.com'}")
-        else:
-            # Local development or keep-alive disabled
-            logger.info(f"⏸️  Keep-alive service disabled or not running on Render")
-            logger.info(f"   RENDER setting: {settings.RENDER}")
-            logger.info(f"   ENABLE_KEEP_ALIVE: {settings.ENABLE_KEEP_ALIVE}")
-            logger.info(f"   RENDER_EXTERNAL_URL: {settings.RENDER_EXTERNAL_URL}")
-        
-    except Exception as e:
-        logger.warning(f"⚠ Keep-alive service initialization failed: {e}")
-
-# Shutdown event
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Clean shutdown of services"""
-    logger.info("🛑 Marshal Core Backend shutting down...")
-    
-    # Stop keep-alive service
-    try:
-        from app.services.keep_alive import stop_keep_alive_service
-        await stop_keep_alive_service()
-    except Exception as e:
-        logger.error(f"Error stopping keep-alive: {e}")
+# Keep-alive service REMOVED - using Neon PostgreSQL's auto-sleep feature
+# Neon free tier: database sleeps after 5 minutes of inactivity, wakes automatically
 
 @app.get("/debug/pdf-files", include_in_schema=False)
 async def debug_pdf_files():
