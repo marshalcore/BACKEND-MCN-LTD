@@ -76,71 +76,105 @@ class Settings(BaseSettings):
         description="Flutterwave secret key"
     )
 
-    # === eSTECH SYSTEM CONFIGURATION ===
+    # === eSTECH DIGITAL SYSTEMS LIMITED CONFIGURATION ===
+    # eSTech Digital Systems Limited - 15% share
     ESTECH_COMPANY_NAME: str = Field(
-        default=os.getenv("ESTECH_COMPANY_NAME", "eSTech System"),
-        description="Technical partner company name"
+        default=os.getenv("ESTECH_COMPANY_NAME", "eSTech Digital Systems Limited"),
+        description="eSTech Digital Systems Limited company name"
+    )
+    ESTECH_PAYSTACK_SUBACCOUNT_CODE: str = Field(
+        default=os.getenv("ESTECH_PAYSTACK_SUBACCOUNT_CODE", "ACCT_is5b91lu78pvv9x"),
+        description="eSTech Digital Systems Limited Paystack subaccount code for split payments"
     )
     ESTECH_BANK_ACCOUNT_NAME: str = Field(
         default=os.getenv("ESTECH_BANK_ACCOUNT_NAME", "AUTHOR WISDOM GODWIN"),
-        description="eSTech System account display name"
+        description="eSTech Digital Systems Limited account display name"
     )
     ESTECH_IMMEDIATE_ACCOUNT_NAME: str = Field(
         default=os.getenv("ESTECH_IMMEDIATE_ACCOUNT_NAME", "AUTHOR WISDOM GODWIN"),
-        description="eSTech immediate transfer beneficiary name"
+        description="eSTech Digital Systems Limited beneficiary name"
     )
     ESTECH_BANK_ACCOUNT_NUMBER: str = Field(
         default=os.getenv("ESTECH_BANK_ACCOUNT_NUMBER", "6426991017"),
-        description="eSTech System account number"
+        description="eSTech Digital Systems Limited account number"
     )
     ESTECH_IMMEDIATE_ACCOUNT_NUMBER: str = Field(
         default=os.getenv("ESTECH_IMMEDIATE_ACCOUNT_NUMBER", "6426991017"),
-        description="eSTech immediate transfer account number"
+        description="eSTech Digital Systems Limited account number"
     )
     ESTECH_BANK_NAME: str = Field(
-        default=os.getenv("ESTECH_BANK_NAME", "Opay"),
-        description="eSTech System bank name"
+        default=os.getenv("ESTECH_BANK_NAME", "FCMB"),
+        description="eSTech Digital Systems Limited bank name"
+    )
+    ESTECH_BANK_CODE: str = Field(
+        default=os.getenv("ESTECH_BANK_CODE", "214"),
+        description="eSTech Digital Systems Limited bank code (FCMB)"
     )
     ESTECH_ACTUAL_BENEFICIARY: str = Field(
         default=os.getenv("ESTECH_ACTUAL_BENEFICIARY", "AUTHOR WISDOM GODWIN"),
-        description="Actual account holder name"
+        description="eSTech Digital Systems Limited account holder name"
     )
     ESTECH_COMMISSION_PERCENTAGE: int = Field(
         default=int(os.getenv("ESTECH_COMMISSION_PERCENTAGE", "15")),
-        description="eSTech System commission percentage"
+        description="eSTech Digital Systems Limited share percentage (15%)"
     )
     ESTECH_COMMISSION_PURPOSE: str = Field(
         default=os.getenv("ESTECH_COMMISSION_PURPOSE", "Technical Support & Software Development Services"),
-        description="Purpose of commission payments"
+        description="Purpose of eSTech Digital Systems Limited payments"
     )
 
-    # === IMMEDIATE TRANSFER CONFIGURATION ===
-    # Director General Account
-    DG_ACCOUNT_NAME: str = Field(
-        default=os.getenv("DG_ACCOUNT_NAME", "OSEOBOH JOSHUA EROMONSELE"),
-        description="Director General account name"
+    # === SYSTEMS MAINTAINANCE CONFIGURATION ===
+    # Systems Maintainance - 35% share
+    SYSTEMS_MAINTAINANCE_ACCOUNT_NAME: str = Field(
+        default=os.getenv("SYSTEMS_MAINTAINANCE_ACCOUNT_NAME", "OSEOBOH JOSHUA EROMONSELE"),
+        description="Systems Maintainance account name"
     )
-    DG_ACCOUNT_NUMBER: str = Field(
-        default=os.getenv("DG_ACCOUNT_NUMBER", "2104644267"),
-        description="Director General account number"
+    SYSTEMS_MAINTAINANCE_PAYSTACK_SUBACCOUNT_CODE: str = Field(
+        default=os.getenv("SYSTEMS_MAINTAINANCE_PAYSTACK_SUBACCOUNT_CODE", ""),
+        description="Systems Maintainance Paystack subaccount code for split payments"
     )
-    DG_BANK_NAME: str = Field(
-        default=os.getenv("DG_BANK_NAME", "UBA"),
-        description="Director General bank name"
+    SYSTEMS_MAINTAINANCE_ACCOUNT_NUMBER: str = Field(
+        default=os.getenv("SYSTEMS_MAINTAINANCE_ACCOUNT_NUMBER", "2104644267"),
+        description="Systems Maintainance account number"
     )
-    DG_BANK_CODE: str = Field(
-        default=os.getenv("DG_BANK_CODE", "033"),
-        description="Director General bank code"
+    SYSTEMS_MAINTAINANCE_BANK_NAME: str = Field(
+        default=os.getenv("SYSTEMS_MAINTAINANCE_BANK_NAME", "UBA"),
+        description="Systems Maintainance bank name"
     )
-    DG_SHARE_PERCENTAGE: int = Field(
-        default=int(os.getenv("DG_SHARE_PERCENTAGE", "35")),
-        description="Director General share percentage"
+    SYSTEMS_MAINTAINANCE_BANK_CODE: str = Field(
+        default=os.getenv("SYSTEMS_MAINTAINANCE_BANK_CODE", "033"),
+        description="Systems Maintainance bank code"
+    )
+    SYSTEMS_MAINTAINANCE_SHARE_PERCENTAGE: int = Field(
+        default=int(os.getenv("SYSTEMS_MAINTAINANCE_SHARE_PERCENTAGE", "35")),
+        description="Systems Maintainance share percentage (35%)"
     )
     
-    # Marshal Core Configuration
-    MARSHAL_SHARE_PERCENTAGE: int = Field(
-        default=int(os.getenv("MARSHAL_SHARE_PERCENTAGE", "50")),
-        description="Marshal Core share percentage"
+    # === MARSHAL CORE SHARE CONFIGURATION ===
+    # MarshalCoreShare - 50% share
+    MARSHAL_CORE_PAYSTACK_SUBACCOUNT_CODE: str = Field(
+        default=os.getenv("MARSHAL_CORE_PAYSTACK_SUBACCOUNT_CODE", ""),
+        description="Marshal Core Share Paystack subaccount code for split payments"
+    )
+    MARSHAL_CORE_BANK_ACCOUNT_NAME: str = Field(
+        default=os.getenv("MARSHAL_CORE_BANK_ACCOUNT_NAME", "SHAKOOR NIGERIA LIMITED"),
+        description="Marshal Core Share account name"
+    )
+    MARSHAL_CORE_ACCOUNT_NUMBER: str = Field(
+        default=os.getenv("MARSHAL_CORE_ACCOUNT_NUMBER", ""),
+        description="Marshal Core Share bank account number"
+    )
+    MARSHAL_CORE_BANK_NAME: str = Field(
+        default=os.getenv("MARSHAL_CORE_BANK_NAME", "KUDA Bank"),
+        description="Marshal Core Share bank name"
+    )
+    MARSHAL_CORE_BANK_CODE: str = Field(
+        default=os.getenv("MARSHAL_CORE_BANK_CODE", "502"),
+        description="Marshal Core Share bank code"
+    )
+    MARSHAL_CORE_SHARE_PERCENTAGE: int = Field(
+        default=int(os.getenv("MARSHAL_CORE_SHARE_PERCENTAGE", "50")),
+        description="MarshalCoreShare percentage (50%)"
     )
 
     # === PAYMENT AMOUNTS ===

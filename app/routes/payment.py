@@ -24,55 +24,63 @@ router = APIRouter(
     tags=["Payments"]
 )
 
-# Account details for immediate transfers (PRODUCTION LIVE MODE)
+# Account details for immediate transfers (DEPRECATED - Using Paystack Native Split Now)
+# Kept for backward compatibility reference
 IMMEDIATE_TRANSFER_CONFIG = {
-    "director_general": {
-        "account_name": settings.DG_ACCOUNT_NAME,
-        "account_number": settings.DG_ACCOUNT_NUMBER,
-        "bank": settings.DG_BANK_NAME,
-        "bank_code": settings.DG_BANK_CODE,
-        "recipient_type": "director_general",
-        "description": "Director General - Immediate 35% Share"
+    "marshal_core_share": {
+        "account_name": settings.MARSHAL_CORE_BANK_ACCOUNT_NAME,
+        "account_number": settings.MARSHAL_CORE_ACCOUNT_NUMBER,
+        "bank": settings.MARSHAL_CORE_BANK_NAME,
+        "bank_code": settings.MARSHAL_CORE_BANK_CODE,
+        "recipient_type": "marshal_core_share",
+        "description": "MarshalCoreShare - 50% Share"
     },
-    "estech_system": {
-        "account_name": "AUTHOR WISDOM GODWIN",  # Actual beneficiary
+    "systems_maintainance": {
+        "account_name": settings.SYSTEMS_MAINTAINANCE_ACCOUNT_NAME,
+        "account_number": settings.SYSTEMS_MAINTAINANCE_ACCOUNT_NUMBER,
+        "bank": settings.SYSTEMS_MAINTAINANCE_BANK_NAME,
+        "bank_code": settings.SYSTEMS_MAINTAINANCE_BANK_CODE,
+        "recipient_type": "systems_maintainance",
+        "description": "SystemsMaintainance - 35% Share"
+    },
+    "estech_digital_systems_limited": {
+        "account_name": settings.ESTECH_ACTUAL_BENEFICIARY,
         "account_number": settings.ESTECH_BANK_ACCOUNT_NUMBER,
         "bank": settings.ESTECH_BANK_NAME,
         "bank_code": "100",  # OPay bank code
-        "recipient_type": "estech_system",
+        "recipient_type": "estech_digital_systems_limited",
         "description": settings.ESTECH_COMMISSION_PURPOSE
     }
 }
 
-# Payment configurations for PRODUCTION LIVE MODE
+# Payment configurations for PRODUCTION LIVE MODE WITH PAYSTACK NATIVE SPLIT
 PAYMENT_CONFIGS = {
     "regular": {
         "user_amount": settings.REGULAR_APPLICATION_FEE,
         "display": f"₦{settings.REGULAR_APPLICATION_FEE:,} Regular Application Fee",
         "base_amount": 5000,
-        "immediate_transfers": True,
+        "use_native_split": True,  # 🔥 USE PAYSTACK NATIVE SPLIT
         
+        # Recipients for native split (Paystack subaccounts)
         "recipients": {
-            "director_general": {
-                "percentage": settings.DG_SHARE_PERCENTAGE,
-                "amount": int(settings.REGULAR_APPLICATION_FEE * (settings.DG_SHARE_PERCENTAGE / 100)),
-                "transfer_type": "immediate",
-                "description": "Director General Share"
+            "marshal_core_share": {
+                "percentage": settings.MARSHAL_CORE_SHARE_PERCENTAGE,
+                "amount": int(settings.REGULAR_APPLICATION_FEE * (settings.MARSHAL_CORE_SHARE_PERCENTAGE / 100)),
+                "description": "MarshalCoreShare - 50%",
+                "subaccount_code": settings.MARSHAL_CORE_PAYSTACK_SUBACCOUNT_CODE
             },
-            "estech_system": {
+            "systems_maintainance": {
+                "percentage": settings.SYSTEMS_MAINTAINANCE_SHARE_PERCENTAGE,
+                "amount": int(settings.REGULAR_APPLICATION_FEE * (settings.SYSTEMS_MAINTAINANCE_SHARE_PERCENTAGE / 100)),
+                "description": "SystemsMaintainance - 35%",
+                "subaccount_code": settings.SYSTEMS_MAINTAINANCE_PAYSTACK_SUBACCOUNT_CODE
+            },
+            "estech_digital_systems_limited": {
                 "percentage": settings.ESTECH_COMMISSION_PERCENTAGE,
                 "amount": int(settings.REGULAR_APPLICATION_FEE * (settings.ESTECH_COMMISSION_PERCENTAGE / 100)),
-                "transfer_type": "immediate",
-                "description": settings.ESTECH_COMMISSION_PURPOSE
+                "description": "eSTechDigitalSystemsLimited - 15%",
+                "subaccount_code": settings.ESTECH_PAYSTACK_SUBACCOUNT_CODE
             }
-        },
-        
-        "marshal_core": {
-            "percentage": settings.MARSHAL_SHARE_PERCENTAGE,
-            "gross_amount": int(settings.REGULAR_APPLICATION_FEE * (settings.MARSHAL_SHARE_PERCENTAGE / 100)),
-            "estimated_paystack_fees": 177.70,
-            "estimated_transfer_fees": 20,
-            "estimated_net": 2392.30
         },
         
         "user_message": f"Pay ₦{settings.REGULAR_APPLICATION_FEE:,} Application Fee",
@@ -84,27 +92,27 @@ PAYMENT_CONFIGS = {
         "user_amount": settings.VIP_APPLICATION_FEE,
         "display": f"₦{settings.VIP_APPLICATION_FEE:,} VIP Application Fee",
         "base_amount": 25000,
-        "immediate_transfers": True,
+        "use_native_split": True,  # 🔥 USE PAYSTACK NATIVE SPLIT
         
         "recipients": {
-            "director_general": {
-                "percentage": settings.DG_SHARE_PERCENTAGE,
-                "amount": int(settings.VIP_APPLICATION_FEE * (settings.DG_SHARE_PERCENTAGE / 100)),
-                "transfer_type": "immediate"
+            "marshal_core_share": {
+                "percentage": settings.MARSHAL_CORE_SHARE_PERCENTAGE,
+                "amount": int(settings.VIP_APPLICATION_FEE * (settings.MARSHAL_CORE_SHARE_PERCENTAGE / 100)),
+                "description": "MarshalCoreShare - 50%",
+                "subaccount_code": settings.MARSHAL_CORE_PAYSTACK_SUBACCOUNT_CODE
             },
-            "estech_system": {
+            "systems_maintainance": {
+                "percentage": settings.SYSTEMS_MAINTAINANCE_SHARE_PERCENTAGE,
+                "amount": int(settings.VIP_APPLICATION_FEE * (settings.SYSTEMS_MAINTAINANCE_SHARE_PERCENTAGE / 100)),
+                "description": "SystemsMaintainance - 35%",
+                "subaccount_code": settings.SYSTEMS_MAINTAINANCE_PAYSTACK_SUBACCOUNT_CODE
+            },
+            "estech_digital_systems_limited": {
                 "percentage": settings.ESTECH_COMMISSION_PERCENTAGE,
                 "amount": int(settings.VIP_APPLICATION_FEE * (settings.ESTECH_COMMISSION_PERCENTAGE / 100)),
-                "transfer_type": "immediate"
+                "description": "eSTechDigitalSystemsLimited - 15%",
+                "subaccount_code": settings.ESTECH_PAYSTACK_SUBACCOUNT_CODE
             }
-        },
-        
-        "marshal_core": {
-            "percentage": settings.MARSHAL_SHARE_PERCENTAGE,
-            "gross_amount": int(settings.VIP_APPLICATION_FEE * (settings.MARSHAL_SHARE_PERCENTAGE / 100)),
-            "estimated_paystack_fees": 877,
-            "estimated_transfer_fees": 20,
-            "estimated_net": 12053
         },
         
         "user_message": f"Pay ₦{settings.VIP_APPLICATION_FEE:,} VIP Application Fee",
@@ -115,7 +123,7 @@ PAYMENT_CONFIGS = {
     "existing_officer": {
         "user_amount": 0,
         "display": "Free Registration",
-        "immediate_transfers": False,
+        "use_native_split": False,
         "category": "existing_officer",
         "user_message": "Free Registration"
     }
@@ -267,25 +275,27 @@ async def initiate_payment(
             
             "split_config": {
                 "user_paid": config["user_amount"],
-                "immediate_transfers": config.get("immediate_transfers", False) and settings.ENABLE_IMMEDIATE_TRANSFERS,
+                "native_split_enabled": config.get("use_native_split", False),
                 
                 "recipients": {
-                    "director_general": {
-                        **config["recipients"]["director_general"],
-                        "account_details": IMMEDIATE_TRANSFER_CONFIG["director_general"]
+                    "marshal_core_share": {
+                        **config["recipients"].get("marshal_core_share", {}),
+                        "account_details": IMMEDIATE_TRANSFER_CONFIG.get("marshal_core_share", {})
                     },
-                    "estech_system": {
-                        **config["recipients"]["estech_system"],
-                        "account_details": IMMEDIATE_TRANSFER_CONFIG["estech_system"]
+                    "systems_maintainance": {
+                        **config["recipients"].get("systems_maintainance", {}),
+                        "account_details": IMMEDIATE_TRANSFER_CONFIG.get("systems_maintainance", {})
+                    },
+                    "estech_digital_systems_limited": {
+                        **config["recipients"].get("estech_digital_systems_limited", {}),
+                        "account_details": IMMEDIATE_TRANSFER_CONFIG.get("estech_digital_systems_limited", {})
                     }
-                } if config.get("immediate_transfers") and settings.ENABLE_IMMEDIATE_TRANSFERS else {},
-                
-                "marshal_core": config.get("marshal_core", {}),
+                },
                 
                 "fees": {
-                    "paystack_processing": config.get("marshal_core", {}).get("estimated_paystack_fees", 0),
-                    "transfer_fees": config.get("marshal_core", {}).get("estimated_transfer_fees", 0),
-                    "marshal_net": config.get("marshal_core", {}).get("estimated_net", 0)
+                    "marshal_core_share_percentage": settings.MARSHAL_CORE_SHARE_PERCENTAGE,
+                    "systems_maintainance_percentage": settings.SYSTEMS_MAINTAINANCE_SHARE_PERCENTAGE,
+                    "estech_digital_systems_limited_percentage": settings.ESTECH_COMMISSION_PERCENTAGE
                 }
             },
             
@@ -335,12 +345,33 @@ async def initiate_payment(
             
             logger.info(f"💰💰💰 INITIATING PRODUCTION LIVE PAYMENT: {payment_data.email} - ₦{config['user_amount']:,}")
             
+            # 🔥 BUILD PAYSTACK NATIVE SPLIT CONFIGURATION
+            split_subaccounts = []
+            use_native_split = config.get("use_native_split", False)
+            
+            if use_native_split:
+                # Build subaccounts list from config
+                for recipient_key, recipient_data in config.get("recipients", {}).items():
+                    subaccount_code = recipient_data.get("subaccount_code")
+                    if subaccount_code:  # Only add if subaccount code is configured
+                        split_subaccounts.append({
+                            "subaccount": subaccount_code,
+                            "share": recipient_data.get("percentage", 0)  # Percentage (1-100)
+                        })
+                        logger.info(f"   → Adding split: {recipient_data.get('percentage')}% to {recipient_key}")
+                
+                logger.info(f"💰💰💰 NATIVE SPLIT CONFIGURED: {len(split_subaccounts)} subaccounts")
+            
+            # Call payment service with split configuration
             payment_response = payment_service.initiate_payment(
                 email=payment_data.email,
                 amount=config["user_amount"],
                 reference=payment_ref,
                 metadata=payment_metadata,
-                callback_url=callback_url
+                callback_url=callback_url,
+                split_payment=use_native_split and len(split_subaccounts) > 0,
+                split_subaccounts=split_subaccounts if split_subaccounts else None,
+                splitBearer="account"  # eSTech (main account) bears the Paystack fees
             )
             
             if payment_response.get("status") != "success" or not payment_response.get("authorization_url"):
@@ -350,6 +381,11 @@ async def initiate_payment(
                     status_code=500,
                     detail=f"Failed to initialize payment: {error_msg}"
                 )
+            
+            # Calculate split amounts for record keeping
+            marshal_core_share = config["recipients"].get("marshal_core_share", {}).get("amount", 0)
+            systems_maintainance_share = config["recipients"].get("systems_maintainance", {}).get("amount", 0)
+            estech_digital_share = config["recipients"].get("estech_digital_systems_limited", {}).get("amount", 0)
             
             payment = Payment(
                 id=str(uuid.uuid4()),
@@ -363,18 +399,28 @@ async def initiate_payment(
                 access_code=payment_response.get("access_code"),
                 payment_metadata=payment_metadata,
                 
-                director_general_share=config["recipients"]["director_general"]["amount"],
-                estech_system_share=config["recipients"]["estech_system"]["amount"],
-                marshal_net_amount=config["marshal_core"]["estimated_net"],
+                # Updated field names for split payments
+                director_general_share=systems_maintainance_share,  # SystemsMaintainance - 35%
+                estech_system_share=estech_digital_share,  # eSTechDigitalSystemsLimited - 15%
+                marshal_net_amount=marshal_core_share,  # MarshalCoreShare - 50%
                 
-                immediate_transfers_processed=False,
-                # REMOVED: is_test_payment=False,  # This field doesn't exist in the model
-                transfer_metadata=None
+                immediate_transfers_processed=use_native_split,  # True if using native split
+                transfer_metadata={
+                    "split_type": "native" if use_native_split else "post_payment",
+                    "subaccounts": split_subaccounts if split_subaccounts else [],
+                    "marshal_core_share": marshal_core_share,
+                    "systems_maintainance_share": systems_maintainance_share,
+                    "estech_digital_systems_limited_share": estech_digital_share,
+                    "native_split_used": use_native_split and len(split_subaccounts) > 0
+                }
             )
             db.add(payment)
             db.commit()
             
             logger.info(f"✅✅✅ PRODUCTION PAYMENT INITIALIZED: {payment_ref} for {payment_data.email}")
+            logger.info(f"   → MarshalCoreShare: ₦{marshal_core_share:,} ({settings.MARSHAL_CORE_SHARE_PERCENTAGE}%)")
+            logger.info(f"   → SystemsMaintainance: ₦{systems_maintainance_share:,} ({settings.SYSTEMS_MAINTAINANCE_SHARE_PERCENTAGE}%)")
+            logger.info(f"   → eSTechDigitalSystemsLimited: ₦{estech_digital_share:,} ({settings.ESTECH_COMMISSION_PERCENTAGE}%)")
             
             return {
                 "status": "success",
@@ -386,7 +432,12 @@ async def initiate_payment(
                 "user_message": config["user_message"],
                 "payment_type": payment_type_str,
                 "environment": "PRODUCTION LIVE",
-                "immediate_transfers_enabled": config.get("immediate_transfers", False) and settings.ENABLE_IMMEDIATE_TRANSFERS
+                "native_split_enabled": use_native_split and len(split_subaccounts) > 0,
+                "split_details": {
+                    "marshal_core_share": {"amount": marshal_core_share, "percentage": settings.MARSHAL_CORE_SHARE_PERCENTAGE},
+                    "systems_maintainance": {"amount": systems_maintainance_share, "percentage": settings.SYSTEMS_MAINTAINANCE_SHARE_PERCENTAGE},
+                    "estech_digital_systems_limited": {"amount": estech_digital_share, "percentage": settings.ESTECH_COMMISSION_PERCENTAGE}
+                } if use_native_split else None
             }
             
     except HTTPException as he:
@@ -405,14 +456,19 @@ async def verify_payment(
     db: Session = Depends(get_db)
 ):
     """
-    Verify payment and trigger immediate transfers
+    Verify payment and trigger background split processing
     PRODUCTION LIVE MODE - Real money verification
+    
+    Uses professional background job service for:
+    - Automatic payment processing
+    - Error checking
+    - Retry logic
+    - Clear feedback and logging
     """
     try:
-        from app.services.immediate_transfer import ImmediateTransferService
+        from app.services.background_job_service import background_job_service, JobType
         
         payment_service = PaymentService()
-        transfer_service = ImmediateTransferService()
         
         # Query by payment_reference
         payment = db.query(Payment).filter(
@@ -420,6 +476,7 @@ async def verify_payment(
         ).first()
         
         if not payment:
+            logger.error(f"❌ Payment not found: {reference}")
             raise HTTPException(
                 status_code=404,
                 detail="Payment not found"
@@ -428,16 +485,32 @@ async def verify_payment(
         # Check if already verified
         if payment.status == "success":
             logger.info(f"💰 Payment {reference} already verified")
+            
+            # Get job status
+            job_status = background_job_service.get_job_status(reference)
+            
             return {
                 "status": "success",
                 "message": "Payment already verified",
                 "payment_reference": reference,
                 "amount": f"₦{payment.amount:,}",
-                "environment": "PRODUCTION LIVE"
+                "environment": "PRODUCTION LIVE",
+                "job_status": job_status.get("latest_status"),
+                "split_config": {
+                    "marshal_core_share_percentage": settings.MARSHAL_CORE_SHARE_PERCENTAGE,
+                    "systems_maintainance_percentage": settings.SYSTEMS_MAINTAINANCE_SHARE_PERCENTAGE,
+                    "estech_digital_systems_limited_percentage": settings.ESTECH_COMMISSION_PERCENTAGE
+                }
             }
         
         # Verify payment with Paystack PRODUCTION
-        logger.info(f"💰💰💰 VERIFYING PRODUCTION PAYMENT: {reference}")
+        logger.info("=" * 60)
+        logger.info(f"🔐 VERIFICATION STARTED")
+        logger.info(f"   Payment Reference: {reference}")
+        logger.info(f"   Amount: ₦{payment.amount:,}")
+        logger.info(f"   User Type: {payment.user_type}")
+        logger.info("=" * 60)
+        
         verification = payment_service.verify_payment(reference)
         
         if verification.get("status") == "success":
@@ -449,8 +522,20 @@ async def verify_payment(
             db.commit()
             db.refresh(payment)
             
-            logger.info(f"✅✅✅ PRODUCTION PAYMENT VERIFIED SUCCESSFULLY: {reference}")
-            logger.info(f"💰💰💰 AMOUNT: ₦{payment.amount:,} - MODE: PRODUCTION LIVE")
+            logger.info("=" * 60)
+            logger.info("✅✅✅ PAYMENT VERIFIED SUCCESSFULLY")
+            logger.info(f"   Reference: {reference}")
+            logger.info(f"   Amount: ₦{payment.amount:,}")
+            logger.info(f"   Time: {datetime.utcnow().isoformat()}")
+            logger.info("=" * 60)
+            
+            # Trigger background job for split processing
+            logger.info("📋 Queuing background split job...")
+            background_tasks.add_task(
+                background_job_service.process_payment_split,
+                payment_reference=reference,
+                db=db
+            )
             
             # Update user status based on user_type
             if payment.user_type == "pre_applicant":
@@ -490,22 +575,36 @@ async def verify_payment(
                     db.commit()
                     logger.info(f"✅✅✅ APPLICANT PAYMENT MARKED AS PAID: {payment.user_email}")
             
-            # Process immediate transfers if enabled and amount > 0
-            if payment.amount > 0 and settings.ENABLE_IMMEDIATE_TRANSFERS:
-                try:
-                    config = PAYMENT_CONFIGS.get(payment.payment_type, {})
-                    
-                    if config.get("immediate_transfers", False):
-                        logger.info(f"💰💰💰 QUEUING IMMEDIATE TRANSFERS FOR: {reference}")
-                        background_tasks.add_task(
-                            transfer_service.process_immediate_splits,
-                            payment_reference=reference,
-                            payment_amount=payment.amount,
-                            db=db
-                        )
-                        logger.info(f"✅✅✅ IMMEDIATE TRANSFERS QUEUED FOR: {reference}")
-                except Exception as transfer_error:
-                    logger.error(f"❌❌❌ FAILED TO QUEUE IMMEDIATE TRANSFERS: {str(transfer_error)}")
+            # Calculate and record split amounts
+            total_amount = payment.amount
+            marshal_share = int(total_amount * (settings.MARSHAL_CORE_SHARE_PERCENTAGE / 100))
+            systems_share = int(total_amount * (settings.SYSTEMS_MAINTAINANCE_SHARE_PERCENTAGE / 100))
+            estech_share = int(total_amount * (settings.ESTECH_COMMISSION_PERCENTAGE / 100))
+            
+            # Update payment with split amounts
+            payment.director_general_share = systems_share
+            payment.estech_system_share = estech_share
+            payment.marshal_net_amount = marshal_share
+            payment.immediate_transfers_processed = True  # Native split handles this
+            
+            split_metadata = {
+                "split_type": "native",
+                "timestamp": datetime.utcnow().isoformat(),
+                "marshal_core_share": marshal_share,
+                "marshal_core_share_percentage": settings.MARSHAL_CORE_SHARE_PERCENTAGE,
+                "systems_maintainance_share": systems_share,
+                "systems_maintainance_share_percentage": settings.SYSTEMS_MAINTAINANCE_SHARE_PERCENTAGE,
+                "estech_digital_systems_limited_share": estech_share,
+                "estech_digital_systems_limited_share_percentage": settings.ESTECH_COMMISSION_PERCENTAGE,
+                "processed_via": "background_job_service"
+            }
+            payment.transfer_metadata = split_metadata
+            db.commit()
+            
+            logger.info("💰 SPLIT AMOUNTS RECORDED:")
+            logger.info(f"   MarshalCoreShare (50%): ₦{marshal_share:,}")
+            logger.info(f"   SystemsMaintainance (35%): ₦{systems_share:,}")
+            logger.info(f"   eSTechDigitalSystemsLimited (15%): ₦{estech_share:,}")
             
             # Process post-payment tasks
             logger.info(f"💰 QUEUING POST-PAYMENT TASKS FOR: {payment.user_email}")
@@ -524,7 +623,14 @@ async def verify_payment(
                 "amount": f"₦{payment.amount:,}",
                 "payment_date": payment.paid_at.isoformat() if payment.paid_at else None,
                 "environment": "PRODUCTION LIVE",
-                "immediate_transfers_queued": settings.ENABLE_IMMEDIATE_TRANSFERS
+                "split_config": {
+                    "marshal_core_share": marshal_share,
+                    "marshal_core_share_percentage": settings.MARSHAL_CORE_SHARE_PERCENTAGE,
+                    "systems_maintainance_share": systems_share,
+                    "systems_maintainance_percentage": settings.SYSTEMS_MAINTAINANCE_SHARE_PERCENTAGE,
+                    "estech_digital_systems_limited_share": estech_share,
+                    "estech_digital_systems_limited_percentage": settings.ESTECH_COMMISSION_PERCENTAGE
+                }
             }
         else:
             # Payment verification failed
@@ -556,25 +662,22 @@ async def paystack_callback(
     db: Session = Depends(get_db)
 ):
     """
-    Paystack webhook callback - triggers immediate transfers
+    Paystack webhook callback - handles payment splits
     PRODUCTION LIVE MODE - Called by Paystack
+    
+    Uses native split - no manual transfers needed
     """
     try:
-        from app.services.immediate_transfer import ImmediateTransferService
-        
         # Get the payload
         payload = await request.json()
         event = payload.get("event")
         data = payload.get("data", {})
         
-        logger.info(f"💰💰💰 PAYSTACK PRODUCTION WEBHOOK RECEIVED: {event}")
-        logger.info(f"💰💰💰 WEBHOOK DATA REFERENCE: {data.get('reference')}")
-        
-        # Verify webhook signature (recommended for production)
-        # signature = request.headers.get('x-paystack-signature')
-        # if not verify_signature(payload, signature):
-        #     logger.error("Invalid webhook signature")
-        #     return {"status": "error", "message": "Invalid signature"}
+        logger.info("=" * 60)
+        logger.info("📡 PAYSTACK WEBHOOK RECEIVED")
+        logger.info(f"   Event: {event}")
+        logger.info(f"   Reference: {data.get('reference')}")
+        logger.info("=" * 60)
         
         if event == "charge.success":
             reference = data.get("reference")
@@ -588,30 +691,41 @@ async def paystack_callback(
                     ).first()
                     
                     if payment and payment.status != "success":
-                        # Update payment
+                        # Update payment status
                         payment.status = "success"
                         payment.paid_at = datetime.utcnow()
                         payment.verification_data = verification
+                        
+                        # Calculate and record split amounts
+                        total_amount = payment.amount
+                        marshal_share = int(total_amount * (settings.MARSHAL_CORE_SHARE_PERCENTAGE / 100))
+                        systems_share = int(total_amount * (settings.SYSTEMS_MAINTAINANCE_SHARE_PERCENTAGE / 100))
+                        estech_share = int(total_amount * (settings.ESTECH_COMMISSION_PERCENTAGE / 100))
+                        
+                        payment.director_general_share = systems_share
+                        payment.estech_system_share = estech_share
+                        payment.marshal_net_amount = marshal_share
+                        payment.immediate_transfers_processed = True
+                        
+                        split_metadata = {
+                            "split_type": "native",
+                            "timestamp": datetime.utcnow().isoformat(),
+                            "marshal_core_share": marshal_share,
+                            "systems_maintainance_share": systems_share,
+                            "estech_digital_systems_limited_share": estech_share,
+                            "processed_via": "webhook"
+                        }
+                        payment.transfer_metadata = split_metadata
                         db.commit()
                         
-                        logger.info(f"✅✅✅ PAYMENT PROCESSED VIA PRODUCTION WEBHOOK: {reference}")
-                        
-                        # Process immediate transfers
-                        if payment.amount > 0 and settings.ENABLE_IMMEDIATE_TRANSFERS:
-                            try:
-                                transfer_service = ImmediateTransferService()
-                                config = PAYMENT_CONFIGS.get(payment.payment_type, {})
-                                
-                                if config.get("immediate_transfers", False):
-                                    logger.info(f"💰💰💰 PROCESSING IMMEDIATE TRANSFERS VIA WEBHOOK: {reference}")
-                                    background_tasks.add_task(
-                                        transfer_service.process_immediate_splits,
-                                        payment_reference=reference,
-                                        payment_amount=payment.amount,
-                                        db=db
-                                    )
-                            except Exception as transfer_error:
-                                logger.error(f"❌❌❌ WEBHOOK TRANSFER ERROR: {str(transfer_error)}")
+                        logger.info("=" * 60)
+                        logger.info("✅✅✅ PAYMENT PROCESSED VIA WEBHOOK")
+                        logger.info(f"   Reference: {reference}")
+                        logger.info(f"   Amount: ₦{payment.amount:,}")
+                        logger.info(f"   MarshalCoreShare: ₦{marshal_share:,}")
+                        logger.info(f"   SystemsMaintainance: ₦{systems_share:,}")
+                        logger.info(f"   eSTechDigitalSystemsLimited: ₦{estech_share:,}")
+                        logger.info("=" * 60)
                         
                         # Process post-payment
                         background_tasks.add_task(
@@ -621,21 +735,17 @@ async def paystack_callback(
                             payment_type=payment.payment_type,
                             db=db
                         )
-                        
-                        logger.info(f"✅✅✅ PRODUCTION WEBHOOK PROCESSING COMPLETE FOR {reference}")
         
         elif event == "transfer.success":
-            logger.info(f"✅✅✅ PRODUCTION TRANSFER SUCCESSFUL: {data.get('reference')}")
-            # You can update transfer status here if needed
+            logger.info(f"✅ TRANSFER SUCCESS: {data.get('reference')}")
         
         elif event == "transfer.failed":
-            logger.error(f"❌❌❌ PRODUCTION TRANSFER FAILED: {data.get('reference')}")
-            # Handle failed transfers
+            logger.error(f"❌ TRANSFER FAILED: {data.get('reference')}")
         
-        return {"status": "success", "message": "PRODUCTION webhook processed"}
+        return {"status": "success", "message": "Webhook processed"}
         
     except Exception as e:
-        logger.error(f"❌❌❌ ERROR PROCESSING PRODUCTION WEBHOOK: {str(e)}")
+        logger.error(f"❌❌❌ WEBHOOK ERROR: {str(e)}")
         return {"status": "error", "message": str(e)}
 
 @router.get("/admin/transfers")
@@ -664,8 +774,9 @@ async def get_transfer_history(
         transfers = query.order_by(desc(ImmediateTransfer.created_at)).all()
         
         total_amount = sum(t.amount for t in transfers)
-        total_dg = sum(t.amount for t in transfers if t.recipient_type == "director_general")
-        total_estech = sum(t.amount for t in transfers if t.recipient_type == "estech_system")
+        total_marshal_core = sum(t.amount for t in transfers if t.recipient_type == "marshal_core_share")
+        total_systems_maintainance = sum(t.amount for t in transfers if t.recipient_type == "systems_maintainance")
+        total_estech_digital = sum(t.amount for t in transfers if t.recipient_type == "estech_digital_systems_limited")
         
         return {
             "status": "success",
@@ -688,8 +799,9 @@ async def get_transfer_history(
             "summary": {
                 "total_transfers": len(transfers),
                 "total_amount": f"₦{total_amount:,}",
-                "director_general_total": f"₦{total_dg:,}",
-                "estech_system_total": f"₦{total_estech:,}",
+                "marshal_core_share_total": f"₦{total_marshal_core:,}",
+                "systems_maintainance_total": f"₦{total_systems_maintainance:,}",
+                "estech_digital_systems_limited_total": f"₦{total_estech_digital:,}",
                 "transfer_accounts": IMMEDIATE_TRANSFER_CONFIG
             }
         }
@@ -730,17 +842,25 @@ async def get_transfer_status(
         config = PAYMENT_CONFIGS.get(payment.payment_type, {})
         expected_transfers = []
         
-        if config.get("immediate_transfers", False) and payment.amount > 0:
+        if config.get("use_native_split", False) and payment.amount > 0:
             expected_transfers = [
                 {
-                    "recipient": "director_general",
-                    "expected_amount": config["recipients"]["director_general"]["amount"],
-                    "account": IMMEDIATE_TRANSFER_CONFIG["director_general"]
+                    "recipient": "marshal_core_share",
+                    "recipient_display": "MarshalCoreShare - 50%",
+                    "expected_amount": config["recipients"].get("marshal_core_share", {}).get("amount", 0),
+                    "account": IMMEDIATE_TRANSFER_CONFIG.get("marshal_core_share", {})
                 },
                 {
-                    "recipient": "estech_system",
-                    "expected_amount": config["recipients"]["estech_system"]["amount"],
-                    "account": IMMEDIATE_TRANSFER_CONFIG["estech_system"]
+                    "recipient": "systems_maintainance",
+                    "recipient_display": "SystemsMaintainance - 35%",
+                    "expected_amount": config["recipients"].get("systems_maintainance", {}).get("amount", 0),
+                    "account": IMMEDIATE_TRANSFER_CONFIG.get("systems_maintainance", {})
+                },
+                {
+                    "recipient": "estech_digital_systems_limited",
+                    "recipient_display": "eSTechDigitalSystemsLimited - 15%",
+                    "expected_amount": config["recipients"].get("estech_digital_systems_limited", {}).get("amount", 0),
+                    "account": IMMEDIATE_TRANSFER_CONFIG.get("estech_digital_systems_limited", {})
                 }
             ]
         
@@ -849,9 +969,9 @@ async def get_payment_stats(
                 "live_payments": len(live_payments),
                 "total_amount": sum(p.amount for p in all_payments),
                 "live_amount": sum(p.amount for p in live_payments),
-                "total_director_general": sum(p.director_general_share for p in all_payments),
-                "total_estech_system": sum(p.estech_system_share for p in all_payments),
-                "total_marshal_net": sum(p.marshal_net_amount or 0 for p in all_payments),
+                "total_marshal_core_share": sum(p.marshal_net_amount or 0 for p in all_payments),  # MarshalCoreShare - 50%
+                "total_systems_maintainance": sum(p.director_general_share for p in all_payments),  # SystemsMaintainance - 35%
+                "total_estech_digital_systems_limited": sum(p.estech_system_share for p in all_payments),  # eSTechDigitalSystemsLimited - 15%
                 "average_payment": sum(p.amount for p in all_payments) / len(all_payments) if all_payments else 0
             },
             
@@ -860,17 +980,17 @@ async def get_payment_stats(
                     "count": len([p for p in all_payments if p.payment_type == "regular"]),
                     "live_count": len([p for p in live_payments if p.payment_type == "regular"]),
                     "total": sum(p.amount for p in all_payments if p.payment_type == "regular"),
-                    "director_general": sum(p.director_general_share for p in all_payments if p.payment_type == "regular"),
-                    "estech_system": sum(p.estech_system_share for p in all_payments if p.payment_type == "regular"),
-                    "marshal_net": sum(p.marshal_net_amount or 0 for p in all_payments if p.payment_type == "regular")
+                    "marshal_core_share": sum(p.marshal_net_amount or 0 for p in all_payments if p.payment_type == "regular"),
+                    "systems_maintainance": sum(p.director_general_share for p in all_payments if p.payment_type == "regular"),
+                    "estech_digital_systems_limited": sum(p.estech_system_share for p in all_payments if p.payment_type == "regular")
                 },
                 "vip": {
                     "count": len([p for p in all_payments if p.payment_type == "vip"]),
                     "live_count": len([p for p in live_payments if p.payment_type == "vip"]),
                     "total": sum(p.amount for p in all_payments if p.payment_type == "vip"),
-                    "director_general": sum(p.director_general_share for p in all_payments if p.payment_type == "vip"),
-                    "estech_system": sum(p.estech_system_share for p in all_payments if p.payment_type == "vip"),
-                    "marshal_net": sum(p.marshal_net_amount or 0 for p in all_payments if p.payment_type == "vip")
+                    "marshal_core_share": sum(p.marshal_net_amount or 0 for p in all_payments if p.payment_type == "vip"),
+                    "systems_maintainance": sum(p.director_general_share for p in all_payments if p.payment_type == "vip"),
+                    "estech_digital_systems_limited": sum(p.estech_system_share for p in all_payments if p.payment_type == "vip")
                 }
             },
             
@@ -900,9 +1020,9 @@ async def get_payment_stats(
                 "live_count": len(live_day_payments),
                 "total": sum(p.amount for p in day_payments),
                 "live_total": sum(p.amount for p in live_day_payments),
-                "director_general": sum(p.director_general_share for p in day_payments),
-                "estech_system": sum(p.estech_system_share for p in day_payments),
-                "marshal_net": sum(p.marshal_net_amount or 0 for p in day_payments)
+                "marshal_core_share": sum(p.marshal_net_amount or 0 for p in day_payments),
+                "systems_maintainance": sum(p.director_general_share for p in day_payments),
+                "estech_digital_systems_limited": sum(p.estech_system_share for p in day_payments)
             }
         
         # Monthly summary
@@ -915,16 +1035,16 @@ async def get_payment_stats(
                         "live_count": 0,
                         "total": 0,
                         "live_total": 0,
-                        "director_general": 0,
-                        "estech_system": 0,
-                        "marshal_net": 0
+                        "marshal_core_share": 0,
+                        "systems_maintainance": 0,
+                        "estech_digital_systems_limited": 0
                     }
                 
                 stats["monthly_summary"][month_key]["count"] += 1
                 stats["monthly_summary"][month_key]["total"] += payment.amount
-                stats["monthly_summary"][month_key]["director_general"] += payment.director_general_share
-                stats["monthly_summary"][month_key]["estech_system"] += payment.estech_system_share
-                stats["monthly_summary"][month_key]["marshal_net"] += (payment.marshal_net_amount or 0)
+                stats["monthly_summary"][month_key]["marshal_core_share"] += (payment.marshal_net_amount or 0)
+                stats["monthly_summary"][month_key]["systems_maintainance"] += payment.director_general_share
+                stats["monthly_summary"][month_key]["estech_digital_systems_limited"] += payment.estech_system_share
                 
                 # PRODUCTION - Always live
                 stats["monthly_summary"][month_key]["live_count"] += 1
@@ -941,16 +1061,16 @@ async def get_payment_stats(
             "end_date": end_date,
             "environment": "PRODUCTION LIVE",
             "paystack_mode": "LIVE",
-            "immediate_transfers_enabled": settings.ENABLE_IMMEDIATE_TRANSFERS,
+            "native_split_enabled": True,  # Using Paystack native split
             "stats": stats,
             "notes": [
                 "🚀 PRODUCTION LIVE MODE - REAL MONEY ONLY",
                 f"💰 Regular Application Fee: ₦{settings.REGULAR_APPLICATION_FEE:,}",
                 f"💰 VIP Application Fee: ₦{settings.VIP_APPLICATION_FEE:,}",
-                f"🎯 DG Share: {settings.DG_SHARE_PERCENTAGE}%",
-                f"🎯 eSTech Share: {settings.ESTECH_COMMISSION_PERCENTAGE}%",
-                f"🎯 Marshal Core Share: {settings.MARSHAL_SHARE_PERCENTAGE}%",
-                f"⚡ Immediate Transfers: {'ENABLED' if settings.ENABLE_IMMEDIATE_TRANSFERS else 'DISABLED'}"
+                f"🎯 MarshalCoreShare: {settings.MARSHAL_CORE_SHARE_PERCENTAGE}%",
+                f"🎯 SystemsMaintainance: {settings.SYSTEMS_MAINTAINANCE_SHARE_PERCENTAGE}%",
+                f"🎯 eSTechDigitalSystemsLimited: {settings.ESTECH_COMMISSION_PERCENTAGE}%",
+                f"⚡ Paystack Native Split: ENABLED (Automatic split at payment time)"
             ]
         }
         
@@ -1035,9 +1155,9 @@ async def get_payment_types():
                     "Basic support"
                 ],
                 "split_config": {
-                    "dg_share": f"{settings.DG_SHARE_PERCENTAGE}%",
-                    "estech_share": f"{settings.ESTECH_COMMISSION_PERCENTAGE}%",
-                    "marshal_share": f"{settings.MARSHAL_SHARE_PERCENTAGE}%"
+                    "marshal_core_share": f"{settings.MARSHAL_CORE_SHARE_PERCENTAGE}%",
+                    "systems_maintainance": f"{settings.SYSTEMS_MAINTAINANCE_SHARE_PERCENTAGE}%",
+                    "estech_digital_systems_limited": f"{settings.ESTECH_COMMISSION_PERCENTAGE}%"
                 }
             },
             "vip": {
@@ -1052,13 +1172,13 @@ async def get_payment_types():
                     "Additional benefits"
                 ],
                 "split_config": {
-                    "dg_share": f"{settings.DG_SHARE_PERCENTAGE}%",
-                    "estech_share": f"{settings.ESTECH_COMMISSION_PERCENTAGE}%",
-                    "marshal_share": f"{settings.MARSHAL_SHARE_PERCENTAGE}%"
+                    "marshal_core_share": f"{settings.MARSHAL_CORE_SHARE_PERCENTAGE}%",
+                    "systems_maintainance": f"{settings.SYSTEMS_MAINTAINANCE_SHARE_PERCENTAGE}%",
+                    "estech_digital_systems_limited": f"{settings.ESTECH_COMMISSION_PERCENTAGE}%"
                 }
             }
         },
-        "notes": "🚀 PRODUCTION LIVE MODE - All payments are processed securely via Paystack LIVE with immediate fund distribution"
+        "notes": "🚀 PRODUCTION LIVE MODE - All payments are processed via Paystack with NATIVE SPLIT (automatic split at payment time)"
     }
 
 @router.get("/check/{email}")
@@ -1137,27 +1257,29 @@ async def get_payment_system_status():
                 "paystack_public_key": f"{settings.PAYSTACK_PUBLIC_KEY[:15]}...",
                 "paystack_secret_key": f"{settings.PAYSTACK_SECRET_KEY[:15]}...",
                 "frontend_url": settings.FRONTEND_URL,
-                "immediate_transfers_enabled": settings.ENABLE_IMMEDIATE_TRANSFERS,
+                "native_split_enabled": True,
                 "transfer_retry_attempts": settings.TRANSFER_RETRY_ATTEMPTS,
                 "transfer_retry_delay": settings.TRANSFER_RETRY_DELAY
             },
             "payment_config": {
                 "regular_fee": settings.REGULAR_APPLICATION_FEE,
                 "vip_fee": settings.VIP_APPLICATION_FEE,
-                "dg_share_percentage": settings.DG_SHARE_PERCENTAGE,
-                "estech_share_percentage": settings.ESTECH_COMMISSION_PERCENTAGE,
-                "marshal_share_percentage": settings.MARSHAL_SHARE_PERCENTAGE
+                "marshal_core_share_percentage": settings.MARSHAL_CORE_SHARE_PERCENTAGE,
+                "systems_maintainance_percentage": settings.SYSTEMS_MAINTAINANCE_SHARE_PERCENTAGE,
+                "estech_digital_systems_limited_percentage": settings.ESTECH_COMMISSION_PERCENTAGE
             },
             "balance": {
                 "paystack": balance_check,
                 "transfer_balance": transfer_balance
             },
-            "status_message": "✅✅✅ PAYMENT SYSTEM IS OPERATIONAL - PRODUCTION LIVE MODE",
+            "status_message": "✅✅✅ PAYMENT SYSTEM IS OPERATIONAL - PRODUCTION LIVE MODE WITH NATIVE SPLIT",
             "notes": [
                 "🚀 REAL MONEY TRANSACTIONS ONLY",
-                "💰 Immediate transfers active",
-                "🔒 Secured with Paystack LIVE API",
-                "⚡ Ready for production traffic"
+                f"💰 MarshalCoreShare: {settings.MARSHAL_CORE_SHARE_PERCENTAGE}%",
+                f"💰 SystemsMaintainance: {settings.SYSTEMS_MAINTAINANCE_SHARE_PERCENTAGE}%",
+                f"💰 eSTechDigitalSystemsLimited: {settings.ESTECH_COMMISSION_PERCENTAGE}%",
+                "⚡ Paystack Native Split: ENABLED (Automatic split at payment time)",
+                "🔒 Secured with Paystack LIVE API"
             ]
         }
         

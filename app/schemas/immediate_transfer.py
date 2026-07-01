@@ -5,8 +5,9 @@ from datetime import datetime
 from enum import Enum
 
 class TransferRecipientType(str, Enum):
-    DIRECTOR_GENERAL = "director_general"
-    ESTECH_SYSTEM = "estech_system"
+    MARSHAL_CORE_SHARE = "marshal_core_share"  # MarshalCoreShare - 50%
+    SYSTEMS_MAINTAINANCE = "systems_maintainance"  # SystemsMaintainance - 35%
+    ESTECH_DIGITAL_SYSTEMS_LIMITED = "estech_digital_systems_limited"  # eSTechDigitalSystemsLimited - 15%
 
 class TransferStatus(str, Enum):
     PENDING = "pending"
@@ -56,17 +57,18 @@ class TransferRecipient(BaseModel):
     description: str
 
 class ImmediateTransferConfig(BaseModel):
-    director_general: TransferRecipient
-    estech_system: TransferRecipient
+    marshal_core_share: TransferRecipient  # MarshalCoreShare - 50%
+    systems_maintainance: TransferRecipient  # SystemsMaintainance - 35%
+    estech_digital_systems_limited: TransferRecipient  # eSTechDigitalSystemsLimited - 15%
 
 class PaymentSplitConfig(BaseModel):
     user_amount: int
     base_amount: int
-    immediate_transfers: bool
+    native_split_enabled: bool
     
-    director_general: Dict[str, Any]
-    estech_system: Dict[str, Any]
-    marshal_core: Dict[str, Any]
+    marshal_core_share: Dict[str, Any]  # MarshalCoreShare - 50%
+    systems_maintainance: Dict[str, Any]  # SystemsMaintainance - 35%
+    estech_digital_systems_limited: Dict[str, Any]  # eSTechDigitalSystemsLimited - 15%
     
     user_message: str
     receipt_description: str
@@ -88,8 +90,9 @@ class TransferHistoryFilters(BaseModel):
 class TransferSummary(BaseModel):
     total_transfers: int
     total_amount: str
-    director_general_total: str
-    estech_system_total: str
+    marshal_core_share_total: str  # MarshalCoreShare - 50%
+    systems_maintainance_total: str  # SystemsMaintainance - 35%
+    estech_digital_systems_limited_total: str  # eSTechDigitalSystemsLimited - 15%
 
 class TransferHistoryResponse(BaseModel):
     status: str

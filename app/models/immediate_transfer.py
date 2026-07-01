@@ -1,6 +1,6 @@
 # app/models/immediate_transfer.py - COMPLETE
 """
-Database model to track immediate transfers to DG and eSTech System
+Database model to track immediate transfers to Shakoor Nigeria, System Maintenance, and eSTech System
 """
 from sqlalchemy import Column, String, Integer, Float, DateTime, JSON, Boolean, Text
 from sqlalchemy.sql import func
@@ -15,10 +15,10 @@ class ImmediateTransfer(Base):
     # Link to payment
     payment_reference = Column(String, index=True, nullable=False)
     
-    # Recipient details
-    recipient_type = Column(String, nullable=False)  # "director_general" or "estech_system"
+    # Recipient details: "system_maintenance", "shakoor_nigeria", or "estech_system"
+    recipient_type = Column(String, nullable=False)
     recipient_account = Column(String, nullable=False)  # "Name - Account Number"
-    recipient_bank = Column(String, nullable=False)  # "UBA" or "OPay"
+    recipient_bank = Column(String, nullable=False)  # Bank name
     
     # Transfer details
     amount = Column(Float, nullable=False)  # Amount in Naira

@@ -36,10 +36,20 @@ class PaymentService:
         amount: float,
         reference: str,
         metadata: Optional[Dict] = None,
-        callback_url: Optional[str] = None
+        callback_url: Optional[str] = None,
+        split_payment: bool = False,
+        split_subaccounts: Optional[list] = None,
+        split_percentage: Optional[int] = None,
+        splitBearer: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Initialize payment with Paystack LIVE - PRODUCTION
+        
+        Args:
+            split_payment: If True, use Paystack native split
+            split_subaccounts: List of subaccount dicts with 'subaccount', 'share' keys
+            split_percentage: If using percentage split (1-100)
+            splitBearer: Who bears the split charges (account, subaccount, all)
         """
         try:
             amount_kobo = int(amount * 100)  # Convert to kobo
@@ -55,8 +65,28 @@ class PaymentService:
             if callback_url:
                 payload["callback_url"] = callback_url
             
+            # 🔥 ADD PAYSTACK NATIVE SPLIT CONFIGURATION
+            if split_payment and split_subaccounts:
+                payload["split"] = {
+                    "type": "flat",  # Use flat amount splits
+                    "bearer_type": splitBearer or "account",  # Who bears the charges
+                    "subaccounts": split_subaccounts
+                }
+                logger.info(f"💰💰💰 SPLIT PAYMENT CONFIGURED: {len(split_subaccounts)} subaccounts")
+                for sa in split_subaccounts:
+                    logger.info(f"   → {sa.get('share', 'N/A')}% to {sa.get('subaccount', 'N/A')[:20]}...")
+            elif split_percentage:
+                # Simple percentage split - all goes to main account bearer
+                payload["split"] = {
+                    "type": "percentage",
+                    "bearer_type": splitBearer or "account",
+                    "percentage": split_percentage
+                }
+                logger.info(f"💰💰💰 PERCENTAGE SPLIT: {split_percentage}% to main account")
+            
             logger.info(f"💰 INITIATING LIVE PAYMENT: {reference} - ₦{amount:,}")
             logger.info(f"💰 Callback URL: {callback_url}")
+            logger.info(f"💰 Split Payment: {split_payment}")
             
             response = httpx.post(
                 f"{self.base_url}/transaction/initialize",
@@ -78,7 +108,8 @@ class PaymentService:
                     "access_code": data["data"]["access_code"],
                     "reference": reference,
                     "message": data.get("message", "Payment initialized"),
-                    "mode": "LIVE"
+                    "mode": "LIVE",
+                    "split_configured": split_payment
                 }
             else:
                 error_msg = data.get("message", "Payment initialization failed")

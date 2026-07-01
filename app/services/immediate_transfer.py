@@ -32,23 +32,32 @@ class ImmediateTransferService:
         self.is_live_mode = True  # Force LIVE mode in production
         self.enable_transfers = settings.ENABLE_IMMEDIATE_TRANSFERS
         
-        # Recipient configurations for LIVE transfers
+        # Recipient configurations for LIVE transfers (DEPRECATED - Using Paystack Native Split Now)
+        # This service is kept for backward compatibility and manual transfers only
         self.recipients = {
-            "director_general": {
+            "marshal_core_share": {
                 "type": "nuban",
-                "name": settings.DG_ACCOUNT_NAME,
-                "account_number": settings.DG_ACCOUNT_NUMBER,
-                "bank_code": settings.DG_BANK_CODE,
+                "name": settings.MARSHAL_CORE_BANK_ACCOUNT_NAME,
+                "account_number": settings.MARSHAL_CORE_ACCOUNT_NUMBER,
+                "bank_code": settings.MARSHAL_CORE_BANK_CODE,
                 "currency": "NGN",
-                "description": "Director General - Marshal Core Nigeria"
+                "description": "MarshalCoreShare - 50% of payments"
             },
-            "estech_system": {
+            "systems_maintainance": {
                 "type": "nuban",
-                "name": settings.ESTECH_IMMEDIATE_ACCOUNT_NAME,  # Actual beneficiary name
-                "account_number": settings.ESTECH_IMMEDIATE_ACCOUNT_NUMBER,
-                "bank_code": "100",  # OPay bank code
+                "name": settings.SYSTEMS_MAINTAINANCE_ACCOUNT_NAME,
+                "account_number": settings.SYSTEMS_MAINTAINANCE_ACCOUNT_NUMBER,
+                "bank_code": settings.SYSTEMS_MAINTAINANCE_BANK_CODE,
                 "currency": "NGN",
-                "description": settings.ESTECH_COMMISSION_PURPOSE
+                "description": "SystemsMaintainance - 35% of payments"
+            },
+            "estech_digital_systems_limited": {
+                "type": "nuban",
+                "name": settings.ESTECH_ACTUAL_BENEFICIARY,
+                "account_number": settings.ESTECH_BANK_ACCOUNT_NUMBER,
+                "bank_code": settings.ESTECH_BANK_CODE,  # FCMB bank code
+                "currency": "NGN",
+                "description": "eSTechDigitalSystemsLimited - 15% of payments"
             }
         }
         
@@ -295,21 +304,21 @@ class ImmediateTransferService:
             transfer_results = []
             all_successful = True
             
-            # Process Director General transfer (35%)
-            dg_amount = payment.director_general_share
-            if dg_amount > 0:
-                logger.info(f"💰💰 Transferring ₦{dg_amount:,} to Director General (REAL MONEY)")
+            # Process System Maintenance transfer (35%) - formerly Director General
+            system_maintenance_amount = payment.director_general_share  # Field name unchanged for DB compatibility
+            if system_maintenance_amount > 0:
+                logger.info(f"💰💰 Transferring ₦{system_maintenance_amount:,} to System Maintenance (REAL MONEY)")
                 
                 # Create or get recipient code
-                recipient_result = await self.create_transfer_recipient("director_general")
+                recipient_result = await self.create_transfer_recipient("system_maintenance")
                 
                 if recipient_result.get("status") == "success":
                     # Initiate transfer
                     transfer_result = await self.initiate_transfer(
                         recipient_code=recipient_result["recipient_code"],
-                        amount=int(dg_amount * 100),  # Convert to kobo
-                        reason=f"Marshal Core - DG Share for {payment_reference}",
-                        recipient_type="director_general",
+                        amount=int(system_maintenance_amount * 100),  # Convert to kobo
+                        reason=f"Marshal Core - System Maintenance Share for {payment_reference}",
+                        recipient_type="system_maintenance",
                         payment_reference=payment_reference
                     )
                     
@@ -317,10 +326,10 @@ class ImmediateTransferService:
                     if transfer_result.get("status") == "success":
                         transfer = ImmediateTransfer(
                             payment_reference=payment_reference,
-                            recipient_type="director_general",
-                            amount=dg_amount,
-                            recipient_account=f"{self.recipients['director_general']['name']} - {self.recipients['director_general']['account_number']}",
-                            recipient_bank=settings.DG_BANK_NAME,
+                            recipient_type="system_maintenance",
+                            amount=system_maintenance_amount,
+                            recipient_account=f"{self.recipients['system_maintenance']['name']} - {self.recipients['system_maintenance']['account_number']}",
+                            recipient_bank=settings.SYSTEM_MAINTENANCE_BANK_NAME,
                             transfer_reference=transfer_result.get("transfer_reference"),
                             status="initiated",
                             transferred_at=datetime.utcnow(),
@@ -330,23 +339,23 @@ class ImmediateTransferService:
                         db.add(transfer)
                         
                         transfer_results.append({
-                            "recipient": "director_general",
-                            "amount": dg_amount,
+                            "recipient": "system_maintenance",
+                            "amount": system_maintenance_amount,
                             "status": "initiated",
                             "transfer_reference": transfer_result.get("transfer_reference"),
                             "test_mode": False,
                             "timestamp": datetime.utcnow().isoformat()
                         })
-                        logger.info(f"✅✅✅ Director General transfer initiated: ₦{dg_amount:,} (REAL MONEY)")
+                        logger.info(f"✅✅✅ System Maintenance transfer initiated: ₦{system_maintenance_amount:,} (REAL MONEY)")
                     else:
                         all_successful = False
                         # Record failed transfer
                         transfer = ImmediateTransfer(
                             payment_reference=payment_reference,
-                            recipient_type="director_general",
-                            amount=dg_amount,
-                            recipient_account=f"{self.recipients['director_general']['name']} - {self.recipients['director_general']['account_number']}",
-                            recipient_bank=settings.DG_BANK_NAME,
+                            recipient_type="system_maintenance",
+                            amount=system_maintenance_amount,
+                            recipient_account=f"{self.recipients['system_maintenance']['name']} - {self.recipients['system_maintenance']['account_number']}",
+                            recipient_bank=settings.SYSTEM_MAINTENANCE_BANK_NAME,
                             transfer_reference=None,
                             status="failed",
                             transferred_at=datetime.utcnow(),
@@ -355,23 +364,23 @@ class ImmediateTransferService:
                         db.add(transfer)
                         
                         transfer_results.append({
-                            "recipient": "director_general",
-                            "amount": dg_amount,
+                            "recipient": "system_maintenance",
+                            "amount": system_maintenance_amount,
                             "status": "failed",
                             "error": transfer_result.get("message"),
                             "test_mode": False
                         })
-                        logger.error(f"❌❌❌ Director General transfer failed: {transfer_result.get('message')}")
+                        logger.error(f"❌❌❌ System Maintenance transfer failed: {transfer_result.get('message')}")
                 else:
                     all_successful = False
                     transfer_results.append({
-                        "recipient": "director_general",
-                        "amount": dg_amount,
+                        "recipient": "system_maintenance",
+                        "amount": system_maintenance_amount,
                         "status": "failed",
                         "error": recipient_result.get("message"),
                         "test_mode": False
                     })
-                    logger.error(f"❌❌❌ Failed to create DG recipient: {recipient_result.get('message')}")
+                    logger.error(f"❌❌❌ Failed to create System Maintenance recipient: {recipient_result.get('message')}")
             
             # Process eSTech System transfer (15%)
             estech_amount = payment.estech_system_share

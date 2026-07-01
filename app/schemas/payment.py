@@ -46,7 +46,7 @@ class PaymentCallback(BaseModel):
 # New schemas for immediate transfers
 class ImmediateTransferRequest(BaseModel):
     payment_reference: str
-    recipient_type: str = Field(..., description="director_general or estech_system")
+    recipient_type: str = Field(..., description="system_maintenance, shakoor_nigeria, or estech_system")
     amount: float
 
     model_config = ConfigDict(title="ImmediateTransferRequest")

@@ -899,8 +899,10 @@ async def startup_event():
         logger.info("✅ Immediate transfer service initialized")
         logger.info(f"  Mode: {'LIVE' if transfer_service.is_live_mode else 'TEST'}")
         logger.info(f"  Transfers Enabled: {transfer_service.enable_transfers}")
-        logger.info(f"  DG Account: {settings.DG_ACCOUNT_NAME} - {settings.DG_ACCOUNT_NUMBER}")
-        logger.info(f"  eSTech Account: {settings.ESTECH_IMMEDIATE_ACCOUNT_NAME} - {settings.ESTECH_IMMEDIATE_ACCOUNT_NUMBER}")
+        logger.info(f"  MarshalCoreShare Account: {settings.MARSHAL_CORE_BANK_ACCOUNT_NAME} - {settings.MARSHAL_CORE_ACCOUNT_NUMBER} ({settings.MARSHAL_CORE_SHARE_PERCENTAGE}%)")
+        logger.info(f"  SystemsMaintainance Account: {settings.SYSTEMS_MAINTAINANCE_ACCOUNT_NAME} - {settings.SYSTEMS_MAINTAINANCE_ACCOUNT_NUMBER} ({settings.SYSTEMS_MAINTAINANCE_SHARE_PERCENTAGE}%)")
+        logger.info(f"  eSTechDigitalSystemsLimited Account: {settings.ESTECH_ACTUAL_BENEFICIARY} - {settings.ESTECH_BANK_ACCOUNT_NUMBER} ({settings.ESTECH_COMMISSION_PERCENTAGE}%)")
+        logger.info(f"  ⚡ Using Paystack Native Split (Automatic split at payment time)")
     except Exception as e:
         logger.warning(f"⚠ Immediate transfer service initialization failed: {e}")
     
