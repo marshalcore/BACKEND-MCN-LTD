@@ -1,5 +1,5 @@
 # app/routes/pre_register.py - COMPLETE FIXED VERSION
-from fastapi import APIRouter, Depends, HTTPException, Form
+from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from sqlalchemy.exc import ProgrammingError, IntegrityError, OperationalError
@@ -10,11 +10,10 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 import logging
 
+
 router = APIRouter(prefix="/pre-applicant", tags=["Pre Applicant"])
 logger = logging.getLogger(__name__)
 
-# FIXED: Accept JSON with Body() and also Form for backwards compatibility
-from fastapi import Body
 
 @router.post("/check-status")
 async def check_application_status(
@@ -42,7 +41,7 @@ async def check_application_status(
     
     logger.info(f"✅ Pre-applicant found: {pre_applicant.email}")
     
-    # ✅ FIXED: Build response with consistent field names
+    # Build response with consistent field names
     status_info = {
         "email": normalized_email,
         "full_name": pre_applicant.full_name,
@@ -57,13 +56,12 @@ async def check_application_status(
         "created_at": pre_applicant.created_at.isoformat() if pre_applicant.created_at else None,
     }
     
-    # ✅ FIXED: Always include both 'id' and 'pre_applicant_id'
+    # Always include both 'id' and 'pre_applicant_id'
     if pre_applicant.id:
-        # Include both formats for frontend compatibility
         status_info["pre_applicant_id"] = str(pre_applicant.id)
-        status_info["id"] = str(pre_applicant.id)  # Alias for frontend
+        status_info["id"] = str(pre_applicant.id)
     
-    # ✅ FIXED: Add pre-applicant data consistently
+    # Add pre-applicant data consistently
     status_info["pre_applicant_data"] = {
         "id": str(pre_applicant.id) if pre_applicant.id else None,
         "email": normalized_email,
@@ -101,6 +99,7 @@ async def check_application_status(
     logger.info(f"📊 Returning status: {status_info}")
     return status_info
 
+
 @router.post("/register", response_model=PreApplicantStatusResponse)
 async def register_pre_applicant(
     full_name: str = Body(...),
@@ -113,13 +112,19 @@ async def register_pre_applicant(
     
     logger.info(f"📝 Registering pre-applicant: {normalized_email}, {full_name}, {tier}")
     
+    # Validate tier
+    if tier not in ["regular", "vip"]:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid tier. Must be 'regular' or 'vip'"
+        )
+    
     # Check if email already exists
     existing = db.query(PreApplicant).filter(
         func.lower(PreApplicant.email) == normalized_email
     ).first()
     
     if existing:
-        # Use safe attribute access with defaults
         application_submitted = getattr(existing, "application_submitted", False)
         password_used = getattr(existing, "password_used", False)
         has_paid = getattr(existing, "has_paid", False)
@@ -168,6 +173,7 @@ async def register_pre_applicant(
             full_name=full_name,
             email=normalized_email,
             status="created",
+            selected_tier=tier,
             created_at=datetime.now(ZoneInfo("UTC"))
         )
         
@@ -193,22 +199,25 @@ async def register_pre_applicant(
             detail="Failed to create pre-applicant. Please try again."
         )
 
+
 @router.post("/select-tier")
 async def select_application_tier(
     email: str = Body(...),
     category: str = Body(...),
-
-
-
     db: Session = Depends(get_db)
 ):
     """Select application tier (Regular ₦5,180 or VIP ₦25,900)"""
     normalized_email = email.strip().lower()
     
+    # Accept both 'category' and 'tier' for flexibility
+    tier = category if category else None
+    if not tier:
+        raise HTTPException(status_code=400, detail="Category is required")
+    
     logger.info(f"🎯 Selecting tier: {normalized_email} -> {tier}")
     
     if tier not in ["regular", "vip"]:
-        raise HTTPException(status_code=400, detail="Invalid tier. Must be 'regular' or 'vip'")
+        raise HTTPException(status_code=400, detail="Invalid category. Must be 'regular' or 'vip'")
     
     pre_applicant = db.query(PreApplicant).filter(
         func.lower(PreApplicant.email) == normalized_email
@@ -237,12 +246,14 @@ async def select_application_tier(
     return {
         "status": "tier_selected",
         "tier": tier,
+        "category": tier,
         "amount": amount,
         "amount_display": f"₦{amount:,}",
         "payment_reference": getattr(pre_applicant, 'payment_reference', None) or "not_paid",
         "next_step": "payment",
         "payment_endpoint": "/api/payments/initiate"
     }
+
 
 @router.get("/status/{email}")
 async def get_pre_applicant_status(email: str, db: Session = Depends(get_db)):
@@ -256,7 +267,7 @@ async def get_pre_applicant_status(email: str, db: Session = Depends(get_db)):
     if not pre_applicant:
         raise HTTPException(status_code=404, detail="Applicant not found")
     
-    # ✅ FIXED: Build response with consistent field names
+    # Build response with consistent field names
     response = {
         "full_name": pre_applicant.full_name,
         "email": pre_applicant.email,
@@ -265,10 +276,10 @@ async def get_pre_applicant_status(email: str, db: Session = Depends(get_db)):
         "created_at": pre_applicant.created_at.isoformat() if pre_applicant.created_at else None
     }
     
-    # ✅ FIXED: Always include both 'id' and 'pre_applicant_id'
+    # Always include both 'id' and 'pre_applicant_id'
     if pre_applicant.id:
         response["pre_applicant_id"] = str(pre_applicant.id)
-        response["id"] = str(pre_applicant.id)  # Alias for frontend compatibility
+        response["id"] = str(pre_applicant.id)
     
     # Add optional fields if they exist
     optional_fields = [
@@ -290,7 +301,7 @@ async def get_pre_applicant_status(email: str, db: Session = Depends(get_db)):
             else:
                 response[field] = value
     
-    # ✅ FIXED: Add pre-applicant data
+    # Add pre-applicant data
     response["pre_applicant_data"] = {
         "id": str(pre_applicant.id) if pre_applicant.id else None,
         "email": normalized_email,
@@ -300,6 +311,7 @@ async def get_pre_applicant_status(email: str, db: Session = Depends(get_db)):
     }
     
     return response
+
 
 @router.get("/debug/schema")
 async def debug_schema(db: Session = Depends(get_db)):
