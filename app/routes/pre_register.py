@@ -13,18 +13,20 @@ import logging
 router = APIRouter(prefix="/pre-applicant", tags=["Pre Applicant"])
 logger = logging.getLogger(__name__)
 
-# FIXED: Added Form(...) to all parameters
+# FIXED: Accept JSON with Body() and also Form for backwards compatibility
+from fastapi import Body
+
 @router.post("/check-status")
 async def check_application_status(
-    email: str = Form(...),
-    full_name: str = Form(...),
-    category: str = Form(...),
+    email: str = Body(...),
+    full_name: str = Body(...),
+    category: str = Body(...),
     db: Session = Depends(get_db)
 ):
     """Check pre-applicant status for continue application feature"""
     normalized_email = email.strip().lower()
     
-    logger.info(f"📞 Check status called for: {normalized_email}, {full_name}, {category}")
+    logger.info(f"📞 Check status called for: {normalized_email}")
     
     # Check if pre-applicant exists
     pre_applicant = db.query(PreApplicant).filter(
@@ -101,12 +103,12 @@ async def check_application_status(
 
 @router.post("/register", response_model=PreApplicantStatusResponse)
 async def register_pre_applicant(
-    full_name: str = Form(...),
-    email: str = Form(...),
-    tier: str = Form(...),
+    full_name: str = Body(...),
+    email: str = Body(...),
+    tier: str = Body(...),
     db: Session = Depends(get_db)
 ):
-    """Register new pre-applicant - FIXED to use Form parameters"""
+    """Register new pre-applicant"""
     normalized_email = email.strip().lower()
     
     logger.info(f"📝 Registering pre-applicant: {normalized_email}, {full_name}, {tier}")
@@ -193,8 +195,11 @@ async def register_pre_applicant(
 
 @router.post("/select-tier")
 async def select_application_tier(
-    email: str = Form(...),
-    tier: str = Form(...),
+    email: str = Body(...),
+    category: str = Body(...),
+
+
+
     db: Session = Depends(get_db)
 ):
     """Select application tier (Regular ₦5,180 or VIP ₦25,900)"""
