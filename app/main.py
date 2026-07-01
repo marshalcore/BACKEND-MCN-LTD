@@ -167,7 +167,6 @@ routers = [
 
 for router in routers:
     app.include_router(router)
-    logger.info(f"Included router: {router.prefix}")
 
 # ==================== MIDDLEWARE FOR NORMALIZED FILE PATHS ====================
 
@@ -175,84 +174,32 @@ for router in routers:
 async def normalize_static_paths(request: Request, call_next):
     """
     Middleware to normalize static file paths for officer IDs with slashes
-    
-    This handles the case where officer IDs contain slashes (e.g., MCN/001B/001)
-    and converts them to hyphens for file system compatibility.
     """
     path = request.url.path
     
-    # Check if it's a static uploads path with existing_officers
-    if '/static/uploads/existing_officers/' in path:
-        logger.info(f"🔄 Processing static path: {path}")
-        
-        # Extract officer ID from path and normalize it
+    # Silent path normalization
+    if '/static/uploads/existing_officers/' in path and ('/' in path or '\\' in path):
         parts = path.split('/')
-        
-        # Find the index of 'existing_officers' in the path
         try:
-            existing_officers_index = parts.index('existing_officers')
-            if existing_officers_index + 1 < len(parts):
-                officer_id = parts[existing_officers_index + 1]
+            idx = parts.index('existing_officers')
+            if idx + 1 < len(parts) and ('/' in parts[idx + 1] or '\\' in parts[idx + 1]):
+                normalized = parts[idx + 1].replace('/', '-').replace('\\', '-')
+                normalized_relative_path = '/'.join(parts[:idx+1]) + '/' + normalized + '/'.join(parts[idx+2:])
+                normalized_full_path = os.path.join(STATIC_DIR, normalized_relative_path)
                 
-                # Check if officer ID has slashes (e.g., MCN/001B/001)
-                if '/' in officer_id or '\\' in officer_id:
-                    logger.info(f"🔄 Found officer ID with slashes: {officer_id}")
+                if os.path.exists(normalized_full_path):
+                    ext = '.jpg' if normalized_full_path.endswith(('.jpg', '.jpeg')) else '.png' if normalized_full_path.endswith('.png') else '.pdf' if normalized_full_path.endswith('.pdf') else ''
+                    media_type = {
+                        '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.pdf': 'application/pdf'
+                    }.get(ext, 'application/octet-stream')
                     
-                    # Normalize the officer ID (replace slashes with hyphens)
-                    normalized_id = officer_id.replace('/', '-').replace('\\', '-')
-                    parts[existing_officers_index + 1] = normalized_id
-                    new_path = '/'.join(parts)
-                    
-                    # Construct the full file path for normalized version
-                    normalized_relative_path = new_path.replace('/static/', '')
-                    normalized_full_path = os.path.join(STATIC_DIR, normalized_relative_path)
-                    
-                    # Check if normalized file exists
-                    if os.path.exists(normalized_full_path):
-                        logger.info(f"✅ Serving normalized path: {new_path}")
-                        logger.info(f"   File exists at: {normalized_full_path}")
-                        
-                        # Determine file extension for proper content type
-                        if normalized_full_path.endswith('.jpg') or normalized_full_path.endswith('.jpeg'):
-                            media_type = 'image/jpeg'
-                        elif normalized_full_path.endswith('.png'):
-                            media_type = 'image/png'
-                        elif normalized_full_path.endswith('.pdf'):
-                            media_type = 'application/pdf'
-                        else:
-                            media_type = 'application/octet-stream'
-                        
-                        # Return the file response directly
-                        return FileResponse(
-                            normalized_full_path,
-                            media_type=media_type,
-                            headers={
-                                'Access-Control-Allow-Origin': 'https://marshalcoreofnigeria.ng',
-                                'Access-Control-Allow-Credentials': 'true',
-                                'Cache-Control': 'public, max-age=3600'
-                            }
-                        )
-                    else:
-                        logger.warning(f"⚠️ Normalized file not found: {normalized_full_path}")
-                        
-                        # Try the original path as well (for backward compatibility)
-                        original_relative_path = path.replace('/static/', '')
-                        original_full_path = os.path.join(STATIC_DIR, original_relative_path)
-                        
-                        if os.path.exists(original_full_path):
-                            logger.info(f"✅ Serving original path (backward compatibility): {path}")
-                            response = await call_next(request)
-                            return response
-                        else:
-                            logger.error(f"❌ Both normalized and original files not found")
-                            logger.error(f"   Normalized: {normalized_full_path}")
-                            logger.error(f"   Original: {original_full_path}")
-        
-        except ValueError:
-            # 'existing_officers' not found in path
+                    return FileResponse(normalized_full_path, media_type=media_type,
+                        headers={'Access-Control-Allow-Origin': 'https://marshalcoreofnigeria.ng',
+                                'Cache-Control': 'public, max-age=3600'})
+        except (ValueError, IndexError):
             pass
-        except Exception as e:
-            logger.error(f"❌ Error in normalize_static_paths middleware: {e}")
+        except Exception:
+            pass
     
     # Continue with normal request processing
     response = await call_next(request)
@@ -867,12 +814,12 @@ async def startup_event():
         os.path.join(STATIC_DIR, "images", "logo"),
     ]
     
+    # Create all directories silently
     for directory in directories_to_create:
         try:
             os.makedirs(directory, exist_ok=True)
-            logger.info(f"✓ Created/verified directory: {directory}")
-        except Exception as e:
-            logger.warning(f"⚠ Could not create directory {directory}: {e}")
+        except Exception:
+            pass
     
     # Start background services
     try:
@@ -901,7 +848,7 @@ async def startup_event():
         logger.info(f"  Transfers Enabled: {transfer_service.enable_transfers}")
         logger.info(f"  MarshalCoreShare Account: {settings.MARSHAL_CORE_BANK_ACCOUNT_NAME} - {settings.MARSHAL_CORE_ACCOUNT_NUMBER} ({settings.MARSHAL_CORE_SHARE_PERCENTAGE}%)")
         logger.info(f"  SystemsMaintainance Account: {settings.SYSTEMS_MAINTAINANCE_ACCOUNT_NAME} - {settings.SYSTEMS_MAINTAINANCE_ACCOUNT_NUMBER} ({settings.SYSTEMS_MAINTAINANCE_SHARE_PERCENTAGE}%)")
-        logger.info(f"  eSTechDigitalSystemsLimited Account: {settings.ESTECH_ACTUAL_BENEFICIARY} - {settings.ESTECH_BANK_ACCOUNT_NUMBER} ({settings.ESTECH_COMMISSION_PERCENTAGE}%)")
+        logger.info(f"  eSTechDigitalSystemsLimited: {settings.ESTECH_BANK_NAME} ({settings.ESTECH_BANK_CODE}) - {settings.ESTECH_BANK_ACCOUNT_NUMBER} ({settings.ESTECH_COMMISSION_PERCENTAGE}%)")
         logger.info(f"  ⚡ Using Paystack Native Split (Automatic split at payment time)")
     except Exception as e:
         logger.warning(f"⚠ Immediate transfer service initialization failed: {e}")
