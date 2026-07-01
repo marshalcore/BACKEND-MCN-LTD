@@ -774,12 +774,12 @@ async def startup_event():
     """
     Initialize application on startup
     """
-    logger.info("🚀 Marshal Core Backend starting up...")
-    logger.info(f"📁 Static directory: {STATIC_DIR}")
-    logger.info(f"🌐 CORS enabled for origins: {allowed_origins}")
-    logger.info(f"💰 Immediate Transfers: {'ENABLED' if settings.ENABLE_IMMEDIATE_TRANSFERS else 'DISABLED'}")
-    logger.info(f"💰 Payment Amounts - Regular: ₦{settings.REGULAR_APPLICATION_FEE:,}, VIP: ₦{settings.VIP_APPLICATION_FEE:,}")
-    logger.info("✅ PAYSTACK MODE: LIVE - Real money transfers active")
+    logger.info("Starting up...")
+    logger.debug(f"Static dir: {STATIC_DIR}")
+    logger.debug(f"CORS: {len(allowed_origins)} origins")
+    logger.info(f"Transfers: {'ENABLED' if settings.ENABLE_IMMEDIATE_TRANSFERS else 'DISABLED'}")
+    logger.info(f"Payment: ₦{settings.REGULAR_APPLICATION_FEE:,}, VIP: ₦{settings.VIP_APPLICATION_FEE:,}")
+    logger.info("PAYSTACK: LIVE - Real money active")
     
     # Create necessary directories - UPDATED FOR NORMALIZED PATHS
     directories_to_create = [
@@ -824,7 +824,7 @@ async def startup_event():
         # Start email queue processor
         from app.services.email_service import start_email_queue
         await start_email_queue()
-        logger.info("✓ Email queue processor started")
+        logger.debug("Email queue ready")
         
     except Exception as e:
         logger.warning(f"⚠ Email service initialization failed: {e}")
@@ -832,29 +832,27 @@ async def startup_event():
     # Log PDF system status
     try:
         import reportlab
-        logger.info("✓ ReportLab is installed for PDF generation")
+        logger.debug("PDF system ready")
     except ImportError:
         logger.warning("⚠ ReportLab is not installed. PDF generation will fail.")
-        logger.info("  Install with: pip install reportlab pillow")
+        logger.debug("PDF system ready")
     
     # Log immediate transfer service status - FIXED: No test_mode attribute
     try:
         from app.services.immediate_transfer import ImmediateTransferService
         transfer_service = ImmediateTransferService()
-        logger.info("✅ Immediate transfer service initialized")
-        logger.info(f"  Mode: {'LIVE' if transfer_service.is_live_mode else 'TEST'}")
-        logger.info(f"  Transfers Enabled: {transfer_service.enable_transfers}")
-        logger.info(f"  MarshalCoreShare Account: {settings.MARSHAL_CORE_BANK_ACCOUNT_NAME} - {settings.MARSHAL_CORE_ACCOUNT_NUMBER} ({settings.MARSHAL_CORE_SHARE_PERCENTAGE}%)")
-        logger.info(f"  SystemsMaintainance Account: {settings.SYSTEMS_MAINTAINANCE_ACCOUNT_NAME} - {settings.SYSTEMS_MAINTAINANCE_ACCOUNT_NUMBER} ({settings.SYSTEMS_MAINTAINANCE_SHARE_PERCENTAGE}%)")
-        logger.info(f"  eSTechDigitalSystemsLimited: {settings.ESTECH_BANK_NAME} ({settings.ESTECH_BANK_CODE}) - {settings.ESTECH_BANK_ACCOUNT_NUMBER} ({settings.ESTECH_COMMISSION_PERCENTAGE}%)")
-        logger.info(f"  ⚡ Using Paystack Native Split (Automatic split at payment time)")
+        logger.debug("Transfer service ready")
+        logger.debug(f"Mode: {'LIVE' if transfer_service.is_live_mode else 'TEST'}")
+        logger.debug(f"Transfers: {transfer_service.enable_transfers}")
+        logger.info(f"MarshalCore: {settings.MARSHAL_CORE_BANK_ACCOUNT_NAME} - {settings.MARSHAL_CORE_ACCOUNT_NUMBER} ({settings.MARSHAL_CORE_SHARE_PERCENTAGE}%)")
+        logger.info(f"SystemsMaintainance: {settings.SYSTEMS_MAINTAINANCE_ACCOUNT_NAME} - {settings.SYSTEMS_MAINTAINANCE_ACCOUNT_NUMBER} ({settings.SYSTEMS_MAINTAINANCE_SHARE_PERCENTAGE}%)")
+        logger.info(f"eSTech: {settings.ESTECH_BANK_NAME} ({settings.ESTECH_BANK_CODE}) - {settings.ESTECH_BANK_ACCOUNT_NUMBER} ({settings.ESTECH_COMMISSION_PERCENTAGE}%)")
+        logger.debug("Paystack split enabled")
     except Exception as e:
         logger.warning(f"⚠ Immediate transfer service initialization failed: {e}")
     
     # Log normalized paths middleware status
-    logger.info("✅ Normalized static paths middleware enabled")
-    logger.info("   Officer IDs with slashes (MCN/001B/001) will be normalized to hyphens (MCN-001B-001)")
-    logger.info("   This fixes passport photo 404 errors for existing officers")
+    logger.debug("Path normalization ready")
     
     # Add Render status endpoint
     @app.get("/api/health/render-status", tags=["Health Check"], include_in_schema=False)

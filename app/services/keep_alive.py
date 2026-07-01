@@ -36,7 +36,7 @@ class KeepAliveService:
             else:
                 # Local development
                 self.base_url = "http://localhost:8000"
-                logger.info(f"💻 Local development: {self.base_url}")
+                logger.debug(f"Local dev: {self.base_url}")
             
             # Ping multiple endpoints to ensure activity
             self.endpoints = [

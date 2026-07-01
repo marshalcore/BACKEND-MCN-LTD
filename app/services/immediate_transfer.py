@@ -53,16 +53,15 @@ class ImmediateTransferService:
             },
             "estech_digital_systems_limited": {
                 "type": "nuban",
-                "name": settings.ESTECH_ACTUAL_BENEFICIARY,
-                "account_number": settings.ESTECH_BANK_ACCOUNT_NUMBER,
-                "bank_code": settings.ESTECH_BANK_CODE,  # FCMB bank code
+                "name": "ESTECH DIGITAL SYSTEMS LIMITED",
+                "account_number": "1047085433",
+                "bank_code": "214",  # FCMB
                 "currency": "NGN",
                 "description": "eSTechDigitalSystemsLimited - 15% of payments"
             }
         }
         
-        logger.info("💰 ImmediateTransferService initialized: PRODUCTION LIVE MODE")
-        logger.info(f"💰 Transfers enabled: {self.enable_transfers}")
+        # Silent initialization - production mode
         logger.info("💰 REAL MONEY TRANSFERS ACTIVE")
         
     async def create_transfer_recipient(
@@ -83,7 +82,7 @@ class ImmediateTransferService:
             recipient_data = self.recipients[recipient_type]
             
             # PRODUCTION LIVE MODE - Real API calls
-            logger.info(f"💰 Creating LIVE recipient for {recipient_type}: {recipient_data['account_number']}")
+            logger.debug(f"Creating recipient for {recipient_type}: {recipient_data['account_number']}")
             
             response = httpx.post(
                 f"{self.base_url}/transferrecipient",
@@ -97,7 +96,7 @@ class ImmediateTransferService:
             
             if data["status"]:
                 recipient_code = data["data"]["recipient_code"]
-                logger.info(f"✅ Created LIVE recipient for {recipient_type}: {recipient_code}")
+                logger.debug(f"Created recipient for {recipient_type}: {recipient_code}")
                 return {
                     "status": "success",
                     "recipient_code": recipient_code,
@@ -162,8 +161,8 @@ class ImmediateTransferService:
             }
             
             # PRODUCTION LIVE MODE - Real transfer
-            logger.info(f"💰 Initiating LIVE transfer: ₦{amount/100:,} to {recipient_type}")
-            logger.info(f"💰 Transfer reference: {transfer_ref}")
+            logger.debug(f"Initiating transfer: ₦{amount/100:,} to {recipient_type}")
+            logger.debug(f"Transfer ref: {transfer_ref}")
             
             response = httpx.post(
                 f"{self.base_url}/transfer",
@@ -176,8 +175,8 @@ class ImmediateTransferService:
             data = response.json()
             
             if data["status"]:
-                logger.info(f"✅✅✅ LIVE TRANSFER INITIATED: ₦{amount/100:,} to {recipient_type}")
-                logger.info(f"💰 Transfer code: {data['data']['transfer_code']}")
+                logger.info(f"Transfer initiated: ₦{amount/100:,} to {recipient_type}")
+                logger.debug(f"Transfer code: {data['data']['transfer_code']}")
                 
                 return {
                     "status": "success",
@@ -231,7 +230,7 @@ class ImmediateTransferService:
             
             if data["status"]:
                 status = data["data"]["status"]
-                logger.info(f"💰 Transfer {transfer_code} status: {status}")
+                logger.debug(f"Transfer status: {status}")
                 return {
                     "status": "success",
                     "transfer_status": status,
@@ -276,8 +275,8 @@ class ImmediateTransferService:
                     "payment_reference": payment_reference
                 }
             
-            logger.info(f"💰💰💰 PROCESSING IMMEDIATE SPLITS FOR PAYMENT: {payment_reference}")
-            logger.info(f"💰💰💰 REAL MONEY TRANSFERS INITIATING...")
+            logger.debug(f"Processing splits FOR PAYMENT: {payment_reference}")
+            logger.debug(f"Real money TRANSFERS INITIATING...")
             
             # Get payment details
             payment = db.query(Payment).filter(
@@ -292,7 +291,7 @@ class ImmediateTransferService:
             
             # Check if transfers already processed
             if payment.immediate_transfers_processed:
-                logger.info(f"💰 Transfers already processed for {payment_reference}")
+                logger.debug(f"Already processed for {payment_reference}")
                 return {
                     "status": "success",
                     "message": "Transfers already processed",
@@ -307,7 +306,7 @@ class ImmediateTransferService:
             # Process System Maintenance transfer (35%) - formerly Director General
             system_maintenance_amount = payment.director_general_share  # Field name unchanged for DB compatibility
             if system_maintenance_amount > 0:
-                logger.info(f"💰💰 Transferring ₦{system_maintenance_amount:,} to System Maintenance (REAL MONEY)")
+                logger.debug(f"Transferring ₦{system_maintenance_amount:,} to System Maintenance (REAL MONEY)")
                 
                 # Create or get recipient code
                 recipient_result = await self.create_transfer_recipient("system_maintenance")
@@ -346,7 +345,7 @@ class ImmediateTransferService:
                             "test_mode": False,
                             "timestamp": datetime.utcnow().isoformat()
                         })
-                        logger.info(f"✅✅✅ System Maintenance transfer initiated: ₦{system_maintenance_amount:,} (REAL MONEY)")
+                        logger.debug(f"System Maintenance transfer: ₦{system_maintenance_amount:,} (REAL MONEY)")
                     else:
                         all_successful = False
                         # Record failed transfer
@@ -385,7 +384,7 @@ class ImmediateTransferService:
             # Process eSTech System transfer (15%)
             estech_amount = payment.estech_system_share
             if estech_amount > 0:
-                logger.info(f"💰💰 Transferring ₦{estech_amount:,} to eSTech System (REAL MONEY)")
+                logger.debug(f"Transferring ₦{estech_amount:,} to eSTech System (REAL MONEY)")
                 
                 recipient_result = await self.create_transfer_recipient("estech_system")
                 
@@ -470,7 +469,7 @@ class ImmediateTransferService:
             
             if all_successful:
                 logger.info(f"✅✅✅✅✅ ALL IMMEDIATE TRANSFERS PROCESSED SUCCESSFULLY FOR {payment_reference}")
-                logger.info(f"💰💰💰 REAL MONEY TRANSFERS COMPLETED SUCCESSFULLY")
+                logger.debug(f"Real money TRANSFERS COMPLETED SUCCESSFULLY")
                 return {
                     "status": "success",
                     "message": "All transfers processed successfully",
