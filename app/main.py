@@ -31,7 +31,7 @@ logger.info(f"Resend API Key Set: {'Yes' if settings.RESEND_API_KEY else 'No'}")
 logger.info(f"Debug Mode: {settings.DEBUG}")
 logger.info(f"Running on Render: {settings.RENDER}")
 logger.info(f"Immediate Transfers Enabled: {settings.ENABLE_IMMEDIATE_TRANSFERS}")
-logger.info(f"Paystack Mode: {'LIVE' if not settings.PAYSTACK_TEST_MODE else 'TEST'} - CHANGED TO LIVE")
+logger.info(f"Paystack Mode: {'LIVE' if not settings.PAYSTACK_TEST_MODE else 'TEST'}")
 logger.info("=" * 50)
 
 # ==================== FIXED CORS CONFIGURATION ====================
@@ -779,7 +779,7 @@ async def startup_event():
     logger.debug(f"CORS: {len(allowed_origins)} origins")
     logger.info(f"Transfers: {'ENABLED' if settings.ENABLE_IMMEDIATE_TRANSFERS else 'DISABLED'}")
     logger.info(f"Payment: ₦{settings.REGULAR_APPLICATION_FEE:,}, VIP: ₦{settings.VIP_APPLICATION_FEE:,}")
-    logger.info("PAYSTACK: LIVE - Real money active")
+    logger.info(f"PAYSTACK: {'LIVE' if not settings.PAYSTACK_TEST_MODE else 'TEST'} - {'Real money active' if not settings.PAYSTACK_TEST_MODE else 'Test mode active'}")
     
     # Create necessary directories - UPDATED FOR NORMALIZED PATHS
     directories_to_create = [

@@ -24,11 +24,12 @@ class PaymentService:
             "Authorization": f"Bearer {self.secret_key}",
             "Content-Type": "application/json"
         }
-        self.is_live_mode = True  # Force LIVE mode for production
+        self.is_live_mode = not settings.PAYSTACK_TEST_MODE and "sk_live_" in self.secret_key
         
-        logger.info("💰 PaymentService initialized: PRODUCTION LIVE MODE")
+        mode_str = "LIVE" if self.is_live_mode else "TEST"
+        logger.info(f"💰 PaymentService initialized: {mode_str} MODE")
         logger.info(f"💰 Public Key: {self.public_key[:15]}...")
-        logger.info("💰 REAL MONEY TRANSACTIONS ONLY")
+        logger.info(f"💰 {"REAL MONEY" if self.is_live_mode else "TEST MONEY"} TRANSACTIONS")
     
     def initiate_payment(
         self,
@@ -68,7 +69,7 @@ class PaymentService:
             # 🔥 ADD PAYSTACK NATIVE SPLIT CONFIGURATION
             if split_payment and split_subaccounts:
                 payload["split"] = {
-                    "type": "flat",  # Use flat amount splits
+                    "type": "percentage",  # Use percentage-based splits
                     "bearer_type": splitBearer or "account",  # Who bears the charges
                     "subaccounts": split_subaccounts
                 }
