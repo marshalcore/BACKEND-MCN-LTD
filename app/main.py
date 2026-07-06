@@ -850,6 +850,26 @@ async def startup_event():
         logger.debug("Paystack split enabled")
     except Exception as e:
         logger.warning(f"⚠ Immediate transfer service initialization failed: {e}")
+
+    # AUTO-RUN DATABASE MIGRATIONS on startup
+    try:
+        from app.database import engine
+        from sqlalchemy import text
+        with engine.connect() as conn:
+            # Check if paystack_reference column exists
+            result = conn.execute(text("""
+                SELECT column_name FROM information_schema.columns 
+                WHERE table_name = 'payments' AND column_name = 'paystack_reference'
+            """))
+            if not result.fetchone():
+                conn.execute(text("ALTER TABLE payments ADD COLUMN paystack_reference VARCHAR"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_payments_paystack_reference ON payments(paystack_reference)"))
+                conn.commit()
+                logger.info("✅ MIGRATION: paystack_reference column added")
+            else:
+                logger.info("✅ MIGRATION: paystack_reference column already exists")
+    except Exception as e:
+        logger.warning(f"⚠ Migration check failed: {e}")
     
     # Log normalized paths middleware status
     logger.debug("Path normalization ready")
