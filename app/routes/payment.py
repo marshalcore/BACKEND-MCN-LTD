@@ -389,6 +389,7 @@ async def initiate_payment(
                 payment_type=payment_type_str,
                 status="pending",
                 payment_reference=payment_ref,
+                paystack_reference=payment_response.get("reference"),  # Store Paystack's actual reference
                 authorization_url=payment_response.get("authorization_url"),
                 access_code=payment_response.get("access_code"),
                 payment_metadata=payment_metadata,
@@ -680,9 +681,20 @@ async def paystack_callback(
                 verification = payment_service.verify_payment(reference)
                 
                 if verification.get("status") == "success":
+                    # Look up by Paystack's actual reference first, then our custom reference
                     payment = db.query(Payment).filter(
-                        Payment.payment_reference == reference
+                        Payment.paystack_reference == reference
                     ).first()
+
+                    if not payment:
+                        # Fallback to our custom reference
+                        payment = db.query(Payment).filter(
+                            Payment.payment_reference == reference
+                        ).first()
+
+                    # Update Paystack reference if not set
+                    if payment and not payment.paystack_reference:
+                        payment.paystack_reference = reference
                     
                     if payment and payment.status != "success":
                         # Update payment status
