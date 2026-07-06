@@ -59,7 +59,7 @@ PAYMENT_CONFIGS = {
         "user_amount": settings.REGULAR_APPLICATION_FEE,
         "display": f"₦{settings.REGULAR_APPLICATION_FEE:,} Regular Application Fee",
         "base_amount": 5000,
-        "use_native_split": False,  # Disabled - using immediate transfers
+        "use_native_split": True,  # Enabled - using Paystack native split
         
         # Recipients for native split (Paystack subaccounts)
         "recipients": {
@@ -67,16 +67,19 @@ PAYMENT_CONFIGS = {
                 "percentage": settings.MARSHAL_CORE_SHARE_PERCENTAGE,
                 "amount": int(settings.REGULAR_APPLICATION_FEE * (settings.MARSHAL_CORE_SHARE_PERCENTAGE / 100)),
                 "description": "MarshalCoreShare - 50%",
+                "subaccount_code": settings.MARSHAL_CORE_PAYSTACK_SUBACCOUNT_CODE,  # Main account - no subaccount needed
             },
             "systems_maintainance": {
                 "percentage": settings.SYSTEMS_MAINTAINANCE_SHARE_PERCENTAGE,
                 "amount": int(settings.REGULAR_APPLICATION_FEE * (settings.SYSTEMS_MAINTAINANCE_SHARE_PERCENTAGE / 100)),
-                "description": "SystemsMaintainance - 35%",
+                "description": "SystemsMaintainance - 35% (FCMB - MARSHAL CORE OF NIGERIA LIMITED)",
+                "subaccount_code": settings.SYSTEMS_MAINTAINANCE_PAYSTACK_SUBACCOUNT_CODE,
             },
             "estech_digital_systems_limited": {
                 "percentage": settings.ESTECH_COMMISSION_PERCENTAGE,
                 "amount": int(settings.REGULAR_APPLICATION_FEE * (settings.ESTECH_COMMISSION_PERCENTAGE / 100)),
                 "description": "eSTechDigitalSystemsLimited - 15%",
+                "subaccount_code": settings.ESTECH_PAYSTACK_SUBACCOUNT_CODE,
             }
         },
         
@@ -89,7 +92,7 @@ PAYMENT_CONFIGS = {
         "user_amount": settings.VIP_APPLICATION_FEE,
         "display": f"₦{settings.VIP_APPLICATION_FEE:,} VIP Application Fee",
         "base_amount": 25000,
-        "use_native_split": False,  # Disabled - using immediate transfers
+        "use_native_split": True,  # Enabled - using Paystack native split
         
         "recipients": {
             "marshal_core_share": {
