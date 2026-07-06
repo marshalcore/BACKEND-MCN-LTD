@@ -136,10 +136,10 @@ class PaymentService:
                 if hasattr(e, 'response') and e.response:
                     error_text = e.response.text
                     logger.error(f"Full error response: {error_text}")
-                    return {"status": "error", "message": str(e), "error_detail": error_text, "mode": mode_str}
+                    return {"status": "error", "message": str(e), "error_detail": error_text, "mode": "TEST" if not self.is_live_mode else "LIVE"}
             except:
                 pass
-            return {"status": "error", "message": str(e), "mode": mode_str}
+            return {"status": "error", "message": str(e), "mode": "TEST" if not self.is_live_mode else "LIVE"}
     
     def verify_payment(self, reference: str) -> Dict[str, Any]:
         """
