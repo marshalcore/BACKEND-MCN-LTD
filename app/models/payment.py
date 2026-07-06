@@ -18,7 +18,6 @@ class Payment(Base):
     payment_reference = Column(String, unique=True, index=True, nullable=False)
     authorization_url = Column(Text, nullable=True)
     access_code = Column(String, nullable=True)
-    paystack_reference = Column(String, index=True, nullable=True)  # Paystack's actual reference
     paystack_reference = Column(String, index=True, nullable=True)  # Paystack's actual reference (may differ from our custom reference)
     
     # NEW: Immediate transfer tracking

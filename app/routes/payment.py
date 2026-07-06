@@ -421,6 +421,7 @@ async def initiate_payment(
                 "status": "success",
                 "message": "Payment initialized",
                 "payment_reference": payment_ref,
+                "paystack_reference": payment_response.get("reference"),  # Paystack's actual reference
                 "authorization_url": payment_response.get("authorization_url"),
                 "amount": config["user_amount"],
                 "amount_display": f"₦{config['user_amount']:,}",
