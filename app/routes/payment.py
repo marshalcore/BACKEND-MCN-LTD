@@ -59,7 +59,7 @@ PAYMENT_CONFIGS = {
         "user_amount": settings.REGULAR_APPLICATION_FEE,
         "display": f"₦{settings.REGULAR_APPLICATION_FEE:,} Regular Application Fee",
         "base_amount": 5000,
-        "use_native_split": True,  # Enabled - using Paystack native split
+        "use_native_split": False,  # Disabled - Using Paystack Dashboard Global Split"
         
         # Recipients for native split (Paystack subaccounts)
         "recipients": {
@@ -92,7 +92,7 @@ PAYMENT_CONFIGS = {
         "user_amount": settings.VIP_APPLICATION_FEE,
         "display": f"₦{settings.VIP_APPLICATION_FEE:,} VIP Application Fee",
         "base_amount": 25000,
-        "use_native_split": True,  # Enabled - using Paystack native split
+        "use_native_split": False,  # Disabled - Using Paystack Dashboard Global Split"
         
         "recipients": {
             "marshal_core_share": {
