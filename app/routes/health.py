@@ -259,3 +259,29 @@ async def liveness_head():
             "X-Liveness": "true"
         }
     )
+
+@router.post("/migrate")
+async def run_migration(db: Session = Depends(get_db)):
+    """
+    Run database migrations - add missing columns
+    """
+    try:
+        # Add paystack_reference column if it doesn't exist
+        result = db.execute(text("""
+            SELECT column_name FROM information_schema.columns 
+            WHERE table_name = 'payments' AND column_name = 'paystack_reference'
+        """))
+        if not result.fetchone():
+            db.execute(text("""
+                ALTER TABLE payments ADD COLUMN paystack_reference VARCHAR
+            """))
+            db.execute(text("""
+                CREATE INDEX IF NOT EXISTS ix_payments_paystack_reference ON payments(paystack_reference)
+            """))
+            db.commit()
+            return {"status": "success", "message": "Migration completed: paystack_reference column added"}
+        else:
+            return {"status": "success", "message": "Migration already applied"}
+    except Exception as e:
+        db.rollback()
+        return {"status": "error", "message": str(e)}
