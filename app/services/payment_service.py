@@ -88,6 +88,7 @@ class PaymentService:
             logger.info(f"💰 INITIATING LIVE PAYMENT: {reference} - ₦{amount:,}")
             logger.info(f"💰 Callback URL: {callback_url}")
             logger.info(f"💰 Split Payment: {split_payment}")
+            logger.info(f"💰 Full Payload: {json.dumps(payload, indent=2)}")
             
             response = httpx.post(
                 f"{self.base_url}/transaction/initialize",
@@ -129,12 +130,16 @@ class PaymentService:
                 "mode": "LIVE"
             }
         except Exception as e:
-            logger.error(f"❌❌❌ Error initializing LIVE payment: {str(e)}")
-            return {
-                "status": "error",
-                "message": str(e),
-                "mode": "LIVE"
-            }
+            logger.error(f"❌❌❌ Error initializing payment: {str(e)}")
+            # Log the full response if available
+            try:
+                if hasattr(e, 'response') and e.response:
+                    error_text = e.response.text
+                    logger.error(f"Full error response: {error_text}")
+                    return {"status": "error", "message": str(e), "error_detail": error_text, "mode": mode_str}
+            except:
+                pass
+            return {"status": "error", "message": str(e), "mode": mode_str}
     
     def verify_payment(self, reference: str) -> Dict[str, Any]:
         """
