@@ -247,6 +247,14 @@ class Settings(BaseSettings):
         description="Enable Paystack test mode"
     )
     
+    # === PAYSTACK SPLIT GROUP ===
+    # Split Code from Paystack Dashboard (e.g., SPL_KRGO7FYBBU)
+    # When set, use this split group instead of dynamic splits
+    PAYSTACK_SPLIT_CODE: Optional[str] = Field(
+        default=os.getenv("PAYSTACK_SPLIT_CODE", ""),
+        description="Paystack Dashboard Split Code for automatic payment splitting"
+    )
+    
     # === IMMEDIATE TRANSFER SETTINGS ===
     ENABLE_IMMEDIATE_TRANSFERS: bool = Field(
         default=os.getenv("ENABLE_IMMEDIATE_TRANSFERS", "true").lower() == "true",

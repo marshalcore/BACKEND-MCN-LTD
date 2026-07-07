@@ -59,7 +59,7 @@ PAYMENT_CONFIGS = {
         "user_amount": settings.REGULAR_APPLICATION_FEE,
         "display": f"₦{settings.REGULAR_APPLICATION_FEE:,} Regular Application Fee",
         "base_amount": 5000,
-        "use_native_split": False,  # Disabled - Using Paystack Dashboard Global Split"
+        "use_native_split": True,  # Enabled - Using Paystack Dashboard Split Group (SPL_KRGO7FYBBU)
         
         # Recipients for native split (Paystack subaccounts)
         "recipients": {
@@ -67,7 +67,7 @@ PAYMENT_CONFIGS = {
                 "percentage": settings.MARSHAL_CORE_SHARE_PERCENTAGE,
                 "amount": int(settings.REGULAR_APPLICATION_FEE * (settings.MARSHAL_CORE_SHARE_PERCENTAGE / 100)),
                 "description": "MarshalCoreShare - 50%",
-                "subaccount_code": settings.MARSHAL_CORE_PAYSTACK_SUBACCOUNT_CODE,  # Main account - no subaccount needed
+                "subaccount_code": settings.MARSHAL_CORE_PAYSTACK_SUBACCOUNT_CODE,
             },
             "systems_maintainance": {
                 "percentage": settings.SYSTEMS_MAINTAINANCE_SHARE_PERCENTAGE,
@@ -92,7 +92,7 @@ PAYMENT_CONFIGS = {
         "user_amount": settings.VIP_APPLICATION_FEE,
         "display": f"₦{settings.VIP_APPLICATION_FEE:,} VIP Application Fee",
         "base_amount": 25000,
-        "use_native_split": False,  # Disabled - Using Paystack Dashboard Global Split"
+        "use_native_split": True,  # Enabled - Using Paystack Dashboard Split Group (SPL_KRGO7FYBBU)
         
         "recipients": {
             "marshal_core_share": {
@@ -343,11 +343,18 @@ async def initiate_payment(
             logger.info(f"💰💰💰 INITIATING PRODUCTION LIVE PAYMENT: {payment_data.email} - ₦{config['user_amount']:,}")
             
             # 🔥 BUILD PAYSTACK NATIVE SPLIT CONFIGURATION
+            # Check if using Paystack Dashboard Split Group (split_code) or dynamic splits
             split_subaccounts = []
             use_native_split = config.get("use_native_split", False)
+            split_code = None  # Paystack Dashboard Split Code
             
-            if use_native_split:
-                # Build subaccounts list from config
+            if settings.PAYSTACK_SPLIT_CODE:
+                # Use Paystack Dashboard Split Group - recommended approach
+                split_code = settings.PAYSTACK_SPLIT_CODE
+                use_native_split = True
+                logger.info(f"💰💰💰 USING PAYSTACK DASHBOARD SPLIT GROUP: {split_code}")
+            elif use_native_split:
+                # Build subaccounts list from config for dynamic split
                 for recipient_key, recipient_data in config.get("recipients", {}).items():
                     subaccount_code = recipient_data.get("subaccount_code")
                     if subaccount_code:  # Only add if subaccount code is configured
@@ -366,8 +373,9 @@ async def initiate_payment(
                 reference=payment_ref,
                 metadata=payment_metadata,
                 callback_url=callback_url,
-                split_payment=use_native_split and len(split_subaccounts) > 0,
+                split_payment=use_native_split,
                 split_subaccounts=split_subaccounts if split_subaccounts else None,
+                split_code=split_code,
                 splitBearer="account"  # eSTech (main account) bears the Paystack fees
             )
             
@@ -405,11 +413,13 @@ async def initiate_payment(
                 immediate_transfers_processed=use_native_split,  # True if using native split
                 transfer_metadata={
                     "split_type": "native" if use_native_split else "post_payment",
+                    "split_code": split_code,  # Paystack Dashboard Split Code
                     "subaccounts": split_subaccounts if split_subaccounts else [],
                     "marshal_core_share": marshal_core_share,
                     "systems_maintainance_share": systems_maintainance_share,
                     "estech_digital_systems_limited_share": estech_digital_share,
-                    "native_split_used": use_native_split and len(split_subaccounts) > 0
+                    "native_split_used": use_native_split,
+                    "using_dashboard_split_group": bool(split_code)
                 }
             )
             db.add(payment)
@@ -419,6 +429,8 @@ async def initiate_payment(
             logger.info(f"   → MarshalCoreShare: ₦{marshal_core_share:,} ({settings.MARSHAL_CORE_SHARE_PERCENTAGE}%)")
             logger.info(f"   → SystemsMaintainance: ₦{systems_maintainance_share:,} ({settings.SYSTEMS_MAINTAINANCE_SHARE_PERCENTAGE}%)")
             logger.info(f"   → eSTechDigitalSystemsLimited: ₦{estech_digital_share:,} ({settings.ESTECH_COMMISSION_PERCENTAGE}%)")
+            if split_code:
+                logger.info(f"   → Using Paystack Dashboard Split Group: {split_code}")
             
             return {
                 "status": "success",
@@ -431,7 +443,8 @@ async def initiate_payment(
                 "user_message": config["user_message"],
                 "payment_type": payment_type_str,
                 "environment": "PRODUCTION LIVE",
-                "native_split_enabled": use_native_split and len(split_subaccounts) > 0,
+                "native_split_enabled": use_native_split,
+                "split_code": split_code,
                 "split_details": {
                     "marshal_core_share": {"amount": marshal_core_share, "percentage": settings.MARSHAL_CORE_SHARE_PERCENTAGE},
                     "systems_maintainance": {"amount": systems_maintainance_share, "percentage": settings.SYSTEMS_MAINTAINANCE_SHARE_PERCENTAGE},
@@ -458,6 +471,8 @@ async def verify_payment(
     Verify payment and trigger background split processing
     PRODUCTION LIVE MODE - Real money verification
     
+    Handles both application references (MCN_*) and Paystack references (T* or R*)
+    
     Uses professional background job service for:
     - Automatic payment processing
     - Error checking
@@ -469,10 +484,50 @@ async def verify_payment(
         
         payment_service = PaymentService()
         
-        # Query by payment_reference
+        # Try to find payment by app reference first
         payment = db.query(Payment).filter(
             Payment.payment_reference == reference
         ).first()
+        
+        # If not found by app reference, try Paystack reference
+        if not payment:
+            logger.info(f"🔍 Payment not found by app reference '{reference}', trying Paystack reference lookup...")
+            payment = db.query(Payment).filter(
+                Payment.paystack_reference == reference
+            ).first()
+        
+        # If still not found, verify with Paystack and try to find by metadata
+        if not payment:
+            logger.info(f"🔍 Payment not found by Paystack reference '{reference}', querying Paystack...")
+            paystack_verification = payment_service.verify_payment(reference)
+            
+            if paystack_verification.get("status") == "success":
+                # Payment exists in Paystack but not in our DB
+                # Try to find by email from metadata
+                paystack_metadata = paystack_verification.get("metadata", {})
+                user_email = paystack_metadata.get("email")
+                user_type = paystack_metadata.get("user_type", "pre_applicant")
+                payment_type = paystack_metadata.get("payment_type", "regular")
+                
+                logger.info(f"🔍 Paystack verification succeeded, looking for payment by email: {user_email}")
+                
+                # Find the pending payment for this user
+                payment = db.query(Payment).filter(
+                    Payment.user_email == user_email.lower(),
+                    Payment.user_type == user_type,
+                    Payment.payment_type == payment_type,
+                    Payment.status == "pending"
+                ).order_by(desc(Payment.created_at)).first()
+                
+                if payment:
+                    logger.info(f"✅ Found payment by email: {payment.payment_reference}")
+                    # Update the Paystack reference if not set
+                    if not payment.paystack_reference:
+                        payment.paystack_reference = reference
+                else:
+                    logger.warning(f"⚠️ Could not find corresponding payment in database for Paystack reference: {reference}")
+            else:
+                logger.warning(f"⚠️ Paystack verification also failed for: {reference}")
         
         if not payment:
             logger.error(f"❌ Payment not found: {reference}")
@@ -483,15 +538,16 @@ async def verify_payment(
         
         # Check if already verified
         if payment.status == "success":
-            logger.info(f"💰 Payment {reference} already verified")
+            logger.info(f"💰 Payment {payment.payment_reference} already verified")
             
             # Get job status
-            job_status = background_job_service.get_job_status(reference)
+            job_status = background_job_service.get_job_status(payment.payment_reference)
             
             return {
                 "status": "success",
                 "message": "Payment already verified",
-                "payment_reference": reference,
+                "payment_reference": payment.payment_reference,
+                "paystack_reference": payment.paystack_reference,
                 "amount": f"₦{payment.amount:,}",
                 "environment": "PRODUCTION LIVE",
                 "job_status": job_status.get("latest_status"),
@@ -505,7 +561,8 @@ async def verify_payment(
         # Verify payment with Paystack PRODUCTION
         logger.info("=" * 60)
         logger.info(f"🔐 VERIFICATION STARTED")
-        logger.info(f"   Payment Reference: {reference}")
+        logger.info(f"   App Reference: {payment.payment_reference}")
+        logger.info(f"   Paystack Reference: {reference}")
         logger.info(f"   Amount: ₦{payment.amount:,}")
         logger.info(f"   User Type: {payment.user_type}")
         logger.info("=" * 60)
@@ -523,7 +580,8 @@ async def verify_payment(
             
             logger.info("=" * 60)
             logger.info("✅✅✅ PAYMENT VERIFIED SUCCESSFULLY")
-            logger.info(f"   Reference: {reference}")
+            logger.info(f"   App Reference: {payment.payment_reference}")
+            logger.info(f"   Paystack Reference: {reference}")
             logger.info(f"   Amount: ₦{payment.amount:,}")
             logger.info(f"   Time: {datetime.utcnow().isoformat()}")
             logger.info("=" * 60)
@@ -532,7 +590,7 @@ async def verify_payment(
             logger.info("📋 Queuing background split job...")
             background_tasks.add_task(
                 background_job_service.process_payment_split,
-                payment_reference=reference,
+                payment_reference=payment.payment_reference,
                 db=db
             )
             
@@ -618,7 +676,8 @@ async def verify_payment(
             return {
                 "status": "success",
                 "message": "Payment successful! Your application is being processed.",
-                "payment_reference": reference,
+                "payment_reference": payment.payment_reference,
+                "paystack_reference": reference,
                 "amount": f"₦{payment.amount:,}",
                 "payment_date": payment.paid_at.isoformat() if payment.paid_at else None,
                 "environment": "PRODUCTION LIVE",

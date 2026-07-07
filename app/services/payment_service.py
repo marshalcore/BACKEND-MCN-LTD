@@ -40,6 +40,7 @@ class PaymentService:
         callback_url: Optional[str] = None,
         split_payment: bool = False,
         split_subaccounts: Optional[list] = None,
+        split_code: Optional[str] = None,
         split_percentage: Optional[int] = None,
         splitBearer: Optional[str] = None
     ) -> Dict[str, Any]:
@@ -49,6 +50,7 @@ class PaymentService:
         Args:
             split_payment: If True, use Paystack native split
             split_subaccounts: List of subaccount dicts with 'subaccount', 'share' keys
+            split_code: Paystack Dashboard Split Code (e.g., SPL_KRGO7FYBBU)
             split_percentage: If using percentage split (1-100)
             splitBearer: Who bears the split charges (account, subaccount, all)
         """
@@ -67,7 +69,15 @@ class PaymentService:
                 payload["callback_url"] = callback_url
             
             # 🔥 ADD PAYSTACK NATIVE SPLIT CONFIGURATION
-            if split_payment and split_subaccounts:
+            if split_code:
+                # Use Paystack Dashboard Split Group - recommended approach
+                payload["split"] = {
+                    "type": "percentage",
+                    "bearer_type": splitBearer or "account",
+                    "split_code": split_code
+                }
+                logger.info(f"💰💰💰 SPLIT PAYMENT CONFIGURED: Using Dashboard Split Group: {split_code}")
+            elif split_payment and split_subaccounts:
                 payload["split"] = {
                     "type": "percentage",  # Use percentage-based splits
                     "bearer_type": splitBearer or "account",  # Who bears the charges
@@ -111,7 +121,8 @@ class PaymentService:
                     "reference": reference,
                     "message": data.get("message", "Payment initialized"),
                     "mode": "LIVE",
-                    "split_configured": split_payment
+                    "split_configured": split_payment,
+                    "split_code": split_code
                 }
             else:
                 error_msg = data.get("message", "Payment initialization failed")

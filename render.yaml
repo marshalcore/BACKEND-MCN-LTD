@@ -32,6 +32,10 @@ services:
         sync: false
       - key: PAYSTACK_SECRET_KEY
         sync: false
+      - key: PAYSTACK_SPLIT_CODE
+        sync: false
+      - key: PAYSTACK_TEST_MODE
+        value: "false"
       - key: FLUTTERWAVE_SECRET_KEY
         value: "flw_test_xxxxx"
       - key: DEBUG
