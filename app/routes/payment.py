@@ -355,7 +355,8 @@ async def initiate_payment(
             is_live_mode = settings.PAYSTACK_SECRET_KEY and "sk_live_" in settings.PAYSTACK_SECRET_KEY
             
             # Priority 1: Use Dashboard Split Code from settings if set (works in TEST or LIVE mode)
-            if settings.PAYSTACK_SPLIT_CODE:
+            # TEMPORARILY DISABLED - Uncomment to enable split
+            if False and settings.PAYSTACK_SPLIT_CODE:
                 split_code = settings.PAYSTACK_SPLIT_CODE
                 use_native_split = True
                 mode_str = "TEST" if not is_live_mode else "LIVE"
@@ -1352,12 +1353,14 @@ async def get_payment_system_status():
         is_live_mode = settings.PAYSTACK_SECRET_KEY and "sk_live_" in settings.PAYSTACK_SECRET_KEY
         
         # Check if native split is enabled (works in both TEST and LIVE mode)
-        native_split_enabled = (
-            settings.PAYSTACK_SPLIT_CODE or 
-            settings.MARSHAL_CORE_PAYSTACK_SUBACCOUNT_CODE or 
-            settings.SYSTEMS_MAINTAINANCE_PAYSTACK_SUBACCOUNT_CODE or
-            settings.ESTECH_PAYSTACK_SUBACCOUNT_CODE
-        )
+        # TEMPORARILY DISABLED - Uncomment to enable split
+        native_split_enabled = False  # Disabled for testing
+        # native_split_enabled = (
+        #     settings.PAYSTACK_SPLIT_CODE or 
+        #     settings.MARSHAL_CORE_PAYSTACK_SUBACCOUNT_CODE or 
+        #     settings.SYSTEMS_MAINTAINANCE_PAYSTACK_SUBACCOUNT_CODE or
+        #     settings.ESTECH_PAYSTACK_SUBACCOUNT_CODE
+        # )
         
         return {
             "status": "success",
