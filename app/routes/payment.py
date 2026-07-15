@@ -351,20 +351,26 @@ async def initiate_payment(
             use_native_split = False
             split_code = None  # Paystack Dashboard Split Code
             
-            # Priority 1: Use Dashboard Split Code from settings if set
-            if settings.PAYSTACK_SPLIT_CODE:
+            # Check if using LIVE mode keys
+            is_live_mode = settings.PAYSTACK_SECRET_KEY and "sk_live_" in settings.PAYSTACK_SECRET_KEY
+            
+            if not is_live_mode:
+                logger.warning("⚠️ Using TEST Paystack keys - native split will be disabled")
+            
+            # Priority 1: Use Dashboard Split Code from settings if set (ONLY in LIVE mode)
+            elif settings.PAYSTACK_SPLIT_CODE:
                 split_code = settings.PAYSTACK_SPLIT_CODE
                 use_native_split = True
                 logger.info(f"💰💰💰 USING PAYSTACK DASHBOARD SPLIT GROUP: {split_code}")
             
-            # Priority 2: Use split_code from config if available
-            elif config.get("split_code"):
+            # Priority 2: Use split_code from config if available (ONLY in LIVE mode)
+            elif config.get("split_code") and is_live_mode:
                 split_code = config.get("split_code")
                 use_native_split = True
                 logger.info(f"💰💰💰 USING PAYSTACK DASHBOARD SPLIT CODE FROM CONFIG: {split_code}")
             
-            # Priority 3: Build dynamic splits from subaccounts if enabled
-            elif config.get("use_native_split", False):
+            # Priority 3: Build dynamic splits from subaccounts if enabled (ONLY in LIVE mode)
+            elif config.get("use_native_split", False) and is_live_mode:
                 for recipient_key, recipient_data in config.get("recipients", {}).items():
                     subaccount_code = recipient_data.get("subaccount_code")
                     if subaccount_code:  # Only add if subaccount code is configured
@@ -1335,15 +1341,28 @@ async def get_payment_system_status():
         transfer_service = ImmediateTransferService()
         transfer_balance = await transfer_service.check_transfer_balance()
         
+        # Check if using LIVE mode keys
+        is_live_mode = settings.PAYSTACK_SECRET_KEY and "sk_live_" in settings.PAYSTACK_SECRET_KEY
+        
+        # Check if native split is enabled
+        native_split_enabled = (
+            is_live_mode and 
+            (settings.PAYSTACK_SPLIT_CODE or 
+             settings.MARSHAL_CORE_PAYSTACK_SUBACCOUNT_CODE or 
+             settings.SYSTEMS_MAINTAINANCE_PAYSTACK_SUBACCOUNT_CODE or
+             settings.ESTECH_PAYSTACK_SUBACCOUNT_CODE)
+        )
+        
         return {
             "status": "success",
             "system": {
                 "environment": "PRODUCTION LIVE",
-                "paystack_mode": "LIVE",
-                "paystack_public_key": f"{settings.PAYSTACK_PUBLIC_KEY[:15]}...",
-                "paystack_secret_key": f"{settings.PAYSTACK_SECRET_KEY[:15]}...",
+                "paystack_mode": "LIVE" if is_live_mode else "TEST",
+                "paystack_public_key": f"{settings.PAYSTACK_PUBLIC_KEY[:15]}..." if settings.PAYSTACK_PUBLIC_KEY else "Not set",
+                "paystack_secret_key": f"{settings.PAYSTACK_SECRET_KEY[:15]}..." if settings.PAYSTACK_SECRET_KEY else "Not set",
                 "frontend_url": settings.FRONTEND_URL,
-                "native_split_enabled": True,
+                "native_split_enabled": native_split_enabled,
+                "paystack_split_code_configured": bool(settings.PAYSTACK_SPLIT_CODE),
                 "transfer_retry_attempts": settings.TRANSFER_RETRY_ATTEMPTS,
                 "transfer_retry_delay": settings.TRANSFER_RETRY_DELAY
             },
@@ -1358,14 +1377,14 @@ async def get_payment_system_status():
                 "paystack": balance_check,
                 "transfer_balance": transfer_balance
             },
-            "status_message": "✅✅✅ PAYMENT SYSTEM IS OPERATIONAL - PRODUCTION LIVE MODE WITH NATIVE SPLIT",
+            "status_message": "✅✅✅ PAYMENT SYSTEM IS OPERATIONAL" + (" WITH NATIVE SPLIT" if native_split_enabled else ""),
             "notes": [
-                "🚀 REAL MONEY TRANSACTIONS ONLY",
+                "🚀 REAL MONEY TRANSACTIONS ONLY" if is_live_mode else "⚠️ TEST MODE - NO REAL MONEY",
                 f"💰 MarshalCoreShare: {settings.MARSHAL_CORE_SHARE_PERCENTAGE}%",
                 f"💰 SystemsMaintainance: {settings.SYSTEMS_MAINTAINANCE_SHARE_PERCENTAGE}%",
                 f"💰 eSTechDigitalSystemsLimited: {settings.ESTECH_COMMISSION_PERCENTAGE}%",
-                "⚡ Paystack Native Split: ENABLED (Automatic split at payment time)",
-                "🔒 Secured with Paystack LIVE API"
+                f"⚡ Paystack Native Split: {'ENABLED' if native_split_enabled else 'DISABLED (set PAYSTACK_SPLIT_CODE to enable)'}",
+                "🔒 Secured with Paystack API"
             ]
         }
         
