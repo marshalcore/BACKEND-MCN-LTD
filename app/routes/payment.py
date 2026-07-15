@@ -343,10 +343,10 @@ async def initiate_payment(
             callback_url = "https://marshalcoreofnigeria.ng/apply.html?payment_success=true"
             logger.info(f"💰 PRODUCTION CALLBACK URL: {callback_url}")
             
-            logger.info(f"💰💰💰 INITIATING PRODUCTION LIVE PAYMENT: {payment_data.email} - ₦{config['user_amount']:,}")
+            logger.info(f"💰💰💰 INITIATING PRODUCTION PAYMENT: {payment_data.email} - ₦{config['user_amount']:,}")
             
             # 🔥 BUILD PAYSTACK NATIVE SPLIT CONFIGURATION
-            # Check if using Paystack Dashboard Split Group (split_code) or dynamic splits
+            # Split works in both TEST and LIVE mode if split_code is set
             split_subaccounts = []
             use_native_split = False
             split_code = None  # Paystack Dashboard Split Code
@@ -354,23 +354,21 @@ async def initiate_payment(
             # Check if using LIVE mode keys
             is_live_mode = settings.PAYSTACK_SECRET_KEY and "sk_live_" in settings.PAYSTACK_SECRET_KEY
             
-            if not is_live_mode:
-                logger.warning("⚠️ Using TEST Paystack keys - native split will be disabled")
-            
-            # Priority 1: Use Dashboard Split Code from settings if set (ONLY in LIVE mode)
-            elif settings.PAYSTACK_SPLIT_CODE:
+            # Priority 1: Use Dashboard Split Code from settings if set (works in TEST or LIVE mode)
+            if settings.PAYSTACK_SPLIT_CODE:
                 split_code = settings.PAYSTACK_SPLIT_CODE
                 use_native_split = True
-                logger.info(f"💰💰💰 USING PAYSTACK DASHBOARD SPLIT GROUP: {split_code}")
+                mode_str = "TEST" if not is_live_mode else "LIVE"
+                logger.info(f"💰💰💰 USING PAYSTACK {mode_str} MODE SPLIT GROUP: {split_code}")
             
-            # Priority 2: Use split_code from config if available (ONLY in LIVE mode)
-            elif config.get("split_code") and is_live_mode:
+            # Priority 2: Use split_code from config if available
+            elif config.get("split_code"):
                 split_code = config.get("split_code")
                 use_native_split = True
-                logger.info(f"💰💰💰 USING PAYSTACK DASHBOARD SPLIT CODE FROM CONFIG: {split_code}")
+                logger.info(f"💰💰💰 USING PAYSTACK SPLIT CODE FROM CONFIG: {split_code}")
             
-            # Priority 3: Build dynamic splits from subaccounts if enabled (ONLY in LIVE mode)
-            elif config.get("use_native_split", False) and is_live_mode:
+            # Priority 3: Build dynamic splits from subaccounts if enabled
+            elif config.get("use_native_split", False):
                 for recipient_key, recipient_data in config.get("recipients", {}).items():
                     subaccount_code = recipient_data.get("subaccount_code")
                     if subaccount_code:  # Only add if subaccount code is configured
@@ -1353,13 +1351,12 @@ async def get_payment_system_status():
         # Check if using LIVE mode keys
         is_live_mode = settings.PAYSTACK_SECRET_KEY and "sk_live_" in settings.PAYSTACK_SECRET_KEY
         
-        # Check if native split is enabled
+        # Check if native split is enabled (works in both TEST and LIVE mode)
         native_split_enabled = (
-            is_live_mode and 
-            (settings.PAYSTACK_SPLIT_CODE or 
-             settings.MARSHAL_CORE_PAYSTACK_SUBACCOUNT_CODE or 
-             settings.SYSTEMS_MAINTAINANCE_PAYSTACK_SUBACCOUNT_CODE or
-             settings.ESTECH_PAYSTACK_SUBACCOUNT_CODE)
+            settings.PAYSTACK_SPLIT_CODE or 
+            settings.MARSHAL_CORE_PAYSTACK_SUBACCOUNT_CODE or 
+            settings.SYSTEMS_MAINTAINANCE_PAYSTACK_SUBACCOUNT_CODE or
+            settings.ESTECH_PAYSTACK_SUBACCOUNT_CODE
         )
         
         return {
