@@ -111,14 +111,17 @@ class PaymentService:
             data = response.json()
             
             if data.get("status"):
+                paystack_reference = data["data"]["reference"]  # Paystack's actual reference
                 logger.info(f"✅✅✅ LIVE PAYMENT INITIALIZED: {reference} for {email} - ₦{amount:,}")
+                logger.info(f"💰 Paystack Reference: {paystack_reference}")
                 logger.info(f"💰 Authorization URL: {data['data']['authorization_url'][:50]}...")
                 
                 return {
                     "status": "success",
                     "authorization_url": data["data"]["authorization_url"],
                     "access_code": data["data"]["access_code"],
-                    "reference": reference,
+                    "reference": paystack_reference,  # Return Paystack's actual reference
+                    "original_reference": reference,  # Also return our original reference
                     "message": data.get("message", "Payment initialized"),
                     "mode": "LIVE",
                     "split_configured": split_payment,
@@ -165,7 +168,21 @@ class PaymentService:
                 timeout=30.0
             )
             
-            response.raise_for_status()
+            # Handle non-200 responses (including 400)
+            if response.status_code != 200:
+                error_data = response.json()
+                error_msg = error_data.get("message", "Payment verification failed")
+                logger.error(f"❌❌❌ Paystack verification returned {response.status_code}: {error_msg}")
+                
+                # Return error with status so caller can handle it
+                return {
+                    "status": "error",
+                    "message": error_msg,
+                    "error_code": error_data.get("errors", [{}])[0].get("code") if error_data.get("errors") else None,
+                    "paystack_reference": reference,
+                    "mode": "LIVE"
+                }
+            
             data = response.json()
             
             if data.get("status"):

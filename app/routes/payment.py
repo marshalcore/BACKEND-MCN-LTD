@@ -415,6 +415,10 @@ async def initiate_payment(
             systems_maintainance_share = config["recipients"].get("systems_maintainance", {}).get("amount", 0)
             estech_digital_share = config["recipients"].get("estech_digital_systems_limited", {}).get("amount", 0)
             
+            # Get Paystack's actual reference and our original reference
+            paystack_ref = payment_response.get("reference")  # Paystack's actual reference
+            original_ref = payment_response.get("original_reference")  # Our original reference
+            
             payment = Payment(
                 id=str(uuid.uuid4()),
                 user_email=payment_data.email.lower(),
@@ -422,8 +426,8 @@ async def initiate_payment(
                 amount=config["user_amount"],
                 payment_type=payment_type_str,
                 status="pending",
-                payment_reference=payment_ref,
-                paystack_reference=payment_response.get("reference"),  # Store Paystack's actual reference
+                payment_reference=original_ref or payment_ref,  # Our original reference
+                paystack_reference=paystack_ref,  # Paystack's actual reference
                 authorization_url=payment_response.get("authorization_url"),
                 access_code=payment_response.get("access_code"),
                 payment_metadata=payment_metadata,
@@ -442,13 +446,17 @@ async def initiate_payment(
                     "systems_maintainance_share": systems_maintainance_share,
                     "estech_digital_systems_limited_share": estech_digital_share,
                     "native_split_used": use_native_split,
-                    "using_dashboard_split_group": bool(split_code)
+                    "using_dashboard_split_group": bool(split_code),
+                    "original_payment_reference": original_ref,
+                    "paystack_reference": paystack_ref
                 }
             )
             db.add(payment)
             db.commit()
             
             logger.info(f"✅✅✅ PRODUCTION PAYMENT INITIALIZED: {payment_ref} for {payment_data.email}")
+            logger.info(f"   → Paystack Reference: {paystack_ref}")
+            logger.info(f"   → Original Reference: {original_ref}")
             logger.info(f"   → MarshalCoreShare: ₦{marshal_core_share:,} ({settings.MARSHAL_CORE_SHARE_PERCENTAGE}%)")
             logger.info(f"   → SystemsMaintainance: ₦{systems_maintainance_share:,} ({settings.SYSTEMS_MAINTAINANCE_SHARE_PERCENTAGE}%)")
             logger.info(f"   → eSTechDigitalSystemsLimited: ₦{estech_digital_share:,} ({settings.ESTECH_COMMISSION_PERCENTAGE}%)")
@@ -458,8 +466,9 @@ async def initiate_payment(
             return {
                 "status": "success",
                 "message": "Payment initialized",
-                "payment_reference": payment_ref,
-                "paystack_reference": payment_response.get("reference"),  # Paystack's actual reference
+                "payment_reference": original_ref or payment_ref,  # Our original reference
+                "paystack_reference": paystack_ref,  # Paystack's actual reference
+                "original_reference": original_ref,  # Original reference
                 "authorization_url": payment_response.get("authorization_url"),
                 "amount": config["user_amount"],
                 "amount_display": f"₦{config['user_amount']:,}",
