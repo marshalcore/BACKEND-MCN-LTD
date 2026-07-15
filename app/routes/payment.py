@@ -54,13 +54,14 @@ IMMEDIATE_TRANSFER_CONFIG = {
 }
 
 # Payment configurations for PRODUCTION LIVE MODE WITH PAYSTACK NATIVE SPLIT
+# NOTE: Native split is automatically enabled ONLY when split_code OR valid subaccounts are configured
 PAYMENT_CONFIGS = {
     "regular": {
         "user_amount": settings.REGULAR_APPLICATION_FEE,
         "display": f"₦{settings.REGULAR_APPLICATION_FEE:,} Regular Application Fee",
         "base_amount": 5000,
-        "use_native_split": True,  # Enabled - Uses PAYSTACK_SPLIT_CODE if set, otherwise dynamic splits
-        "split_code": settings.PAYSTACK_SPLIT_CODE if settings.PAYSTACK_SPLIT_CODE else None,  # Dashboard Split Code
+        "use_native_split": False,  # Disabled by default - Only enabled if split_code or subaccounts configured
+        "split_code": None,  # Set PAYSTACK_SPLIT_CODE env var to enable
         
         # Recipients for native split (Paystack subaccounts)
         "recipients": {
@@ -68,19 +69,19 @@ PAYMENT_CONFIGS = {
                 "percentage": settings.MARSHAL_CORE_SHARE_PERCENTAGE,
                 "amount": int(settings.REGULAR_APPLICATION_FEE * (settings.MARSHAL_CORE_SHARE_PERCENTAGE / 100)),
                 "description": "MarshalCoreShare - 50%",
-                "subaccount_code": settings.MARSHAL_CORE_PAYSTACK_SUBACCOUNT_CODE,
+                "subaccount_code": settings.MARSHAL_CORE_PAYSTACK_SUBACCOUNT_CODE if settings.MARSHAL_CORE_PAYSTACK_SUBACCOUNT_CODE else None,
             },
             "systems_maintainance": {
                 "percentage": settings.SYSTEMS_MAINTAINANCE_SHARE_PERCENTAGE,
                 "amount": int(settings.REGULAR_APPLICATION_FEE * (settings.SYSTEMS_MAINTAINANCE_SHARE_PERCENTAGE / 100)),
                 "description": "SystemsMaintainance - 35% (FCMB - MARSHAL CORE OF NIGERIA LIMITED)",
-                "subaccount_code": settings.SYSTEMS_MAINTAINANCE_PAYSTACK_SUBACCOUNT_CODE,
+                "subaccount_code": settings.SYSTEMS_MAINTAINANCE_PAYSTACK_SUBACCOUNT_CODE if settings.SYSTEMS_MAINTAINANCE_PAYSTACK_SUBACCOUNT_CODE else None,
             },
             "estech_digital_systems_limited": {
                 "percentage": settings.ESTECH_COMMISSION_PERCENTAGE,
                 "amount": int(settings.REGULAR_APPLICATION_FEE * (settings.ESTECH_COMMISSION_PERCENTAGE / 100)),
                 "description": "eSTechDigitalSystemsLimited - 15%",
-                "subaccount_code": settings.ESTECH_PAYSTACK_SUBACCOUNT_CODE,
+                "subaccount_code": settings.ESTECH_PAYSTACK_SUBACCOUNT_CODE if settings.ESTECH_PAYSTACK_SUBACCOUNT_CODE else None,
             }
         },
         
@@ -93,8 +94,8 @@ PAYMENT_CONFIGS = {
         "user_amount": settings.VIP_APPLICATION_FEE,
         "display": f"₦{settings.VIP_APPLICATION_FEE:,} VIP Application Fee",
         "base_amount": 25000,
-        "use_native_split": True,  # Enabled - Uses PAYSTACK_SPLIT_CODE if set, otherwise dynamic splits
-        "split_code": settings.PAYSTACK_SPLIT_CODE if settings.PAYSTACK_SPLIT_CODE else None,  # Dashboard Split Code
+        "use_native_split": False,  # Disabled by default - Only enabled if split_code or subaccounts configured
+        "split_code": None,  # Set PAYSTACK_SPLIT_CODE env var to enable
         
         "recipients": {
             "marshal_core_share": {
