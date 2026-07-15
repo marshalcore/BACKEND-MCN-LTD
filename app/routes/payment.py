@@ -59,7 +59,8 @@ PAYMENT_CONFIGS = {
         "user_amount": settings.REGULAR_APPLICATION_FEE,
         "display": f"₦{settings.REGULAR_APPLICATION_FEE:,} Regular Application Fee",
         "base_amount": 5000,
-        "use_native_split": True,  # Enabled - Using Paystack Dashboard Split Group (SPL_KRGO7FYBBU)
+        "use_native_split": True,  # Enabled - Uses PAYSTACK_SPLIT_CODE if set, otherwise dynamic splits
+        "split_code": settings.PAYSTACK_SPLIT_CODE if settings.PAYSTACK_SPLIT_CODE else None,  # Dashboard Split Code
         
         # Recipients for native split (Paystack subaccounts)
         "recipients": {
@@ -92,7 +93,8 @@ PAYMENT_CONFIGS = {
         "user_amount": settings.VIP_APPLICATION_FEE,
         "display": f"₦{settings.VIP_APPLICATION_FEE:,} VIP Application Fee",
         "base_amount": 25000,
-        "use_native_split": True,  # Enabled - Using Paystack Dashboard Split Group (SPL_KRGO7FYBBU)
+        "use_native_split": True,  # Enabled - Uses PAYSTACK_SPLIT_CODE if set, otherwise dynamic splits
+        "split_code": settings.PAYSTACK_SPLIT_CODE if settings.PAYSTACK_SPLIT_CODE else None,  # Dashboard Split Code
         
         "recipients": {
             "marshal_core_share": {
@@ -345,16 +347,23 @@ async def initiate_payment(
             # 🔥 BUILD PAYSTACK NATIVE SPLIT CONFIGURATION
             # Check if using Paystack Dashboard Split Group (split_code) or dynamic splits
             split_subaccounts = []
-            use_native_split = config.get("use_native_split", False)
+            use_native_split = False
             split_code = None  # Paystack Dashboard Split Code
             
+            # Priority 1: Use Dashboard Split Code from settings if set
             if settings.PAYSTACK_SPLIT_CODE:
-                # Use Paystack Dashboard Split Group - recommended approach
                 split_code = settings.PAYSTACK_SPLIT_CODE
                 use_native_split = True
                 logger.info(f"💰💰💰 USING PAYSTACK DASHBOARD SPLIT GROUP: {split_code}")
-            elif use_native_split:
-                # Build subaccounts list from config for dynamic split
+            
+            # Priority 2: Use split_code from config if available
+            elif config.get("split_code"):
+                split_code = config.get("split_code")
+                use_native_split = True
+                logger.info(f"💰💰💰 USING PAYSTACK DASHBOARD SPLIT CODE FROM CONFIG: {split_code}")
+            
+            # Priority 3: Build dynamic splits from subaccounts if enabled
+            elif config.get("use_native_split", False):
                 for recipient_key, recipient_data in config.get("recipients", {}).items():
                     subaccount_code = recipient_data.get("subaccount_code")
                     if subaccount_code:  # Only add if subaccount code is configured
@@ -364,7 +373,14 @@ async def initiate_payment(
                         })
                         logger.info(f"   → Adding split: {recipient_data.get('percentage')}% to {recipient_key}")
                 
-                logger.info(f"💰💰💰 NATIVE SPLIT CONFIGURED: {len(split_subaccounts)} subaccounts")
+                if split_subaccounts:
+                    use_native_split = True
+                    logger.info(f"💰💰💰 NATIVE SPLIT CONFIGURED: {len(split_subaccounts)} subaccounts")
+                else:
+                    logger.warning(f"⚠️ Native split enabled but no subaccounts configured - proceeding without split")
+            
+            if not use_native_split:
+                logger.info("💰💰💰 PROCEEDING WITHOUT PAYMENT SPLIT")
             
             # Call payment service with split configuration
             payment_response = payment_service.initiate_payment(
