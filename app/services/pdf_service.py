@@ -248,17 +248,17 @@ class PDFGenerator:
         
         # Header background - taller to fit everything
         canvas_obj.setFillColor(colors.HexColor('#f5f5f5'))
-        canvas_obj.rect(doc.leftMargin, page_height - 1.0*inch, 
-                      page_width - doc.leftMargin - doc.rightMargin, 0.7*inch, fill=1, stroke=0)
+        canvas_obj.rect(doc.leftMargin, page_height - 1.1*inch, 
+                      page_width - doc.leftMargin - doc.rightMargin, 0.8*inch, fill=1, stroke=0)
         
-        # Add BIG BOLD logo at top left
+        # Add VERY BIG BOLD logo at top left
         if self.logo_image and self.logo_bytes:
             try:
                 self.logo_image.seek(0)
-                logo_width = 1.0 * inch
-                logo_height = 0.55 * inch
+                logo_width = 1.4 * inch
+                logo_height = 0.7 * inch
                 logo_x = doc.leftMargin + 0.1*inch
-                logo_y = page_height - 0.95*inch
+                logo_y = page_height - 1.0*inch
                 
                 canvas_obj.drawImage(ImageReader(self.logo_image), logo_x, logo_y,
                                    width=logo_width, height=logo_height,
@@ -269,8 +269,8 @@ class PDFGenerator:
         # Header text - Company name (right side) - BIGGER BOLDER
         canvas_obj.setFont('Helvetica-Bold', 14)
         canvas_obj.setFillColor(colors.HexColor('#1a237e'))
-        header_x = doc.leftMargin + 1.3*inch
-        header_y = page_height - 0.55*inch
+        header_x = doc.leftMargin + 1.7*inch
+        header_y = page_height - 0.5*inch
         canvas_obj.drawString(header_x, header_y, COMPANY_INFO['name'])
         
         # Address - LARGER font
@@ -282,7 +282,7 @@ class PDFGenerator:
         # Line under header - AFTER address text
         canvas_obj.setStrokeColor(colors.HexColor('#1a237e'))
         canvas_obj.setLineWidth(2)
-        line_y = page_height - 1.0*inch
+        line_y = page_height - 1.1*inch
         canvas_obj.line(doc.leftMargin, line_y,
                        page_width - doc.rightMargin, line_y)
         
