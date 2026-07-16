@@ -306,6 +306,22 @@ class PDFGenerator:
         date_str = datetime.now().strftime("%d/%m/%Y")
         canvas_obj.drawRightString(page_width - doc.rightMargin, 0.4*inch, date_str)
         
+        # STAMP on EVERY page - bottom RIGHT corner (same position on all pages)
+        if self.stamp_bytes:
+            try:
+                self.stamp_image.seek(0)
+                stamp_width = 1.2 * inch
+                stamp_height = 0.8 * inch
+                stamp_x = page_width - doc.rightMargin - stamp_width - 0.2*inch  # Bottom RIGHT
+                stamp_y = 0.8 * inch  # Just above footer line
+                
+                canvas_obj.drawImage(ImageReader(BytesIO(self.stamp_bytes)), 
+                                   stamp_x, stamp_y,
+                                   width=stamp_width, height=stamp_height,
+                                   mask='auto', preserveAspectRatio=True)
+            except Exception as e:
+                logger.warning(f"Could not draw stamp: {e}")
+        
         canvas_obj.restoreState()
     
     def _add_background_watermark(self, canvas_obj, doc):
@@ -813,33 +829,14 @@ class PDFGenerator:
             story.append(Paragraph(f"<b>Date:</b> {datetime.now().strftime('%d/%m/%Y')}", bold_style))
             story.append(Spacer(1, 24))
             
-            # Organization signature with stamp - compact layout to fit on one page
+            # Organization signature - stamp is in footer on every page
             story.append(Paragraph("<b>For Marshal Core of Nigeria:</b>", bold_style))
-            story.append(Spacer(1, 24))
+            story.append(Spacer(1, 18))
             story.append(Paragraph("________________________________________", normal_style))
             story.append(Paragraph("<b>Name: ADG. AKAH IFEAKACHUKWU SUNDAY</b>", bold_style))
             story.append(Paragraph("<b>Acting National Chief Commandant</b>", bold_style))
             story.append(Paragraph(f"<b>Date:</b> {datetime.now().strftime('%d/%m/%Y')}", bold_style))
-            story.append(Spacer(1, 18))
-            
-            # Stamp at bottom RIGHT - using table for right alignment
-            if self.stamp_bytes:
-                story.append(Paragraph("<b>Official Stamp:</b>", bold_style))
-                story.append(Spacer(1, 4))
-                stamp_img = Image(BytesIO(self.stamp_bytes), width=2.0*inch, height=1.4*inch)
-                stamp_table = Table([[stamp_img]], colWidths=[6.5*inch])
-                stamp_table.setStyle(TableStyle([
-                    ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
-                    ('VALIGN', (0, 0), (-1, -1), 'BOTTOM'),
-                    ('LEFTPADDING', (0, 0), (-1, -1), 0),
-                    ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-                    ('TOPPADDING', (0, 0), (-1, -1), 0),
-                    ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
-                ]))
-                story.append(stamp_table)
-            else:
-                story.append(Paragraph("<b>Official Stamp:</b>", bold_style))
-                story.append(Paragraph("[OFFICIAL STAMP]", normal_style))
+            story.append(Spacer(1, 12))
             
             # Footer note
             story.append(Paragraph(
@@ -1122,41 +1119,20 @@ class PDFGenerator:
             
             # Applicant signature
             story.append(Paragraph(f"<b>Name of Applicant:</b> {user_data.get('full_name', '')}", bold_style))
-            story.append(Spacer(1, 24))
+            story.append(Spacer(1, 18))
             story.append(Paragraph("________________________________________", normal_style))
             story.append(Paragraph("<b>Signature of Applicant</b>", bold_style))
             story.append(Paragraph(f"<b>Date:</b> {datetime.now().strftime('%d %B, %Y')}", bold_style))
             
-            story.append(Spacer(1, 24))
-            
-            # Organization signature with stamp
-            story.append(Paragraph("<b>FOR MARSHAL CORE OF NIGERIA:</b>", bold_style))
             story.append(Spacer(1, 18))
+            
+            # Organization signature - stamp is in footer on every page
+            story.append(Paragraph("<b>FOR MARSHAL CORE OF NIGERIA:</b>", bold_style))
+            story.append(Spacer(1, 12))
             story.append(Paragraph("________________________________________", normal_style))
             story.append(Paragraph("<b>ADG. AKAH IFEAKACHUKWU SUNDAY</b>", bold_style))
             story.append(Paragraph("<b>Acting National Chief Commandant</b>", bold_style))
             story.append(Paragraph(f"<b>Date:</b> {datetime.now().strftime('%d %B, %Y')}", bold_style))
-            
-            story.append(Spacer(1, 12))
-            
-            # Stamp at bottom RIGHT
-            if self.stamp_bytes:
-                story.append(Paragraph("<b>Official Stamp:</b>", bold_style))
-                story.append(Spacer(1, 4))
-                stamp_img = Image(BytesIO(self.stamp_bytes), width=2.0*inch, height=1.4*inch)
-                stamp_table = Table([[stamp_img]], colWidths=[6.5*inch])
-                stamp_table.setStyle(TableStyle([
-                    ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
-                    ('VALIGN', (0, 0), (-1, -1), 'BOTTOM'),
-                    ('LEFTPADDING', (0, 0), (-1, -1), 0),
-                    ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-                    ('TOPPADDING', (0, 0), (-1, -1), 0),
-                    ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
-                ]))
-                story.append(stamp_table)
-            else:
-                story.append(Paragraph("<b>Official Stamp:</b>", bold_style))
-                story.append(Paragraph("[OFFICIAL STAMP]", normal_style))
             
             # Build PDF with watermark
             def on_first_page(canvas_obj, doc_obj):
@@ -1439,43 +1415,22 @@ class PDFGenerator:
                 "disqualification or termination of appointment as per the Terms and Conditions.",
                 normal_style
             ))
-            story.append(Spacer(1, 24))
+            story.append(Spacer(1, 18))
             
             # Signature lines
             story.append(Paragraph("<b>Signature of Applicant:</b>", bold_style))
-            story.append(Spacer(1, 24))
+            story.append(Spacer(1, 18))
             story.append(Paragraph("________________________________________", normal_style))
             story.append(Paragraph(f"<b>Date:</b> {datetime.now().strftime('%d/%m/%Y')}", bold_style))
-            story.append(Spacer(1, 18))
+            story.append(Spacer(1, 12))
             
-            # Organization signature with stamp
+            # Organization signature - stamp is in footer on every page
             story.append(Paragraph("<b>For Marshal Core of Nigeria:</b>", bold_style))
-            story.append(Spacer(1, 18))
+            story.append(Spacer(1, 12))
             story.append(Paragraph("________________________________________", normal_style))
             story.append(Paragraph("<b>Name: ADG. AKAH IFEAKACHUKWU SUNDAY</b>", bold_style))
             story.append(Paragraph("<b>Acting National Chief Commandant</b>", bold_style))
             story.append(Paragraph(f"<b>Date:</b> {datetime.now().strftime('%d/%m/%Y')}", bold_style))
-            
-            story.append(Spacer(1, 12))
-            
-            # Stamp at bottom RIGHT
-            if self.stamp_bytes:
-                story.append(Paragraph("<b>Official Stamp:</b>", bold_style))
-                story.append(Spacer(1, 4))
-                stamp_img = Image(BytesIO(self.stamp_bytes), width=2.0*inch, height=1.4*inch)
-                stamp_table = Table([[stamp_img]], colWidths=[6.5*inch])
-                stamp_table.setStyle(TableStyle([
-                    ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
-                    ('VALIGN', (0, 0), (-1, -1), 'BOTTOM'),
-                    ('LEFTPADDING', (0, 0), (-1, -1), 0),
-                    ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-                    ('TOPPADDING', (0, 0), (-1, -1), 0),
-                    ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
-                ]))
-                story.append(stamp_table)
-            else:
-                story.append(Paragraph("<b>Official Stamp:</b>", bold_style))
-                story.append(Paragraph("[OFFICIAL STAMP]", normal_style))
             
             # Footer note
             story.append(Paragraph(
