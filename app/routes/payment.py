@@ -539,6 +539,7 @@ async def verify_payment(
                 user_email = paystack_metadata.get("email")
                 user_type = paystack_metadata.get("user_type", "pre_applicant")
                 payment_type = paystack_metadata.get("payment_type", "regular")
+                amount = paystack_verification.get("amount", 0)
                 
                 logger.info(f"🔍 Paystack verification succeeded, looking for payment by email: {user_email}")
                 
@@ -556,7 +557,37 @@ async def verify_payment(
                     if not payment.paystack_reference:
                         payment.paystack_reference = reference
                 else:
-                    logger.warning(f"⚠️ Could not find corresponding payment in database for Paystack reference: {reference}")
+                    # ⚠️ Payment not in our DB but Paystack says it was paid!
+                    # This happens when payment initiation failed but user still paid
+                    # Create a new payment record to track this
+                    logger.warning(f"⚠️ Payment not in DB but Paystack says SUCCESS. Creating record...")
+                    
+                    # Try to find the pre-applicant by email
+                    pre_applicant = db.query(PreApplicant).filter(
+                        func.lower(PreApplicant.email) == user_email.lower()
+                    ).first()
+                    
+                    if pre_applicant:
+                        # Create payment record
+                        payment = Payment(
+                            id=str(uuid.uuid4()),
+                            user_email=user_email.lower(),
+                            user_type=user_type or "pre_applicant",
+                            amount=amount,
+                            payment_type=payment_type or "regular",
+                            status="success",
+                            payment_reference=f"RECOVERED_{reference}",  # Mark as recovered
+                            paystack_reference=reference,
+                            paid_at=datetime.utcnow(),
+                            verification_data=paystack_verification,
+                            payment_metadata=paystack_metadata
+                        )
+                        db.add(payment)
+                        db.commit()
+                        db.refresh(payment)
+                        logger.info(f"✅✅✅ Created recovery payment record: {payment.payment_reference}")
+                    else:
+                        logger.warning(f"⚠️ Could not find pre-applicant for email: {user_email}")
             else:
                 logger.warning(f"⚠️ Paystack verification also failed for: {reference}")
         
