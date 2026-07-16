@@ -868,6 +868,18 @@ async def startup_event():
                 logger.info("✅ MIGRATION: paystack_reference column added")
             else:
                 logger.info("✅ MIGRATION: paystack_reference column already exists")
+            
+            # Check if verification_data column exists
+            result = conn.execute(text("""
+                SELECT column_name FROM information_schema.columns 
+                WHERE table_name = 'payments' AND column_name = 'verification_data'
+            """))
+            if not result.fetchone():
+                conn.execute(text("ALTER TABLE payments ADD COLUMN verification_data JSONB"))
+                conn.commit()
+                logger.info("✅ MIGRATION: verification_data column added")
+            else:
+                logger.info("✅ MIGRATION: verification_data column already exists")
     except Exception as e:
         logger.warning(f"⚠ Migration check failed: {e}")
     
