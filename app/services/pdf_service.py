@@ -243,19 +243,22 @@ class PDFGenerator:
         """Create header and footer for PDF pages"""
         canvas_obj.saveState()
         
+        page_width = doc.width + doc.leftMargin + doc.rightMargin
+        page_height = doc.height + doc.topMargin + doc.bottomMargin
+        
         # Header background
         canvas_obj.setFillColor(colors.HexColor('#f5f5f5'))
-        canvas_obj.rect(doc.leftMargin, doc.height + doc.topMargin - 0.1*inch, 
-                      doc.width, 1.2*inch, fill=1, stroke=0)
+        canvas_obj.rect(doc.leftMargin, page_height - 0.8*inch, 
+                      page_width - doc.leftMargin - doc.rightMargin, 0.5*inch, fill=1, stroke=0)
         
         # Add logo at top left
         if self.logo_image and self.logo_bytes:
             try:
                 self.logo_image.seek(0)
-                logo_width = 1.2 * inch
-                logo_height = 0.6 * inch
+                logo_width = 0.8 * inch
+                logo_height = 0.4 * inch
                 logo_x = doc.leftMargin + 0.1*inch
-                logo_y = doc.height + doc.topMargin + 0.45*inch
+                logo_y = page_height - 0.75*inch
                 
                 canvas_obj.drawImage(ImageReader(self.logo_image), logo_x, logo_y,
                                    width=logo_width, height=logo_height,
@@ -263,47 +266,44 @@ class PDFGenerator:
             except Exception as e:
                 logger.warning(f"Could not draw logo: {e}")
         
-        # Header text - Company name
-        canvas_obj.setFont('Helvetica-Bold', 12)
+        # Header text - Company name (right side)
+        canvas_obj.setFont('Helvetica-Bold', 10)
         canvas_obj.setFillColor(colors.HexColor('#1a237e'))
-        header_x = doc.leftMargin + 1.5*inch
-        header_y = doc.height + doc.topMargin + 0.75*inch
+        header_x = doc.leftMargin + 1.0*inch
+        header_y = page_height - 0.65*inch
         canvas_obj.drawString(header_x, header_y, COMPANY_INFO['name'])
         
-        # Address - more compact
-        canvas_obj.setFont('Helvetica', 8)
+        # Address - compact on one line
+        canvas_obj.setFont('Helvetica', 7)
         canvas_obj.setFillColor(colors.HexColor('#333333'))
-        
-        address_y = header_y - 0.18*inch
-        canvas_obj.drawString(header_x, address_y, f"{COMPANY_INFO['address_line1']}, {COMPANY_INFO['address_line2']}")
-        canvas_obj.drawString(header_x, address_y - 0.15*inch, f"{COMPANY_INFO['address_line3']} | {COMPANY_INFO['phone']}")
+        canvas_obj.drawString(header_x, header_y - 0.15*inch, COMPANY_INFO['address_line1'])
+        canvas_obj.drawString(header_x, header_y - 0.28*inch, COMPANY_INFO['address_line3'])
         
         # Line under header
         canvas_obj.setStrokeColor(colors.HexColor('#1a237e'))
-        canvas_obj.setLineWidth(2)
-        line_y = doc.height + doc.topMargin - 0.1*inch
-        canvas_obj.line(doc.leftMargin, line_y,
-                       doc.width + doc.leftMargin, line_y)
+        canvas_obj.setLineWidth(1.5)
+        canvas_obj.line(doc.leftMargin, page_height - 0.82*inch,
+                       page_width - doc.rightMargin, page_height - 0.82*inch)
         
-        # Footer
-        canvas_obj.setFont('Helvetica', 8)
+        # Footer - simple and clean
+        canvas_obj.setFont('Helvetica', 7)
         canvas_obj.setFillColor(colors.HexColor('#666666'))
         
         # Line above footer
         canvas_obj.setStrokeColor(colors.HexColor('#cccccc'))
-        canvas_obj.setLineWidth(1)
-        canvas_obj.line(doc.leftMargin, 0.75*inch, doc.width + doc.leftMargin, 0.75*inch)
+        canvas_obj.setLineWidth(0.5)
+        canvas_obj.line(doc.leftMargin, 0.6*inch, page_width - doc.rightMargin, 0.6*inch)
         
         # Page number
-        canvas_obj.drawString(doc.leftMargin, 0.5*inch, f"Page {doc.page}")
+        canvas_obj.drawString(doc.leftMargin, 0.35*inch, f"Page {doc.page}")
         
         # Document info
         doc_info = "Terms & Conditions" if is_terms else "Application Form"
-        canvas_obj.drawCentredString(doc.width/2 + doc.leftMargin, 0.5*inch, doc_info)
+        canvas_obj.drawCentredString(page_width/2, 0.35*inch, doc_info)
         
         # Date
         date_str = datetime.now().strftime("%d/%m/%Y")
-        canvas_obj.drawRightString(doc.width + doc.leftMargin, 0.5*inch, date_str)
+        canvas_obj.drawRightString(page_width - doc.rightMargin, 0.35*inch, date_str)
         
         canvas_obj.restoreState()
     
@@ -807,36 +807,34 @@ class PDFGenerator:
             
             # Signature lines
             story.append(Paragraph("<b>Signature of Officer:</b>", bold_style))
-            story.append(Spacer(1, 48))
+            story.append(Spacer(1, 36))
             story.append(Paragraph("________________________________________", normal_style))
-            story.append(Spacer(1, 24))
             story.append(Paragraph(f"<b>Date:</b> {datetime.now().strftime('%d/%m/%Y')}", bold_style))
-            story.append(Spacer(1, 36))
+            story.append(Spacer(1, 24))
             
-            # Organization signature with stamp - using Table for better layout
+            # Organization signature with stamp - compact layout to fit on one page
             story.append(Paragraph("<b>For Marshal Core of Nigeria:</b>", bold_style))
-            story.append(Spacer(1, 36))
+            story.append(Spacer(1, 24))
             story.append(Paragraph("________________________________________", normal_style))
             story.append(Paragraph("<b>Name: ADG. AKAH IFEAKACHUKWU SUNDAY</b>", bold_style))
             story.append(Paragraph("<b>Acting National Chief Commandant</b>", bold_style))
             story.append(Paragraph(f"<b>Date:</b> {datetime.now().strftime('%d/%m/%Y')}", bold_style))
-            story.append(Spacer(1, 36))
+            story.append(Spacer(1, 18))
             
-            # Stamp positioned at bottom left - landscape orientation
+            # Stamp at bottom RIGHT - using table for right alignment
             if self.stamp_bytes:
-                # Create a table with stamp on the left
-                stamp_img = Image(BytesIO(self.stamp_bytes), width=1.8*inch, height=1.2*inch)
-                stamp_table = Table([[stamp_img]], colWidths=[2*inch])
+                story.append(Paragraph("<b>Official Stamp:</b>", bold_style))
+                story.append(Spacer(1, 4))
+                stamp_img = Image(BytesIO(self.stamp_bytes), width=1.5*inch, height=1.0*inch)
+                stamp_table = Table([[stamp_img]], colWidths=[6.5*inch])
                 stamp_table.setStyle(TableStyle([
-                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                    ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
                     ('VALIGN', (0, 0), (-1, -1), 'BOTTOM'),
                     ('LEFTPADDING', (0, 0), (-1, -1), 0),
                     ('RIGHTPADDING', (0, 0), (-1, -1), 0),
                     ('TOPPADDING', (0, 0), (-1, -1), 0),
                     ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
                 ]))
-                story.append(Paragraph("<b>Official Stamp:</b>", bold_style))
-                story.append(Spacer(1, 6))
                 story.append(stamp_table)
             else:
                 story.append(Paragraph("<b>Official Stamp:</b>", bold_style))
@@ -1119,42 +1117,41 @@ class PDFGenerator:
                 "outlined in this agreement.",
                 normal_style
             ))
-            story.append(Spacer(1, 36))
+            story.append(Spacer(1, 24))
             
             # Applicant signature
             story.append(Paragraph(f"<b>Name of Applicant:</b> {user_data.get('full_name', '')}", bold_style))
-            story.append(Spacer(1, 48))
+            story.append(Spacer(1, 24))
             story.append(Paragraph("________________________________________", normal_style))
             story.append(Paragraph("<b>Signature of Applicant</b>", bold_style))
-            story.append(Spacer(1, 24))
             story.append(Paragraph(f"<b>Date:</b> {datetime.now().strftime('%d %B, %Y')}", bold_style))
             
-            story.append(Spacer(1, 48))
+            story.append(Spacer(1, 24))
             
             # Organization signature with stamp
             story.append(Paragraph("<b>FOR MARSHAL CORE OF NIGERIA:</b>", bold_style))
-            story.append(Spacer(1, 36))
+            story.append(Spacer(1, 18))
             story.append(Paragraph("________________________________________", normal_style))
             story.append(Paragraph("<b>ADG. AKAH IFEAKACHUKWU SUNDAY</b>", bold_style))
             story.append(Paragraph("<b>Acting National Chief Commandant</b>", bold_style))
             story.append(Paragraph(f"<b>Date:</b> {datetime.now().strftime('%d %B, %Y')}", bold_style))
             
-            story.append(Spacer(1, 36))
+            story.append(Spacer(1, 12))
             
-            # Stamp positioned at bottom left - landscape orientation
+            # Stamp at bottom RIGHT
             if self.stamp_bytes:
-                stamp_img = Image(BytesIO(self.stamp_bytes), width=1.8*inch, height=1.2*inch)
-                stamp_table = Table([[stamp_img]], colWidths=[2*inch])
+                story.append(Paragraph("<b>Official Stamp:</b>", bold_style))
+                story.append(Spacer(1, 4))
+                stamp_img = Image(BytesIO(self.stamp_bytes), width=1.5*inch, height=1.0*inch)
+                stamp_table = Table([[stamp_img]], colWidths=[6.5*inch])
                 stamp_table.setStyle(TableStyle([
-                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                    ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
                     ('VALIGN', (0, 0), (-1, -1), 'BOTTOM'),
                     ('LEFTPADDING', (0, 0), (-1, -1), 0),
                     ('RIGHTPADDING', (0, 0), (-1, -1), 0),
                     ('TOPPADDING', (0, 0), (-1, -1), 0),
                     ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
                 ]))
-                story.append(Paragraph("<b>Official Stamp:</b>", bold_style))
-                story.append(Spacer(1, 6))
                 story.append(stamp_table)
             else:
                 story.append(Paragraph("<b>Official Stamp:</b>", bold_style))
@@ -1431,7 +1428,7 @@ class PDFGenerator:
                 ))
                 story.append(Spacer(1, 2))
             
-            story.append(Spacer(1, 24))
+            story.append(Spacer(1, 18))
             
             # Declaration
             story.append(Paragraph("DECLARATION", heading1_style))
@@ -1441,40 +1438,39 @@ class PDFGenerator:
                 "disqualification or termination of appointment as per the Terms and Conditions.",
                 normal_style
             ))
-            story.append(Spacer(1, 48))
+            story.append(Spacer(1, 24))
             
             # Signature lines
             story.append(Paragraph("<b>Signature of Applicant:</b>", bold_style))
-            story.append(Spacer(1, 48))
-            story.append(Paragraph("________________________________________", normal_style))
             story.append(Spacer(1, 24))
+            story.append(Paragraph("________________________________________", normal_style))
             story.append(Paragraph(f"<b>Date:</b> {datetime.now().strftime('%d/%m/%Y')}", bold_style))
-            story.append(Spacer(1, 36))
+            story.append(Spacer(1, 18))
             
             # Organization signature with stamp
             story.append(Paragraph("<b>For Marshal Core of Nigeria:</b>", bold_style))
-            story.append(Spacer(1, 36))
+            story.append(Spacer(1, 18))
             story.append(Paragraph("________________________________________", normal_style))
             story.append(Paragraph("<b>Name: ADG. AKAH IFEAKACHUKWU SUNDAY</b>", bold_style))
             story.append(Paragraph("<b>Acting National Chief Commandant</b>", bold_style))
             story.append(Paragraph(f"<b>Date:</b> {datetime.now().strftime('%d/%m/%Y')}", bold_style))
             
-            story.append(Spacer(1, 36))
+            story.append(Spacer(1, 12))
             
-            # Stamp positioned at bottom left - landscape orientation
+            # Stamp at bottom RIGHT
             if self.stamp_bytes:
-                stamp_img = Image(BytesIO(self.stamp_bytes), width=1.8*inch, height=1.2*inch)
-                stamp_table = Table([[stamp_img]], colWidths=[2*inch])
+                story.append(Paragraph("<b>Official Stamp:</b>", bold_style))
+                story.append(Spacer(1, 4))
+                stamp_img = Image(BytesIO(self.stamp_bytes), width=1.5*inch, height=1.0*inch)
+                stamp_table = Table([[stamp_img]], colWidths=[6.5*inch])
                 stamp_table.setStyle(TableStyle([
-                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                    ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
                     ('VALIGN', (0, 0), (-1, -1), 'BOTTOM'),
                     ('LEFTPADDING', (0, 0), (-1, -1), 0),
                     ('RIGHTPADDING', (0, 0), (-1, -1), 0),
                     ('TOPPADDING', (0, 0), (-1, -1), 0),
                     ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
                 ]))
-                story.append(Paragraph("<b>Official Stamp:</b>", bold_style))
-                story.append(Spacer(1, 6))
                 story.append(stamp_table)
             else:
                 story.append(Paragraph("<b>Official Stamp:</b>", bold_style))
