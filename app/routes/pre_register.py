@@ -81,7 +81,7 @@ async def check_application_status(
         status_info["current_stage"] = "password_sent"
         status_info["redirect_to"] = "password_input"
     elif getattr(pre_applicant, "has_paid", False):
-        status_info["current_stage"] = "payment_completed"
+        status_info["current_stage"] = "awaiting_password_generation"
         status_info["redirect_to"] = "password_generation"
     elif getattr(pre_applicant, "selected_tier", None):
         status_info["current_stage"] = "tier_selected"
