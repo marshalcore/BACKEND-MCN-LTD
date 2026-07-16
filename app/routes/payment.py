@@ -602,6 +602,20 @@ async def verify_payment(
         if payment.status == "success":
             logger.info(f"💰 Payment {payment.payment_reference} already verified")
             
+            # STILL update pre-applicant status if not already paid
+            # This handles the case where payment was recovered but pre-applicant wasn't updated
+            if payment.user_type == "pre_applicant":
+                pre_applicant = db.query(PreApplicant).filter(
+                    func.lower(PreApplicant.email) == payment.user_email
+                ).first()
+                
+                if pre_applicant and not pre_applicant.has_paid:
+                    pre_applicant.has_paid = True
+                    pre_applicant.status = "payment_completed"
+                    pre_applicant.payment_reference = payment.paystack_reference or payment.payment_reference
+                    db.commit()
+                    logger.info(f"✅✅✅ Updated pre-applicant has_paid: {payment.user_email}")
+            
             # Get job status
             job_status = background_job_service.get_job_status(payment.payment_reference)
             
