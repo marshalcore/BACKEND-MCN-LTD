@@ -246,19 +246,19 @@ class PDFGenerator:
         page_width = doc.width + doc.leftMargin + doc.rightMargin
         page_height = doc.height + doc.topMargin + doc.bottomMargin
         
-        # Header background
+        # Header background - taller to fit everything
         canvas_obj.setFillColor(colors.HexColor('#f5f5f5'))
-        canvas_obj.rect(doc.leftMargin, page_height - 0.8*inch, 
-                      page_width - doc.leftMargin - doc.rightMargin, 0.5*inch, fill=1, stroke=0)
+        canvas_obj.rect(doc.leftMargin, page_height - 1.0*inch, 
+                      page_width - doc.leftMargin - doc.rightMargin, 0.7*inch, fill=1, stroke=0)
         
-        # Add logo at top left
+        # Add BIG BOLD logo at top left
         if self.logo_image and self.logo_bytes:
             try:
                 self.logo_image.seek(0)
-                logo_width = 0.8 * inch
-                logo_height = 0.4 * inch
+                logo_width = 1.0 * inch
+                logo_height = 0.55 * inch
                 logo_x = doc.leftMargin + 0.1*inch
-                logo_y = page_height - 0.75*inch
+                logo_y = page_height - 0.95*inch
                 
                 canvas_obj.drawImage(ImageReader(self.logo_image), logo_x, logo_y,
                                    width=logo_width, height=logo_height,
@@ -266,44 +266,45 @@ class PDFGenerator:
             except Exception as e:
                 logger.warning(f"Could not draw logo: {e}")
         
-        # Header text - Company name (right side)
-        canvas_obj.setFont('Helvetica-Bold', 10)
+        # Header text - Company name (right side) - BIGGER BOLDER
+        canvas_obj.setFont('Helvetica-Bold', 14)
         canvas_obj.setFillColor(colors.HexColor('#1a237e'))
-        header_x = doc.leftMargin + 1.0*inch
-        header_y = page_height - 0.65*inch
+        header_x = doc.leftMargin + 1.3*inch
+        header_y = page_height - 0.55*inch
         canvas_obj.drawString(header_x, header_y, COMPANY_INFO['name'])
         
-        # Address - compact on one line
-        canvas_obj.setFont('Helvetica', 7)
+        # Address - LARGER font
+        canvas_obj.setFont('Helvetica-Bold', 9)
         canvas_obj.setFillColor(colors.HexColor('#333333'))
-        canvas_obj.drawString(header_x, header_y - 0.15*inch, COMPANY_INFO['address_line1'])
-        canvas_obj.drawString(header_x, header_y - 0.28*inch, COMPANY_INFO['address_line3'])
+        canvas_obj.drawString(header_x, header_y - 0.2*inch, COMPANY_INFO['address_line1'])
+        canvas_obj.drawString(header_x, header_y - 0.38*inch, COMPANY_INFO['address_line3'])
         
-        # Line under header
+        # Line under header - AFTER address text
         canvas_obj.setStrokeColor(colors.HexColor('#1a237e'))
-        canvas_obj.setLineWidth(1.5)
-        canvas_obj.line(doc.leftMargin, page_height - 0.82*inch,
-                       page_width - doc.rightMargin, page_height - 0.82*inch)
+        canvas_obj.setLineWidth(2)
+        line_y = page_height - 1.0*inch
+        canvas_obj.line(doc.leftMargin, line_y,
+                       page_width - doc.rightMargin, line_y)
         
-        # Footer - simple and clean
-        canvas_obj.setFont('Helvetica', 7)
+        # Footer - LARGER font
+        canvas_obj.setFont('Helvetica', 9)
         canvas_obj.setFillColor(colors.HexColor('#666666'))
         
         # Line above footer
         canvas_obj.setStrokeColor(colors.HexColor('#cccccc'))
-        canvas_obj.setLineWidth(0.5)
-        canvas_obj.line(doc.leftMargin, 0.6*inch, page_width - doc.rightMargin, 0.6*inch)
+        canvas_obj.setLineWidth(1)
+        canvas_obj.line(doc.leftMargin, 0.7*inch, page_width - doc.rightMargin, 0.7*inch)
         
         # Page number
-        canvas_obj.drawString(doc.leftMargin, 0.35*inch, f"Page {doc.page}")
+        canvas_obj.drawString(doc.leftMargin, 0.4*inch, f"Page {doc.page}")
         
         # Document info
         doc_info = "Terms & Conditions" if is_terms else "Application Form"
-        canvas_obj.drawCentredString(page_width/2, 0.35*inch, doc_info)
+        canvas_obj.drawCentredString(page_width/2, 0.4*inch, doc_info)
         
         # Date
         date_str = datetime.now().strftime("%d/%m/%Y")
-        canvas_obj.drawRightString(page_width - doc.rightMargin, 0.35*inch, date_str)
+        canvas_obj.drawRightString(page_width - doc.rightMargin, 0.4*inch, date_str)
         
         canvas_obj.restoreState()
     
@@ -825,7 +826,7 @@ class PDFGenerator:
             if self.stamp_bytes:
                 story.append(Paragraph("<b>Official Stamp:</b>", bold_style))
                 story.append(Spacer(1, 4))
-                stamp_img = Image(BytesIO(self.stamp_bytes), width=1.5*inch, height=1.0*inch)
+                stamp_img = Image(BytesIO(self.stamp_bytes), width=2.0*inch, height=1.4*inch)
                 stamp_table = Table([[stamp_img]], colWidths=[6.5*inch])
                 stamp_table.setStyle(TableStyle([
                     ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
@@ -1142,7 +1143,7 @@ class PDFGenerator:
             if self.stamp_bytes:
                 story.append(Paragraph("<b>Official Stamp:</b>", bold_style))
                 story.append(Spacer(1, 4))
-                stamp_img = Image(BytesIO(self.stamp_bytes), width=1.5*inch, height=1.0*inch)
+                stamp_img = Image(BytesIO(self.stamp_bytes), width=2.0*inch, height=1.4*inch)
                 stamp_table = Table([[stamp_img]], colWidths=[6.5*inch])
                 stamp_table.setStyle(TableStyle([
                     ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
@@ -1461,7 +1462,7 @@ class PDFGenerator:
             if self.stamp_bytes:
                 story.append(Paragraph("<b>Official Stamp:</b>", bold_style))
                 story.append(Spacer(1, 4))
-                stamp_img = Image(BytesIO(self.stamp_bytes), width=1.5*inch, height=1.0*inch)
+                stamp_img = Image(BytesIO(self.stamp_bytes), width=2.0*inch, height=1.4*inch)
                 stamp_table = Table([[stamp_img]], colWidths=[6.5*inch])
                 stamp_table.setStyle(TableStyle([
                     ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
