@@ -236,9 +236,11 @@ class PDFGenerator:
             else:
                 # Try to find stamp in different locations
                 possible_paths = [
+                    LOGO_DIR / "stamp.png",
                     STATIC_DIR / "images" / "stamp.png",
                     BASE_DIR / "static" / "images" / "stamp.png",
-                    Path("/app/static/images/stamp.png"),  # For Render deployment
+                    Path("/opt/render/project/src/static/images/stamp.png"),  # For Render deployment
+                    Path("/app/static/images/stamp.png"),  # Legacy Render path
                 ]
                 
                 for path in possible_paths:
