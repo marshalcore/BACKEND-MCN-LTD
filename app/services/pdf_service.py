@@ -67,7 +67,44 @@ class PDFGenerator:
         logger.info("Initializing PDF Generator with Applicant Support")
         self.logo_image = None
         self.logo_bytes = None
+        self.stamp_image = None
+        self.stamp_bytes = None
         self._load_logo()
+        self._load_stamp()
+    
+    def _load_stamp(self):
+        """Load official stamp"""
+        try:
+            stamp_path = LOGO_DIR / "stamp.png"
+            
+            if stamp_path.exists():
+                with open(stamp_path, 'rb') as f:
+                    self.stamp_bytes = f.read()
+                    self.stamp_image = BytesIO(self.stamp_bytes)
+                logger.info("✅ Stamp loaded successfully")
+                return True
+            
+            # Try alternative locations
+            possible_paths = [
+                STATIC_DIR / "images" / "stamp.png",
+                BASE_DIR / "static" / "images" / "stamp.png",
+                Path("/opt/render/project/src/static/images/stamp.png"),
+                Path("/app/static/images/stamp.png"),
+            ]
+            
+            for path in possible_paths:
+                if path.exists():
+                    with open(path, 'rb') as f:
+                        self.stamp_bytes = f.read()
+                        self.stamp_image = BytesIO(self.stamp_bytes)
+                    logger.info(f"✅ Stamp loaded from {path}")
+                    return True
+            
+            logger.warning("⚠️ Stamp not found")
+            return False
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to load stamp: {e}")
+            return False
     
     def _load_logo(self):
         """Load company logo"""
@@ -87,6 +124,7 @@ class PDFGenerator:
                 STATIC_DIR / "logo.png",
                 BASE_DIR / "static" / "images" / "logo.png",
                 BASE_DIR / "static" / "logo.png",
+                Path("/opt/render/project/src/static/images/logo.png"),
                 Path("/app/static/images/logo.png"),
             ]
             
@@ -774,13 +812,20 @@ class PDFGenerator:
             story.append(Paragraph("<b>For Marshal Core of Nigeria:</b>", bold_style))
             story.append(Spacer(1, 48))
             story.append(Paragraph("________________________________________", normal_style))
-            story.append(Paragraph("Name: OSEOBOH JOSHUA EROMONSELE", normal_style))
-            story.append(Paragraph("RANK: Director General", normal_style))
-            story.append(Paragraph(f"Date: {datetime.now().strftime('%d/%m/%Y')}", normal_style))
+            story.append(Paragraph("<b>Name: ADG. AKAH IFEAKACHUKWU SUNDAY</b>", bold_style))
+            story.append(Paragraph("<b>Acting National Chief Commandant</b>", bold_style))
+            story.append(Paragraph(f"<b>Date:</b> {datetime.now().strftime('%d/%m/%Y')}", bold_style))
             story.append(Spacer(1, 24))
             
-            story.append(Paragraph("<b>Official Stamp:</b>", bold_style))
-            story.append(Spacer(1, 12))
+            # Add Official Stamp
+            if self.stamp_bytes:
+                story.append(Paragraph("<b>Official Stamp:</b>", bold_style))
+                story.append(Spacer(1, 12))
+                stamp_img = Image(BytesIO(self.stamp_bytes), width=120, height=120)
+                story.append(stamp_img)
+            else:
+                story.append(Paragraph("<b>Official Stamp:</b>", bold_style))
+                story.append(Paragraph("[OFFICIAL STAMP]", normal_style))
             
             # Footer note
             story.append(Paragraph(
@@ -1075,13 +1120,21 @@ class PDFGenerator:
             story.append(Paragraph("<b>FOR MARSHAL CORE OF NIGERIA:</b>", bold_style))
             story.append(Spacer(1, 48))
             story.append(Paragraph("________________________________________", normal_style))
-            story.append(Paragraph("<b>OSEOBOH JOSHUA EROMONSELE</b>", bold_style))
-            story.append(Paragraph("<b>Director General</b>", bold_style))
+            story.append(Paragraph("<b>ADG. AKAH IFEAKACHUKWU SUNDAY</b>", bold_style))
+            story.append(Paragraph("<b>Acting National Chief Commandant</b>", bold_style))
             story.append(Paragraph(f"<b>Date:</b> {datetime.now().strftime('%d %B, %Y')}", bold_style))
             
-            story.append(Spacer(1, 48))
-            story.append(Paragraph("<b>Official Stamp:</b>", bold_style))
-            story.append(Paragraph("[ORGANIZATION SEAL]", normal_style))
+            story.append(Spacer(1, 24))
+            
+            # Add Official Stamp
+            if self.stamp_bytes:
+                story.append(Paragraph("<b>Official Stamp:</b>", bold_style))
+                story.append(Spacer(1, 12))
+                stamp_img = Image(BytesIO(self.stamp_bytes), width=120, height=120)
+                story.append(stamp_img)
+            else:
+                story.append(Paragraph("<b>Official Stamp:</b>", bold_style))
+                story.append(Paragraph("[OFFICIAL STAMP]", normal_style))
             
             # Build PDF with watermark
             def on_first_page(canvas_obj, doc_obj):
@@ -1378,14 +1431,21 @@ class PDFGenerator:
             story.append(Paragraph("<b>For Marshal Core of Nigeria:</b>", bold_style))
             story.append(Spacer(1, 48))
             story.append(Paragraph("________________________________________", normal_style))
-            story.append(Paragraph("Name: OSEOBOH JOSHUA EROMONSELE", normal_style))
-            story.append(Paragraph("RANK: Director General", normal_style))
-            story.append(Paragraph(f"Date: {datetime.now().strftime('%d/%m/%Y')}", normal_style))
+            story.append(Paragraph("<b>Name: ADG. AKAH IFEAKACHUKWU SUNDAY</b>", bold_style))
+            story.append(Paragraph("<b>Acting National Chief Commandant</b>", bold_style))
+            story.append(Paragraph(f"<b>Date:</b> {datetime.now().strftime('%d/%m/%Y')}", bold_style))
             
             story.append(Spacer(1, 24))
-            story.append(Paragraph("<b>Official Stamp:</b>", bold_style))
             
-            story.append(Spacer(1, 12))
+            # Add Official Stamp
+            if self.stamp_bytes:
+                story.append(Paragraph("<b>Official Stamp:</b>", bold_style))
+                story.append(Spacer(1, 12))
+                stamp_img = Image(BytesIO(self.stamp_bytes), width=120, height=120)
+                story.append(stamp_img)
+            else:
+                story.append(Paragraph("<b>Official Stamp:</b>", bold_style))
+                story.append(Paragraph("[OFFICIAL STAMP]", normal_style))
             
             # Footer note
             story.append(Paragraph(
