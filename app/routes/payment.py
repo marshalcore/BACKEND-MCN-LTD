@@ -465,7 +465,7 @@ async def initiate_payment(
             return {
                 "status": "success",
                 "message": "Payment initialized",
-                "payment_reference": original_ref or payment_ref,  # Our original reference
+                "payment_reference": payment_ref,  # Always use our MCN_{TYPE}_ format
                 "paystack_reference": paystack_ref,  # Paystack's actual reference
                 "original_reference": original_ref,  # Original reference
                 "authorization_url": payment_response.get("authorization_url"),
