@@ -543,31 +543,30 @@ async def verify_payment(
                 
                 logger.info(f"🔍 Paystack verification succeeded, looking for payment by email: {user_email}")
                 
-                # Find the pending payment for this user
+                # Find the pending payment for this user - look for ANY pending payment for this email
                 payment = db.query(Payment).filter(
                     Payment.user_email == user_email.lower(),
                     Payment.user_type == user_type,
-                    Payment.payment_type == payment_type,
                     Payment.status == "pending"
                 ).order_by(desc(Payment.created_at)).first()
                 
                 if payment:
                     logger.info(f"✅ Found payment by email: {payment.payment_reference}")
-                    # Update the Paystack reference if not set
-                    if not payment.paystack_reference:
-                        payment.paystack_reference = reference
+                    # Update the Paystack reference and mark as success
+                    payment.paystack_reference = reference
+                    payment.status = "success"
+                    payment.paid_at = datetime.utcnow()
+                    payment.verification_data = paystack_verification
+                    db.commit()
+                    db.refresh(payment)
+                    logger.info(f"✅✅✅ Updated pending payment to success: {payment.payment_reference}")
                 else:
                     # ⚠️ Payment not in our DB but Paystack says it was paid!
                     # This happens when payment initiation failed but user still paid
-                    # Create a new payment record to track this
-                    logger.warning(f"⚠️ Payment not in DB but Paystack says SUCCESS. Creating record...")
-                    
-                    # Try to find the pre-applicant by email
-                    pre_applicant = db.query(PreApplicant).filter(
-                        func.lower(PreApplicant.email) == user_email.lower()
-                    ).first()
-                    
-                    if pre_applicant:
+                    # Only create recovery if payment type is valid
+                    if payment_type in ["regular", "vip"]:
+                        logger.warning(f"⚠️ Payment not in DB but Paystack says SUCCESS. Creating recovery record...")
+                        
                         # Create payment record with proper MCN reference format
                         payment_ref = f"MCN_{payment_type.upper()}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
                         payment = Payment(
@@ -575,7 +574,7 @@ async def verify_payment(
                             user_email=user_email.lower(),
                             user_type=user_type or "pre_applicant",
                             amount=amount,
-                            payment_type=payment_type or "regular",
+                            payment_type=payment_type,
                             status="success",
                             payment_reference=payment_ref,  # Proper MCN reference
                             paystack_reference=reference,
@@ -588,7 +587,7 @@ async def verify_payment(
                         db.refresh(payment)
                         logger.info(f"✅✅✅ Created recovery payment record: {payment.payment_reference}")
                     else:
-                        logger.warning(f"⚠️ Could not find pre-applicant for email: {user_email}")
+                        logger.warning(f"⚠️ Unknown payment type '{payment_type}' for recovery. Skipping...")
             else:
                 logger.warning(f"⚠️ Paystack verification also failed for: {reference}")
         
