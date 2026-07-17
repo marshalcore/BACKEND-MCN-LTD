@@ -743,6 +743,15 @@ class PDFGenerator:
                 
                 story.append(two_col_table)
                 story.append(Spacer(1, 12))
+                
+                # Add stamp inline after passport photo (first page only)
+                if self.stamp_bytes:
+                    try:
+                        stamp_img = Image(BytesIO(self.stamp_bytes), width=1.2*inch, height=0.8*inch)
+                        story.append(stamp_img)
+                        story.append(Spacer(1, 12))
+                    except Exception as e:
+                        logger.warning(f"Could not add inline stamp: {e}")
             else:
                 # Single column layout (no passport)
                 story.append(Paragraph("PERSONAL INFORMATION", heading1_style))
@@ -1328,6 +1337,15 @@ class PDFGenerator:
                 ]))
                 
                 story.append(two_col_table)
+                
+                # Add stamp inline after passport photo (first page only)
+                if self.stamp_bytes:
+                    try:
+                        stamp_img = Image(BytesIO(self.stamp_bytes), width=1.2*inch, height=0.8*inch)
+                        story.append(stamp_img)
+                        story.append(Spacer(1, 12))
+                    except Exception as e:
+                        logger.warning(f"Could not add inline stamp: {e}")
             else:
                 story.append(Paragraph("PERSONAL INFORMATION", heading1_style))
                 
