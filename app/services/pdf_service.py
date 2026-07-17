@@ -843,29 +843,13 @@ class PDFGenerator:
             story.append(Paragraph("<b>Date Signed:</b> ________________________", bold_style))
             story.append(Spacer(1, 24))
             
-            # Organization signature with stamp - stamp at bottom LEFT inline
+            # Organization signature - NO inline stamp (footer stamp covers it)
             story.append(Paragraph("<b>For Marshal Core of Nigeria:</b>", bold_style))
             story.append(Spacer(1, 18))
             story.append(Paragraph("________________________________________", normal_style))
-            
-            # Name and stamp on same row using table
-            if self.stamp_bytes:
-                stamp_img = Image(BytesIO(self.stamp_bytes), width=1.4*inch, height=0.9*inch)
-                name_col = Paragraph("<b>Name: ADG. AKAH IFEAKACHUKWU SUNDAY</b><br/><b>Acting National Chief Commandant</b><br/><b>Date:</b> " + datetime.now().strftime('%d/%m/%Y'), bold_style)
-                sig_table = Table([[name_col, stamp_img]], colWidths=[5.0*inch, 2.0*inch])
-                sig_table.setStyle(TableStyle([
-                    ('VALIGN', (0, 0), (-1, -1), 'BOTTOM'),
-                    ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
-                    ('LEFTPADDING', (0, 0), (-1, -1), 0),
-                    ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-                    ('TOPPADDING', (0, 0), (-1, -1), 0),
-                    ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
-                ]))
-                story.append(sig_table)
-            else:
-                story.append(Paragraph("<b>Name: ADG. AKAH IFEAKACHUKWU SUNDAY</b>", bold_style))
-                story.append(Paragraph("<b>Acting National Chief Commandant</b>", bold_style))
-                story.append(Paragraph(f"<b>Date:</b> {datetime.now().strftime('%d/%m/%Y')}", bold_style))
+            story.append(Paragraph("<b>Name: ADG. AKAH IFEAKACHUKWU SUNDAY</b>", bold_style))
+            story.append(Paragraph("<b>Acting National Chief Commandant</b>", bold_style))
+            story.append(Paragraph(f"<b>Date:</b> {datetime.now().strftime('%d/%m/%Y')}", bold_style))
             
             # Build PDF with watermark
             def on_first_page(canvas_obj, doc_obj):
@@ -1070,14 +1054,14 @@ class PDFGenerator:
             
             if tier.lower() == "vip":
                 fee_info = [
-                    ("Application Fee", "₦25,900 (Non-refundable)"),
-                    ("Uniform Package", "₦200,000 (Payable in installments)"),
+                    ("Application Fee", "N25,900 (Non-refundable)"),
+                    ("Uniform Package", "N200,000 (Payable in installments)"),
                     ("VIP Benefits", "Full SXTM training, executive security association, advanced protocols")
                 ]
             else:
                 fee_info = [
-                    ("Application Fee", "₦5,180 (Non-refundable)"),
-                    ("Uniform Package", "₦95,000 (Payable in installments)"),
+                    ("Application Fee", "N5,180 (Non-refundable)"),
+                    ("Uniform Package", "N95,000 (Payable in installments)"),
                     ("Training Benefits", "Comprehensive security training and job placement")
                 ]
             
@@ -1142,29 +1126,13 @@ class PDFGenerator:
             
             story.append(Spacer(1, 18))
             
-            # Organization signature with stamp - stamp at bottom LEFT inline
+            # Organization signature - NO inline stamp (footer stamp covers it)
             story.append(Paragraph("<b>FOR MARSHAL CORE OF NIGERIA:</b>", bold_style))
             story.append(Spacer(1, 12))
             story.append(Paragraph("________________________________________", normal_style))
-            
-            # Name and stamp on same row using table
-            if self.stamp_bytes:
-                stamp_img = Image(BytesIO(self.stamp_bytes), width=1.4*inch, height=0.9*inch)
-                name_col = Paragraph("<b>ADG. AKAH IFEAKACHUKWU SUNDAY</b><br/><b>Acting National Chief Commandant</b><br/><b>Date:</b> " + datetime.now().strftime('%d %B, %Y'), bold_style)
-                sig_table = Table([[name_col, stamp_img]], colWidths=[5.0*inch, 2.0*inch])
-                sig_table.setStyle(TableStyle([
-                    ('VALIGN', (0, 0), (-1, -1), 'BOTTOM'),
-                    ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
-                    ('LEFTPADDING', (0, 0), (-1, -1), 0),
-                    ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-                    ('TOPPADDING', (0, 0), (-1, -1), 0),
-                    ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
-                ]))
-                story.append(sig_table)
-            else:
-                story.append(Paragraph("<b>ADG. AKAH IFEAKACHUKWU SUNDAY</b>", bold_style))
-                story.append(Paragraph("<b>Acting National Chief Commandant</b>", bold_style))
-                story.append(Paragraph(f"<b>Date:</b> {datetime.now().strftime('%d %B, %Y')}", bold_style))
+            story.append(Paragraph("<b>ADG. AKAH IFEAKACHUKWU SUNDAY</b>", bold_style))
+            story.append(Paragraph("<b>Acting National Chief Commandant</b>", bold_style))
+            story.append(Paragraph(f"<b>Date:</b> {datetime.now().strftime('%d %B, %Y')}", bold_style))
             
             # Build PDF with watermark
             def on_first_page(canvas_obj, doc_obj):
@@ -1389,7 +1357,7 @@ class PDFGenerator:
                 payment_amount = payment_data.get('amount', 0)
                 payment_info = [
                     ["Payment Status:", "✅ COMPLETED"],
-                    ["Application Fee Paid:", f"₦{payment_amount:,}"],
+                    ["Application Fee Paid:", f"N{payment_amount:,}"],
                     ["Payment Reference:", payment_data.get('reference', 'N/A')],
                     ["Payment Date:", self._format_date(payment_data.get('date')) or datetime.now().strftime("%d %B, %Y")],
                     ["Payment Method:", "Online Payment (Paystack)"]
@@ -1456,29 +1424,13 @@ class PDFGenerator:
             story.append(Paragraph("<b>Date Signed:</b> ________________________", bold_style))
             story.append(Spacer(1, 12))
             
-            # Organization signature with stamp - stamp at bottom LEFT inline
+            # Organization signature - NO inline stamp (footer stamp covers it)
             story.append(Paragraph("<b>For Marshal Core of Nigeria:</b>", bold_style))
             story.append(Spacer(1, 12))
             story.append(Paragraph("________________________________________", normal_style))
-            
-            # Name and stamp on same row using table
-            if self.stamp_bytes:
-                stamp_img = Image(BytesIO(self.stamp_bytes), width=1.4*inch, height=0.9*inch)
-                name_col = Paragraph("<b>Name: ADG. AKAH IFEAKACHUKWU SUNDAY</b><br/><b>Acting National Chief Commandant</b><br/><b>Date:</b> " + datetime.now().strftime('%d/%m/%Y'), bold_style)
-                sig_table = Table([[name_col, stamp_img]], colWidths=[5.0*inch, 2.0*inch])
-                sig_table.setStyle(TableStyle([
-                    ('VALIGN', (0, 0), (-1, -1), 'BOTTOM'),
-                    ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
-                    ('LEFTPADDING', (0, 0), (-1, -1), 0),
-                    ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-                    ('TOPPADDING', (0, 0), (-1, -1), 0),
-                    ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
-                ]))
-                story.append(sig_table)
-            else:
-                story.append(Paragraph("<b>Name: ADG. AKAH IFEAKACHUKWU SUNDAY</b>", bold_style))
-                story.append(Paragraph("<b>Acting National Chief Commandant</b>", bold_style))
-                story.append(Paragraph(f"<b>Date:</b> {datetime.now().strftime('%d/%m/%Y')}", bold_style))
+            story.append(Paragraph("<b>Name: ADG. AKAH IFEAKACHUKWU SUNDAY</b>", bold_style))
+            story.append(Paragraph("<b>Acting National Chief Commandant</b>", bold_style))
+            story.append(Paragraph(f"<b>Date:</b> {datetime.now().strftime('%d/%m/%Y')}", bold_style))
             
             # Build PDF with watermark
             def on_first_page(canvas_obj, doc_obj):

@@ -568,7 +568,8 @@ async def verify_payment(
                     ).first()
                     
                     if pre_applicant:
-                        # Create payment record
+                        # Create payment record with proper MCN reference format
+                        payment_ref = f"MCN_{payment_type.upper()}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
                         payment = Payment(
                             id=str(uuid.uuid4()),
                             user_email=user_email.lower(),
@@ -576,7 +577,7 @@ async def verify_payment(
                             amount=amount,
                             payment_type=payment_type or "regular",
                             status="success",
-                            payment_reference=f"RECOVERED_{reference}",  # Mark as recovered
+                            payment_reference=payment_ref,  # Proper MCN reference
                             paystack_reference=reference,
                             paid_at=datetime.utcnow(),
                             verification_data=paystack_verification,
