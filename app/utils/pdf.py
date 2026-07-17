@@ -45,7 +45,7 @@ COMPANY_INFO = {
     "address_line1": "KM. 3, MARSHAL CORE OF NIGERIA NATIONAL HEADQUARTERS",
     "address_line2": "ABUMWENRENRE COMMUNITY, EKIADOLOR/AGEKPANU ROAD",
     "address_line3": "BENIN CITY, EDO STATE, NIGERIA",
-    "phone": "+234 9137 428 031",
+    "phone": "09071882818",
     "email": "info@marshalcoreofnigeria.ng",
     "website": "www.marshalcoreofnigeria.ng",
     "logo_path": str(LOGO_DIR / "logo.png")  # Local logo path
