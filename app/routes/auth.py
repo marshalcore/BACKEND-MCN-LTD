@@ -1,7 +1,10 @@
 # app/routes/auth.py
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
-from app.utils.jwt_handler import decode_token
+from sqlalchemy.orm import Session
+from app.utils.jwt_handler import decode_token, create_access_token
+from app.database import get_db
+from app.models.pre_applicant import PreApplicant
 
 router = APIRouter(prefix="/api/auth", tags=["Auth"])
 
@@ -76,3 +79,45 @@ async def verify_recovery(request: VerifyRecoveryRequest):
         raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Recovery verification failed: {str(e)}")
+
+class GetAccessTokenRequest(BaseModel):
+    email: str
+    password: str
+
+class GetAccessTokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+@router.post("/get-access-token", response_model=GetAccessTokenResponse)
+async def get_access_token(request: GetAccessTokenRequest, db: Session = Depends(get_db)):
+    """
+    Generate an access token after password verification.
+    Used by frontend to grant access to protected application pages.
+    """
+    # Verify the password first
+    pre_applicant = db.query(PreApplicant).filter(
+        PreApplicant.email == request.email.lower()
+    ).first()
+    
+    if not pre_applicant:
+        raise HTTPException(status_code=401, detail="User not found")
+    
+    if pre_applicant.application_password != request.password:
+        raise HTTPException(status_code=401, detail="Invalid password")
+    
+    # Create access token for VIP page
+    from datetime import timedelta
+    access_token = create_access_token(
+        data={
+            "sub": str(pre_applicant.id),
+            "email": pre_applicant.email,
+            "type": "vip_access",
+            "verified": True
+        },
+        expires_delta=timedelta(hours=24)  # Valid for 24 hours
+    )
+    
+    return GetAccessTokenResponse(
+        access_token=access_token,
+        token_type="bearer"
+    )
