@@ -36,7 +36,7 @@ def create_templates():
 </head>
 <body>
     <div class="header">
-        <h1>MARSHAL CORE NIGERIA LIMITED</h1>
+        <h1>MARSHAL CORE NIGERIA</h1>
         <h2>Terms & Conditions</h2>
     </div>
     <div class="content">

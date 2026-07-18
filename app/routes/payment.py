@@ -74,7 +74,7 @@ PAYMENT_CONFIGS = {
             "systems_maintainance": {
                 "percentage": settings.SYSTEMS_MAINTAINANCE_SHARE_PERCENTAGE,
                 "amount": int(settings.REGULAR_APPLICATION_FEE * (settings.SYSTEMS_MAINTAINANCE_SHARE_PERCENTAGE / 100)),
-                "description": "SystemsMaintainance - 35% (FCMB - MARSHAL CORE OF NIGERIA LIMITED)",
+                "description": "SystemsMaintainance - 35% (FCMB - MARSHAL CORE OF NIGERIA)",
                 "subaccount_code": settings.SYSTEMS_MAINTAINANCE_PAYSTACK_SUBACCOUNT_CODE if settings.SYSTEMS_MAINTAINANCE_PAYSTACK_SUBACCOUNT_CODE else None,
             },
             "estech_digital_systems_limited": {
@@ -355,8 +355,8 @@ async def initiate_payment(
             is_live_mode = settings.PAYSTACK_SECRET_KEY and "sk_live_" in settings.PAYSTACK_SECRET_KEY
             
             # Priority 1: Use Dashboard Split Code from settings if set (works in TEST or LIVE mode)
-            # TEMPORARILY DISABLED - Uncomment to enable split
-            if False and settings.PAYSTACK_SPLIT_CODE:
+            # ENABLED for LIVE mode - ensure PAYSTACK_SPLIT_CODE is set in environment
+            if settings.PAYSTACK_SPLIT_CODE:
                 split_code = settings.PAYSTACK_SPLIT_CODE
                 use_native_split = True
                 mode_str = "TEST" if not is_live_mode else "LIVE"
