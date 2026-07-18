@@ -830,7 +830,25 @@ async def paystack_callback(
                         payment = db.query(Payment).filter(
                             Payment.payment_reference == reference
                         ).first()
-
+                    
+                    # NEW: If still not found, try to find by customer email and amount
+                    # This handles cases where Paystack generates a different reference
+                    if not payment:
+                        customer_email = verification.get("data", {}).get("customer", {}).get("email")
+                        amount_kobo = verification.get("data", {}).get("amount", 0)
+                        amount_naira = amount_kobo // 100
+                        
+                        if customer_email and amount_naira > 0:
+                            # Find pending payment for this email and amount
+                            payment = db.query(Payment).filter(
+                                Payment.user_email == customer_email.lower(),
+                                Payment.amount == amount_naira,
+                                Payment.status == "pending"
+                            ).first()
+                            
+                            if payment:
+                                logger.info(f"🔍 Found payment by email/amount: {payment.payment_reference} -> {reference}")
+                    
                     # Update Paystack reference if not set
                     if payment and not payment.paystack_reference:
                         payment.paystack_reference = reference
@@ -880,6 +898,10 @@ async def paystack_callback(
                             payment_type=payment.payment_type,
                             db=db
                         )
+                    elif payment and payment.status == "success":
+                        logger.info(f"ℹ️ Payment already processed: {reference}")
+                    else:
+                        logger.warning(f"⚠️ Payment not found for reference: {reference}")
         
         elif event == "transfer.success":
             logger.info(f"✅ TRANSFER SUCCESS: {data.get('reference')}")
