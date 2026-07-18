@@ -70,11 +70,11 @@ class PaymentService:
             
             # 🔥 ADD PAYSTACK NATIVE SPLIT CONFIGURATION
             if split_code:
-                # Use Paystack Dashboard Split Group - recommended approach
+                # Use Paystack Dashboard Split Group - split_code at top level
+                payload["split_code"] = split_code
                 payload["split"] = {
                     "type": "percentage",
-                    "bearer_type": splitBearer or "account",
-                    "split_code": split_code
+                    "bearer_type": splitBearer or "account"
                 }
                 logger.info(f"💰💰💰 SPLIT PAYMENT CONFIGURED: Using Dashboard Split Group: {split_code}")
             elif split_payment and split_subaccounts:
