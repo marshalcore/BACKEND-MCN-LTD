@@ -277,3 +277,55 @@ async def full_recovery(
         logger.error(f"❌ Full recovery failed: {str(e)}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/test-email")
+async def test_email(
+    email: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Test endpoint to verify email service is working.
+    Sends a simple test email to the specified address.
+    """
+    try:
+        from app.services.email_service import EmailService
+        email_service = EmailService()
+        
+        test_html = """
+        <html>
+        <body style="font-family: Arial, sans-serif; padding: 20px;">
+            <h2 style="color: #1a237e;">✅ Email Service Test</h2>
+            <p>This is a test email from <strong>Marshal Core of Nigeria</strong>.</p>
+            <p>If you received this email, the email service is working correctly!</p>
+            <hr>
+            <p style="color: #666; font-size: 12px;">
+                Sent at: """ + datetime.now().strftime("%Y-%m-%d %H:%M:%S") + """
+            </p>
+        </body>
+        </html>
+        """
+        
+        success = email_service.send_email(
+            to_email=email,
+            subject="✅ Test Email - Marshal Core of Nigeria",
+            html_content=test_html
+        )
+        
+        if success:
+            logger.info(f"✅ Test email sent to {email}")
+            return {
+                "status": "success",
+                "message": f"Test email sent to {email}",
+                "email": email
+            }
+        else:
+            logger.error(f"❌ Failed to send test email to {email}")
+            return {
+                "status": "failed",
+                "message": f"Failed to send test email to {email}",
+                "email": email
+            }
+            
+    except Exception as e:
+        logger.error(f"❌ Test email error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
