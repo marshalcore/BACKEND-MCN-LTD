@@ -161,15 +161,15 @@ class Settings(BaseSettings):
         description="Marshal Core Share account name"
     )
     MARSHAL_CORE_ACCOUNT_NUMBER: str = Field(
-        default=os.getenv("MARSHAL_CORE_ACCOUNT_NUMBER", ""),
+        default=os.getenv("MARSHAL_CORE_ACCOUNT_NUMBER", "1028387623"),
         description="Marshal Core Share bank account number"
     )
     MARSHAL_CORE_BANK_NAME: str = Field(
-        default=os.getenv("MARSHAL_CORE_BANK_NAME", "KUDA Bank"),
+        default=os.getenv("MARSHAL_CORE_BANK_NAME", "United Bank For Africa"),
         description="Marshal Core Share bank name"
     )
     MARSHAL_CORE_BANK_CODE: str = Field(
-        default=os.getenv("MARSHAL_CORE_BANK_CODE", "502"),
+        default=os.getenv("MARSHAL_CORE_BANK_CODE", "058"),
         description="Marshal Core Share bank code"
     )
     MARSHAL_CORE_SHARE_PERCENTAGE: int = Field(
