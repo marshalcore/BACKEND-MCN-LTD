@@ -209,8 +209,9 @@ async def generate_password_recovery(
         verification_link = f"https://marshalcoreofnigeria.ng/apply.html?verify=true&token={token}"
         
         # Send recovery email
+        email_sent_successfully = False
         if send_email:
-            await send_recovery_email(
+            email_sent_successfully = await send_recovery_email(
                 email=pre_applicant_email,
                 password=password,
                 verification_link=verification_link,
@@ -223,9 +224,10 @@ async def generate_password_recovery(
             "status": "success",
             "message": "Password generated successfully",
             "email": pre_applicant_email,
+            "password": password,
             "verification_token": token,
             "verification_link": verification_link,
-            "email_sent": send_email
+            "email_sent": email_sent_successfully
         }
         
     except HTTPException:
@@ -261,14 +263,18 @@ async def full_recovery(
             db=db
         )
         
+        # Get the actual email sending result from password_response
+        email_was_sent = password_response.get("email_sent", False)
+        
         return {
             "status": "success",
             "message": f"Full recovery completed for {request.email}",
             "payment_type": request.payment_type,
             "email": request.email,
             "verification_link": password_response["verification_link"],
-            "email_sent": True,
-            "note": "Recovery email sent to user with password and verification link"
+            "password": password_response.get("password", "N/A"),
+            "email_sent": email_was_sent,
+            "note": "Recovery email sent to user with password and verification link" if email_was_sent else "Email may not have been sent - check logs"
         }
         
     except HTTPException:
