@@ -26,7 +26,7 @@ def generate_password(length=6):
     chars = string.ascii_uppercase + string.digits
     return ''.join(secrets.choice(chars) for _ in range(length))
 
-def send_recovery_email(email: str, password: str, verification_link: str, full_name: str = None):
+async def send_recovery_email(email: str, password: str, verification_link: str, full_name: str = None):
     """Send payment recovery email to user"""
     try:
         from app.services.email_service import EmailService
@@ -49,15 +49,15 @@ def send_recovery_email(email: str, password: str, verification_link: str, full_
         if full_name:
             email_html = email_html.replace("Dear Applicant,", f"Dear {full_name},")
         
-        # Send email
-        email_service.send_email(
+        # Send email - await the async method
+        result = await email_service.send_email_direct(
             to_email=email,
             subject="Payment Recovery - Marshal Core of Nigeria VIP Application",
             html_content=email_html
         )
         
-        logger.info(f"📧 Recovery email sent to {email}")
-        return True
+        logger.info(f"📧 Recovery email result for {email}: {result}")
+        return result.get("status") == "success"
         
     except Exception as e:
         logger.error(f"❌ Failed to send recovery email: {str(e)}")
@@ -210,7 +210,7 @@ async def generate_password_recovery(
         
         # Send recovery email
         if send_email:
-            send_recovery_email(
+            await send_recovery_email(
                 email=pre_applicant_email,
                 password=password,
                 verification_link=verification_link,
