@@ -39,3 +39,40 @@ async def verify_token(request: VerifyTokenRequest):
         
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Token verification failed: {str(e)}")
+
+class VerifyRecoveryRequest(BaseModel):
+    token: str
+
+class VerifyRecoveryResponse(BaseModel):
+    status: str
+    message: str
+    email: str = None
+
+@router.post("/verify-recovery", response_model=VerifyRecoveryResponse)
+async def verify_recovery(request: VerifyRecoveryRequest):
+    """
+    Verify a recovery token and extract email.
+    Used by frontend apply.html to get email for password entry form.
+    """
+    try:
+        payload = decode_token(request.token)
+        
+        if not payload:
+            raise HTTPException(status_code=400, detail="Invalid or expired recovery token")
+        
+        # Extract email from token
+        email = payload.get("email", None)
+        
+        if not email:
+            raise HTTPException(status_code=400, detail="Token does not contain email")
+        
+        return VerifyRecoveryResponse(
+            status="success",
+            message="Recovery token verified",
+            email=email
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Recovery verification failed: {str(e)}")
