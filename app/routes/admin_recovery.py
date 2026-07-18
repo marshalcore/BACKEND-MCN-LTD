@@ -176,7 +176,7 @@ async def generate_password_recovery(
         password = generate_password()
         
         # Store hashed password
-        from app.utils.security import hash_password
+        from app.utils.hash import hash_password
         pre_applicant.password = hash_password(password)
         pre_applicant.password_generated = True
         pre_applicant.password_sent = True
