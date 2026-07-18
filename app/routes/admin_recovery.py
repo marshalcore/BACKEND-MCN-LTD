@@ -92,11 +92,15 @@ async def recover_payment(
         if not pre_applicant:
             raise HTTPException(status_code=404, detail="Pre-applicant not found")
         
+        # Store pre_applicant_id as string (avoid UUID serialization issues)
+        pre_applicant_id = str(pre_applicant.id)
+        
         # Check if payment already exists
         existing_payment = db.query(Payment).filter(
             Payment.paystack_reference == request.paystack_reference
         ).first()
         
+        payment_ref = None
         if existing_payment:
             if existing_payment.status == "success":
                 return {
@@ -107,6 +111,7 @@ async def recover_payment(
             # Update existing payment
             existing_payment.status = "success"
             existing_payment.paid_at = datetime.utcnow()
+            payment_ref = existing_payment.payment_reference
             logger.info(f"✅ Updated existing payment to success: {existing_payment.payment_reference}")
         else:
             # Create new payment record
@@ -137,6 +142,8 @@ async def recover_payment(
             "status": "success",
             "message": f"Payment marked as paid for {request.email}",
             "payment_type": request.payment_type,
+            "payment_reference": payment_ref,
+            "pre_applicant_id": pre_applicant_id,
             "next_step": "Generate password and send recovery email"
         }
         
@@ -172,6 +179,11 @@ async def generate_password_recovery(
                 detail="User has not paid. Cannot generate password."
             )
         
+        # Store values as strings (avoid UUID serialization issues)
+        pre_applicant_id = str(pre_applicant.id)
+        pre_applicant_email = pre_applicant.email
+        pre_applicant_full_name = pre_applicant.full_name
+        
         # Generate password
         password = generate_password()
         
@@ -188,8 +200,8 @@ async def generate_password_recovery(
         # Generate verification token
         from app.utils.jwt_handler import create_access_token
         token = create_access_token({
-            "sub": pre_applicant.id,
-            "email": pre_applicant.email,
+            "sub": pre_applicant_id,
+            "email": pre_applicant_email,
             "type": "password_verification",
             "password": password  # Include password in token for verification
         })
@@ -199,18 +211,18 @@ async def generate_password_recovery(
         # Send recovery email
         if send_email:
             send_recovery_email(
-                email=request.email,
+                email=pre_applicant_email,
                 password=password,
                 verification_link=verification_link,
-                full_name=pre_applicant.full_name
+                full_name=pre_applicant_full_name
             )
         
-        logger.info(f"📧 Password generated for {request.email}: {password}")
+        logger.info(f"📧 Password generated for {pre_applicant_email}: {password}")
         
         return {
             "status": "success",
             "message": "Password generated successfully",
-            "email": request.email,
+            "email": pre_applicant_email,
             "verification_token": token,
             "verification_link": verification_link,
             "email_sent": send_email
