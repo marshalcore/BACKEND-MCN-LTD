@@ -305,25 +305,32 @@ async def test_email(
         </html>
         """
         
-        success = email_service.send_email(
+        # Use send_email_direct to get detailed results
+        result = await email_service.send_email_direct(
             to_email=email,
             subject="✅ Test Email - Marshal Core of Nigeria",
             html_content=test_html
         )
         
-        if success:
+        logger.info(f"📧 Email test result: {result}")
+        
+        if result.get("status") == "success":
             logger.info(f"✅ Test email sent to {email}")
             return {
                 "status": "success",
                 "message": f"Test email sent to {email}",
-                "email": email
+                "email": email,
+                "provider": result.get("provider"),
+                "details": result
             }
         else:
-            logger.error(f"❌ Failed to send test email to {email}")
+            logger.error(f"❌ Failed to send test email to {email}: {result}")
             return {
                 "status": "failed",
                 "message": f"Failed to send test email to {email}",
-                "email": email
+                "email": email,
+                "provider": result.get("provider"),
+                "details": result
             }
             
     except Exception as e:
