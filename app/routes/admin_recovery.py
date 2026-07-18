@@ -7,7 +7,7 @@ but the system failed to record it properly.
 from fastapi import APIRouter, HTTPException, Depends, Header
 from pydantic import BaseModel
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 import uuid
 import secrets
 import string
@@ -192,6 +192,7 @@ async def generate_password_recovery(
         pre_applicant.password_generated = True
         pre_applicant.password_sent = True
         pre_applicant.password_sent_at = datetime.utcnow()
+        pre_applicant.password_expires_at = datetime.utcnow() + timedelta(days=7)
         pre_applicant.updated_at = datetime.utcnow()
         
         db.commit()
