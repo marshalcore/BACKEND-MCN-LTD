@@ -144,6 +144,7 @@ from app.routes.privacy import router as privacy_router
 from app.routes.email_verification import router as email_verification_router
 from app.routes.image_upload import router as image_upload_router  # NEW
 from app.routes.admin_recovery import router as admin_recovery_router  # NEW - Payment recovery
+from app.routes.auth import router as auth_router  # NEW - Token verification
 
 # Include all routers
 routers = [
@@ -164,6 +165,7 @@ routers = [
     email_verification_router,
     image_upload_router,  # NEW
     admin_recovery_router,  # NEW - Payment recovery
+    auth_router,  # NEW - Token verification
 ]
 
 for router in routers:
