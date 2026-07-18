@@ -206,7 +206,7 @@ async def generate_password_recovery(
             "password": password  # Include password in token for verification
         })
         
-        verification_link = f"https://marshalcoreofnigeria.ng/apply.html?verify=true&token={token}"
+        verification_link = f"https://recruitment.marshalcoreofnigeria.ng/apply?verify=true&token={token}"
         
         # Send recovery email
         email_sent_successfully = False

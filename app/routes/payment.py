@@ -340,7 +340,7 @@ async def initiate_payment(
             }
         else:
             # PRODUCTION callback URL
-            callback_url = "https://marshalcoreofnigeria.ng/apply.html?payment_success=true"
+            callback_url = "https://recruitment.marshalcoreofnigeria.ng/apply?payment_success=true"
             logger.info(f"💰 PRODUCTION CALLBACK URL: {callback_url}")
             
             logger.info(f"💰💰💰 INITIATING PRODUCTION PAYMENT: {payment_data.email} - ₦{config['user_amount']:,}")
