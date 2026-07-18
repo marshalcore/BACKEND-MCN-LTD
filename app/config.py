@@ -126,7 +126,7 @@ class Settings(BaseSettings):
     # === SYSTEMS MAINTAINANCE CONFIGURATION ===
     # Systems Maintainance - 35% share
     SYSTEMS_MAINTAINANCE_ACCOUNT_NAME: str = Field(
-        default=os.getenv("SYSTEMS_MAINTAINANCE_ACCOUNT_NAME", "OSEOBOH JOSHUA EROMONSELE"),
+        default=os.getenv("SYSTEMS_MAINTAINANCE_ACCOUNT_NAME", "Marshal Core of Nigeria Limited"),
         description="Systems Maintainance account name"
     )
     SYSTEMS_MAINTAINANCE_PAYSTACK_SUBACCOUNT_CODE: str = Field(
@@ -134,15 +134,15 @@ class Settings(BaseSettings):
         description="Systems Maintainance Paystack subaccount code for split payments"
     )
     SYSTEMS_MAINTAINANCE_ACCOUNT_NUMBER: str = Field(
-        default=os.getenv("SYSTEMS_MAINTAINANCE_ACCOUNT_NUMBER", "2104644267"),
+        default=os.getenv("SYSTEMS_MAINTAINANCE_ACCOUNT_NUMBER", "1039706786"),
         description="Systems Maintainance account number"
     )
     SYSTEMS_MAINTAINANCE_BANK_NAME: str = Field(
-        default=os.getenv("SYSTEMS_MAINTAINANCE_BANK_NAME", "UBA"),
+        default=os.getenv("SYSTEMS_MAINTAINANCE_BANK_NAME", "FCMB"),
         description="Systems Maintainance bank name"
     )
     SYSTEMS_MAINTAINANCE_BANK_CODE: str = Field(
-        default=os.getenv("SYSTEMS_MAINTAINANCE_BANK_CODE", "033"),
+        default=os.getenv("SYSTEMS_MAINTAINANCE_BANK_CODE", "214"),
         description="Systems Maintainance bank code"
     )
     SYSTEMS_MAINTAINANCE_SHARE_PERCENTAGE: int = Field(
@@ -157,7 +157,7 @@ class Settings(BaseSettings):
         description="Marshal Core Share Paystack subaccount code for split payments"
     )
     MARSHAL_CORE_BANK_ACCOUNT_NAME: str = Field(
-        default=os.getenv("MARSHAL_CORE_BANK_ACCOUNT_NAME", "SHAKOOR NIGERIA LIMITED"),
+        default=os.getenv("MARSHAL_CORE_BANK_ACCOUNT_NAME", "Marshal Core of Nigeria Limited"),
         description="Marshal Core Share account name"
     )
     MARSHAL_CORE_ACCOUNT_NUMBER: str = Field(
