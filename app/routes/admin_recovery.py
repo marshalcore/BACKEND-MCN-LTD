@@ -187,9 +187,8 @@ async def generate_password_recovery(
         # Generate password
         password = generate_password()
         
-        # Store hashed password
-        from app.utils.hash import hash_password
-        pre_applicant.password = hash_password(password)
+        # Store password as plain text (verify endpoint expects plain text)
+        pre_applicant.application_password = password
         pre_applicant.password_generated = True
         pre_applicant.password_sent = True
         pre_applicant.password_sent_at = datetime.utcnow()
