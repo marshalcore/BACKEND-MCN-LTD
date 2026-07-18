@@ -329,3 +329,38 @@ async def test_email(
     except Exception as e:
         logger.error(f"❌ Test email error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/email-status")
+async def email_status():
+    """
+    Check email service configuration and status.
+    """
+    try:
+        from app.services.email_service import EmailService
+        from app.config import settings
+        
+        email_service = EmailService()
+        stats = email_service.get_stats()
+        
+        # Check environment variables
+        import os
+        resend_key = os.getenv("RESEND_API_KEY", "")
+        resend_from = os.getenv("RESEND_FROM_EMAIL", "")
+        
+        return {
+            "status": "ok",
+            "email_service_config": {
+                "resend_enabled": stats.get("config", {}).get("resend_enabled", False),
+                "is_render": stats.get("config", {}).get("is_render", False),
+                "smtp_available": stats.get("config", {}).get("smtp_ports_available", 0) > 0,
+            },
+            "environment_variables": {
+                "RESEND_API_KEY_SET": bool(resend_key),
+                "RESEND_API_KEY_PREFIX": resend_key[:10] + "..." if resend_key else "NOT SET",
+                "RESEND_FROM_EMAIL": resend_from,
+            },
+            "statistics": stats
+        }
+    except Exception as e:
+        logger.error(f"❌ Email status check failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
