@@ -143,6 +143,7 @@ from app.routes.health import router as health_router
 from app.routes.privacy import router as privacy_router
 from app.routes.email_verification import router as email_verification_router
 from app.routes.image_upload import router as image_upload_router  # NEW
+from app.routes.admin_recovery import router as admin_recovery_router  # NEW - Payment recovery
 
 # Include all routers
 routers = [
@@ -162,6 +163,7 @@ routers = [
     privacy_router, 
     email_verification_router,
     image_upload_router,  # NEW
+    admin_recovery_router,  # NEW - Payment recovery
 ]
 
 for router in routers:
