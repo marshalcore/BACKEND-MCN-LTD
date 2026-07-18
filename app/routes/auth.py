@@ -1,7 +1,7 @@
 # app/routes/auth.py
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from app.utils.jwt_handler import decode_access_token
+from app.utils.jwt_handler import decode_token
 
 router = APIRouter(prefix="/api/auth", tags=["Auth"])
 
@@ -21,7 +21,7 @@ async def verify_token(request: VerifyTokenRequest):
     Used by frontend apply.html page to verify account recovery tokens.
     """
     try:
-        payload = decode_access_token(request.token)
+        payload = decode_token(request.token)
         
         if not payload:
             raise HTTPException(status_code=400, detail="Invalid or expired token")
