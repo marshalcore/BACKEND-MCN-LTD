@@ -17,6 +17,7 @@ import os
 from app.database import get_db
 from app.models import PreApplicant, Payment, Applicant
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/admin", tags=["admin-recovery"])
