@@ -250,7 +250,7 @@ async def full_recovery(
     try:
         # Find pre-applicant
         pre_applicant = db.query(PreApplicant).filter(
-            func.lower(PreApplicant.email) == request.email.lower()
+            PreApplicant.email.ilike(request.email.lower())
         ).first()
         
         if not pre_applicant:
