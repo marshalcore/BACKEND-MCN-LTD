@@ -13,7 +13,12 @@ import asyncio
 from app.config import settings
 
 # Init app
-app = FastAPI(title="Marshal Core Backend")
+app = FastAPI(
+    title="Marshal Core Backend",
+    docs_url=None,      # Disable Swagger UI
+    redoc_url=None,     # Disable ReDoc
+    openapi_url=None    # Disable OpenAPI schema
+)
 
 # Enable logging
 logging.basicConfig(level=logging.INFO)
