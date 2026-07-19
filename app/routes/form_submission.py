@@ -235,34 +235,58 @@ async def submit_full_application(
         if nin_slip and nin_slip.filename:
             nin_path = save_upload(nin_slip, "nin_slips")
 
-        # ✅ Create new applicant
-        applicant = Applicant(
-            # SECTION A: Basic Information
-            phone_number=phone_number,
-            nin_number=nin_number,
-            date_of_birth=dob,
-            state_of_residence=state_of_residence,
-            lga=lga,
-            address=address,
-            
-            # SECTION B: Documents
-            passport_photo=passport_path,
-            nin_slip=nin_path,
-            
-            # SECTION C: Application Details
-            application_tier=application_tier,
-            selected_reasons=reasons_list,
-            additional_details=additional_details,
-            
-            # SECTION D: Pre-filled from pre-applicant
-            full_name=full_name,
-            email=email,
-            
-            # SECTION E: Meta Information
-            is_verified=True,
-            has_paid=True,
-            payment_type=application_tier
-        )
+        # Check if applicant already exists for this email
+        existing_applicant = db.query(Applicant).filter(
+            Applicant.email.ilike(email)
+        ).first()
+        
+        if existing_applicant:
+            # Update existing applicant
+            logger.info(f"🔄 Updating existing applicant: {existing_applicant.id}")
+            existing_applicant.phone_number = phone_number
+            existing_applicant.nin_number = nin_number
+            existing_applicant.date_of_birth = dob
+            existing_applicant.state_of_residence = state_of_residence
+            existing_applicant.lga = lga
+            existing_applicant.address = address
+            existing_applicant.passport_photo = passport_path
+            existing_applicant.nin_slip = nin_path
+            existing_applicant.application_tier = application_tier
+            existing_applicant.selected_reasons = reasons_list
+            existing_applicant.additional_details = additional_details
+            existing_applicant.is_verified = True
+            existing_applicant.has_paid = True
+            applicant = existing_applicant
+        else:
+            # ✅ Create new applicant
+            applicant = Applicant(
+                # SECTION A: Basic Information
+                phone_number=phone_number,
+                nin_number=nin_number,
+                date_of_birth=dob,
+                state_of_residence=state_of_residence,
+                lga=lga,
+                address=address,
+                
+                # SECTION B: Documents
+                passport_photo=passport_path,
+                nin_slip=nin_path,
+                
+                # SECTION C: Application Details
+                application_tier=application_tier,
+                selected_reasons=reasons_list,
+                additional_details=additional_details,
+                
+                # SECTION D: Pre-filled from pre-applicant
+                full_name=full_name,
+                email=email,
+                
+                # SECTION E: Meta Information
+                is_verified=True,
+                has_paid=True,
+                payment_type=application_tier
+            )
+            db.add(applicant)
 
         # Mark password as used and application as submitted
         pre_applicant.password_used = True
@@ -270,11 +294,10 @@ async def submit_full_application(
         pre_applicant.submitted_at = current_time
         pre_applicant.status = "submitted"
 
-        db.add(applicant)
         db.commit()
         db.refresh(applicant)
         
-        logger.info(f"✅ Applicant created with ID: {applicant.id}")
+        logger.info(f"✅ Applicant saved with ID: {applicant.id}")
 
         # ✅ Prepare payment data for PDF
         payment_data = None
