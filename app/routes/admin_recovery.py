@@ -243,9 +243,8 @@ async def full_recovery(
     db: Session = Depends(get_db)
 ):
     """
-    Complete recovery: mark payment as paid AND generate password in one call.
-    Sends a recovery email to the user with password and verification link.
-    Also resets application_submitted so user can reapply.
+    Complete recovery: Reset password fields, keep has_paid and privacy_accepted as true.
+    Generate new password and send verification link.
     """
     try:
         # Find pre-applicant
@@ -256,7 +255,7 @@ async def full_recovery(
         if not pre_applicant:
             raise HTTPException(status_code=404, detail="Applicant not found")
         
-        # Reset application status so user can reapply
+        # ONLY reset password-related fields (keep has_paid and privacy_accepted as-is)
         pre_applicant.application_submitted = False
         pre_applicant.submitted_at = None
         pre_applicant.password_used = False
@@ -264,34 +263,30 @@ async def full_recovery(
         pre_applicant.password_sent = False
         pre_applicant.status = "paid"
         
-        # Step 1: Recover payment
-        recover_response = await recover_payment(request, db)
+        # DO NOT reset: has_paid (keep true), privacy_accepted (keep true)
         
-        if recover_response["status"] == "already_recovered":
-            # Payment already recovered, just generate password
-            pass
-        elif recover_response["status"] != "success":
-            raise HTTPException(status_code=400, detail=recover_response.get("message"))
+        db.commit()
         
-        # Step 2: Generate password and send email
+        # Generate password and send email
         password_response = await generate_password_recovery(
             PasswordRecoveryRequest(email=request.email),
             send_email=True,
             db=db
         )
         
-        # Get the actual email sending result from password_response
         email_was_sent = password_response.get("email_sent", False)
         
         return {
             "status": "success",
-            "message": f"Full recovery completed for {request.email}",
+            "message": f"Password reset completed for {request.email}",
             "payment_type": request.payment_type,
             "email": request.email,
             "verification_link": password_response["verification_link"],
             "password": password_response.get("password", "N/A"),
             "email_sent": email_was_sent,
-            "note": "Recovery email sent to user with password and verification link. Application has been reset for re-submission." if email_was_sent else "Email may not have been sent - check logs"
+            "has_paid": pre_applicant.has_paid,
+            "privacy_accepted": pre_applicant.privacy_accepted,
+            "note": "User can now access application with new password. has_paid and privacy_accepted preserved." if email_was_sent else "Email may not have been sent"
         }
         
     except HTTPException:
