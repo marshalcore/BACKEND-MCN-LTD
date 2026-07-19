@@ -245,8 +245,25 @@ async def full_recovery(
     """
     Complete recovery: mark payment as paid AND generate password in one call.
     Sends a recovery email to the user with password and verification link.
+    Also resets application_submitted so user can reapply.
     """
     try:
+        # Find pre-applicant
+        pre_applicant = db.query(PreApplicant).filter(
+            func.lower(PreApplicant.email) == request.email.lower()
+        ).first()
+        
+        if not pre_applicant:
+            raise HTTPException(status_code=404, detail="Applicant not found")
+        
+        # Reset application status so user can reapply
+        pre_applicant.application_submitted = False
+        pre_applicant.submitted_at = None
+        pre_applicant.password_used = False
+        pre_applicant.password_generated = False
+        pre_applicant.password_sent = False
+        pre_applicant.status = "paid"
+        
         # Step 1: Recover payment
         recover_response = await recover_payment(request, db)
         
@@ -274,7 +291,7 @@ async def full_recovery(
             "verification_link": password_response["verification_link"],
             "password": password_response.get("password", "N/A"),
             "email_sent": email_was_sent,
-            "note": "Recovery email sent to user with password and verification link" if email_was_sent else "Email may not have been sent - check logs"
+            "note": "Recovery email sent to user with password and verification link. Application has been reset for re-submission." if email_was_sent else "Email may not have been sent - check logs"
         }
         
     except HTTPException:
