@@ -68,26 +68,26 @@ class PaymentService:
             if callback_url:
                 payload["callback_url"] = callback_url
             
-            # 🔥 ADD PAYSTACK NATIVE SPLIT CONFIGURATION
+            # 🔥 PAYSTACK NATIVE SPLIT CONFIGURATION - Use ONLY ONE method
+            # Method 1: Use Paystack Dashboard Split Code (RECOMMENDED - cleanest)
             if split_code:
-                # Use Paystack Dashboard Split Group - split_code at top level
+                # Send ONLY the split_code - Paystack handles everything else
                 payload["split_code"] = split_code
-                payload["split"] = {
-                    "type": "percentage",
-                    "bearer_type": splitBearer or "account"
-                }
-                logger.info(f"💰💰💰 SPLIT PAYMENT CONFIGURED: Using Dashboard Split Group: {split_code}")
+                logger.info(f"💰💰💰 SPLIT PAYMENT: Using Dashboard Split Code: {split_code}")
+            
+            # Method 2: Use explicit subaccounts (only if no split_code)
             elif split_payment and split_subaccounts:
                 payload["split"] = {
-                    "type": "percentage",  # Use percentage-based splits
-                    "bearer_type": splitBearer or "account",  # Who bears the charges
+                    "type": "percentage",
+                    "bearer_type": splitBearer or "account",
                     "subaccounts": split_subaccounts
                 }
-                logger.info(f"💰💰💰 SPLIT PAYMENT CONFIGURED: {len(split_subaccounts)} subaccounts")
+                logger.info(f"💰💰💰 SPLIT PAYMENT: Using explicit subaccounts: {len(split_subaccounts)} subaccounts")
                 for sa in split_subaccounts:
                     logger.info(f"   → {sa.get('share', 'N/A')}% to {sa.get('subaccount', 'N/A')[:20]}...")
+            
+            # Method 3: Simple percentage split to main account (only if no split_code)
             elif split_percentage:
-                # Simple percentage split - all goes to main account bearer
                 payload["split"] = {
                     "type": "percentage",
                     "bearer_type": splitBearer or "account",
